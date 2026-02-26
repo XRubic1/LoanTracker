@@ -37,6 +37,15 @@ npm run build
 npm run preview
 ```
 
+### 4. Deploy to GitHub Pages
+
+1. In your repo: **Settings → Secrets and variables → Actions**. Add:
+   - `VITE_SUPABASE_URL` — your Supabase project URL
+   - `VITE_SUPABASE_ANON_KEY` — your Supabase anon key
+2. **Settings → Pages**. Under **Build and deployment**:
+   - **Source**: choose **GitHub Actions** (not “Deploy from a branch”).
+3. Push to `main`; the workflow builds and deploys. The site will be at `https://<username>.github.io/LoanTracker/`.
+
 ## Project structure
 
 - `src/` — React + TypeScript source
