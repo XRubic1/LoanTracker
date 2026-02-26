@@ -1,0 +1,45 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: theme('fontFamily.sans');
+  background: theme('colors.bg');
+  color: theme('colors.text');
+  font-size: 14px;
+  height: 100vh;
+  overflow: hidden;
+}
+
+#root {
+  display: flex;
+  height: 100%;
+}
+
+/* Scrollbar */
+.main::-webkit-scrollbar {
+  width: 6px;
+}
+.main::-webkit-scrollbar-track {
+  background: transparent;
+}
+.main::-webkit-scrollbar-thumb {
+  background: theme('colors.border');
+  border-radius: 3px;
+}
+
+.scrollable::-webkit-scrollbar {
+  width: 4px;
+}
+.scrollable::-webkit-scrollbar-thumb {
+  background: theme('colors.border');
+  border-radius: 2px;
+}
