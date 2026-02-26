@@ -4,7 +4,6 @@ Chart.register(ArcElement, Tooltip, DoughnutController);
 import { Section } from '@/components/Section';
 import { StatCard } from '@/components/StatCard';
 import { Badge } from '@/components/Badge';
-import { CheckBox } from '@/components/CheckBox';
 import {
   fmt,
   fmtDate,
@@ -15,6 +14,9 @@ import {
   isDueThisWeek,
   isReserveDueThisWeek,
   isToday,
+  getLoanProviderDisplay,
+  getLoanBasePerInstallment,
+  getLoanFeePerInstallment,
 } from '@/lib/utils';
 import type { UseDataResult } from '@/hooks/useData';
 
@@ -25,7 +27,12 @@ export function OverviewPage({
   reserves,
   markLoanPaid,
   markReservePaid,
-}: Pick<UseDataResult, 'loans' | 'reserves' | 'markLoanPaid' | 'markReservePaid'>) {
+  onOpenCloseInstallment,
+  onOpenCloseDeduction,
+}: Pick<UseDataResult, 'loans' | 'reserves' | 'markLoanPaid' | 'markReservePaid'> & {
+  onOpenCloseInstallment: (loanId: number) => void;
+  onOpenCloseDeduction: (reserveId: number) => void;
+}) {
   const chartRef = useRef<HTMLCanvasElement>(null);
   const chartInstance = useRef<Chart | null>(null);
 
@@ -124,6 +131,9 @@ export function OverviewPage({
                   Client
                 </th>
                 <th className="text-[10px] text-muted uppercase tracking-widest py-0 pb-2.5 pr-3 text-left border-b border-border">
+                  Provider
+                </th>
+                <th className="text-[10px] text-muted uppercase tracking-widest py-0 pb-2.5 pr-3 text-left border-b border-border">
                   Installment
                 </th>
                 <th className="text-[10px] text-muted uppercase tracking-widest py-0 pb-2.5 pr-3 text-left border-b border-border">
@@ -132,7 +142,6 @@ export function OverviewPage({
                 <th className="text-[10px] text-muted uppercase tracking-widest py-0 pb-2.5 pr-3 text-left border-b border-border">
                   Status
                 </th>
-                <th className="text-[10px] text-muted uppercase tracking-widest py-0 pb-2.5 pr-3 text-left border-b border-border" />
               </tr>
             </thead>
             <tbody>
@@ -147,13 +156,37 @@ export function OverviewPage({
                   const rem = getLoanRemaining(l);
                   const left = l.totalInstallments - l.paidCount;
                   return (
-                    <tr key={l.id} className="hover:bg-white/[0.015] transition-colors">
+                    <tr
+                      key={l.id}
+                      role="button"
+                      tabIndex={0}
+                      onClick={() => onOpenCloseInstallment(l.id)}
+                      onKeyDown={(e) => e.key === 'Enter' && onOpenCloseInstallment(l.id)}
+                      className="hover:bg-white/[0.015] transition-colors cursor-pointer"
+                    >
                       <td className="py-2.5 pr-3 border-b border-border/40 align-middle text-[13px]">
                         <div className="font-medium text-text">{l.client}</div>
                         <div className="text-[11px] text-muted font-mono mt-0.5">{l.ref}</div>
                       </td>
+                      <td className="py-2.5 pr-3 border-b border-border/40 align-middle text-[12px]">
+                        <span>{getLoanProviderDisplay(l)}</span>
+                        {l.factoringFee != null && l.factoringFee > 0 && (
+                          <div className="text-[10px] text-muted2">Fee {fmt(l.factoringFee)}</div>
+                        )}
+                      </td>
                       <td className="py-2.5 pr-3 border-b border-border/40 align-middle">
-                        <span className="font-mono font-medium text-yellow">{fmt(l.installment)}</span>
+                        <div className="font-mono font-medium text-yellow">
+                          {l.factoringFee != null && l.factoringFee > 0 ? (
+                            <>
+                              <div>{fmt(getLoanBasePerInstallment(l))}</div>
+                              <div className="text-[11px] text-muted2 font-normal">
+                                +{fmt(getLoanFeePerInstallment(l))} = {fmt(l.installment)}
+                              </div>
+                            </>
+                          ) : (
+                            fmt(l.installment)
+                          )}
+                        </div>
                       </td>
                       <td className="py-2.5 pr-3 border-b border-border/40 align-middle">
                         <span className="font-mono font-medium">{fmt(rem)}</span>
@@ -161,12 +194,6 @@ export function OverviewPage({
                       </td>
                       <td className="py-2.5 pr-3 border-b border-border/40 align-middle">
                         <Badge variant="due">Due</Badge>
-                      </td>
-                      <td className="py-2.5 pr-3 border-b border-border/40 align-middle">
-                        <CheckBox
-                          checked={false}
-                          onToggle={() => markLoanPaid(l.id)}
-                        />
                       </td>
                     </tr>
                   );
@@ -190,13 +217,13 @@ export function OverviewPage({
                 return (
                   <div
                     key={r.id}
-                    className="flex items-center justify-between py-2.5 px-3.5 bg-surface rounded-[10px] text-[13px] hover:bg-white/[0.02] mb-2 last:mb-0"
+                    role="button"
+                    tabIndex={0}
+                    onClick={() => onOpenCloseDeduction(r.id)}
+                    onKeyDown={(e) => e.key === 'Enter' && onOpenCloseDeduction(r.id)}
+                    className="flex items-center justify-between py-2.5 px-3.5 bg-surface rounded-[10px] text-[13px] hover:bg-white/[0.02] mb-2 last:mb-0 cursor-pointer"
                   >
                     <div className="flex items-center gap-2.5">
-                      <CheckBox
-                        checked={false}
-                        onToggle={() => markReservePaid(r.id)}
-                      />
                       <div>
                         <div className="font-medium text-[13px]">
                           {r.client}{' '}
@@ -237,6 +264,9 @@ export function OverviewPage({
                   Client
                 </th>
                 <th className="text-[10px] text-muted uppercase tracking-widest py-0 pb-2.5 pr-3 text-left border-b border-border">
+                  Provider
+                </th>
+                <th className="text-[10px] text-muted uppercase tracking-widest py-0 pb-2.5 pr-3 text-left border-b border-border">
                   Next Date
                 </th>
                 <th className="text-[10px] text-muted uppercase tracking-widest py-0 pb-2.5 pr-3 text-left border-b border-border">
@@ -247,22 +277,43 @@ export function OverviewPage({
             <tbody>
               {upcoming.length === 0 ? (
                 <tr>
-                  <td colSpan={3} className="text-center py-10 text-muted text-[13px]">
+                  <td colSpan={4} className="text-center py-10 text-muted text-[13px]">
                     —
                   </td>
                 </tr>
               ) : (
                 upcoming.map((l) => (
-                  <tr key={l.id} className="hover:bg-white/[0.015] transition-colors">
+                  <tr
+                    key={l.id}
+                    className="hover:bg-white/[0.015] transition-colors"
+                  >
                     <td className="py-2.5 pr-3 border-b border-border/40 align-middle">
                       <div className="font-medium text-text">{l.client}</div>
-                      <div className="text-[11px] text-muted font-mono">{l.ref}</div>
+                      <div className="text-[11px] text-muted font-mono mt-0.5">
+                        {l.ref}
+                        <span className="ml-1.5 text-muted2">· {l.totalInstallments - l.paidCount} left</span>
+                      </div>
+                    </td>
+                    <td className="py-2.5 pr-3 border-b border-border/40 align-middle text-[12px]">
+                      <span>{getLoanProviderDisplay(l)}</span>
+                      {l.factoringFee != null && l.factoringFee > 0 && (
+                        <div className="text-[10px] text-muted2">Fee {fmt(l.factoringFee)}</div>
+                      )}
                     </td>
                     <td className="py-2.5 pr-3 border-b border-border/40 align-middle font-mono text-[11px] text-muted2">
                       {l.nextDate ? fmtDate(l.nextDate) : '—'}
                     </td>
                     <td className="py-2.5 pr-3 border-b border-border/40 align-middle font-mono font-medium">
-                      {fmt(l.installment)}
+                      {l.factoringFee != null && l.factoringFee > 0 ? (
+                        <>
+                          <div>{fmt(getLoanBasePerInstallment(l))}</div>
+                          <div className="text-[10px] text-muted2 font-normal">
+                            +{fmt(getLoanFeePerInstallment(l))} = {fmt(l.installment)}
+                          </div>
+                        </>
+                      ) : (
+                        fmt(l.installment)
+                      )}
                     </td>
                   </tr>
                 ))

@@ -4,7 +4,12 @@ import { Badge } from '@/components/Badge';
 import { fmt, fmtDate } from '@/lib/utils';
 import type { UseDataResult } from '@/hooks/useData';
 
-export function ClosedPage({ loans, reserves }: Pick<UseDataResult, 'loans' | 'reserves'>) {
+interface ClosedPageProps extends Pick<UseDataResult, 'loans' | 'reserves'> {
+  onOpenLoan: (id: number) => void;
+  onOpenReserve: (id: number) => void;
+}
+
+export function ClosedPage({ loans, reserves, onOpenLoan, onOpenReserve }: ClosedPageProps) {
   const [tab, setTab] = useState<'loans' | 'reserves'>('loans');
 
   const closedLoans = loans.filter((l) => l.paidCount >= l.totalInstallments);
@@ -64,7 +69,11 @@ export function ClosedPage({ loans, reserves }: Pick<UseDataResult, 'loans' | 'r
               </thead>
               <tbody>
                 {closedLoans.map((l) => (
-                  <tr key={l.id} className="hover:bg-white/[0.015] transition-colors">
+                  <tr
+                    key={l.id}
+                    onClick={() => onOpenLoan(l.id)}
+                    className="hover:bg-white/[0.015] transition-colors cursor-pointer"
+                  >
                     <td className="py-2.5 pr-3 border-b border-border/40 align-middle">
                       <div className="font-medium text-text">{l.client}</div>
                     </td>
@@ -123,7 +132,11 @@ export function ClosedPage({ loans, reserves }: Pick<UseDataResult, 'loans' | 'r
                       ? fmtDate(r.deductionDates[r.deductionDates.length - 1])
                       : '—';
                   return (
-                    <tr key={r.id} className="hover:bg-white/[0.015] transition-colors">
+                    <tr
+                      key={r.id}
+                      onClick={() => onOpenReserve(r.id)}
+                      className="hover:bg-white/[0.015] transition-colors cursor-pointer"
+                    >
                       <td className="py-2.5 pr-3 border-b border-border/40 align-middle">
                         <div className="font-medium text-text">{r.client}</div>
                         {r.note && (

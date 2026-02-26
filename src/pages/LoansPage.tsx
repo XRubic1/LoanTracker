@@ -3,7 +3,7 @@ import type { Loan } from '@/types';
 import { Section } from '@/components/Section';
 import { Badge } from '@/components/Badge';
 import { CheckBox } from '@/components/CheckBox';
-import { fmt, fmtDate, getLoanRemaining, getNextDueDate, isDueThisWeek } from '@/lib/utils';
+import { fmt, fmtDate, getLoanRemaining, getNextDueDate, isDueThisWeek, getLoanProviderDisplay } from '@/lib/utils';
 import type { UseDataResult } from '@/hooks/useData';
 
 type LoanFilter = 'all' | 'due' | 'active';
@@ -90,6 +90,9 @@ export function LoansPage({
                 Client
               </th>
               <th className="text-[10px] text-muted uppercase tracking-widest py-0 pb-2.5 pr-3 text-left border-b border-border">
+                Provider
+              </th>
+              <th className="text-[10px] text-muted uppercase tracking-widest py-0 pb-2.5 pr-3 text-left border-b border-border">
                 Total
               </th>
               <th className="text-[10px] text-muted uppercase tracking-widest py-0 pb-2.5 pr-3 text-left border-b border-border">
@@ -113,7 +116,7 @@ export function LoansPage({
           <tbody>
             {list.length === 0 ? (
               <tr>
-                <td colSpan={8} className="text-center py-10 text-muted text-[13px]">
+                <td colSpan={9} className="text-center py-10 text-muted text-[13px]">
                   No loans found
                 </td>
               </tr>
@@ -141,6 +144,12 @@ export function LoansPage({
                     <td className="py-2.5 pr-3 border-b border-border/40 align-middle">
                       <div className="font-medium text-text">{l.client}</div>
                       <div className="text-[11px] text-muted font-mono mt-0.5">{l.ref}</div>
+                    </td>
+                    <td className="py-2.5 pr-3 border-b border-border/40 align-middle">
+                      <div className="text-[13px]">{getLoanProviderDisplay(l)}</div>
+                      {l.factoringFee != null && l.factoringFee > 0 && (
+                        <div className="text-[10px] text-muted2">Fee {fmt(l.factoringFee)}</div>
+                      )}
                     </td>
                     <td className="py-2.5 pr-3 border-b border-border/40 align-middle font-mono font-medium">
                       {fmt(l.total)}

@@ -1,3 +1,6 @@
+/** Provider type for loans */
+export type LoanProviderType = 'TruFunding' | 'Other';
+
 /** App model: loan (camelCase) */
 export interface Loan {
   id: number;
@@ -11,7 +14,15 @@ export interface Loan {
   startDate: string;
   freqDays: number;
   paymentDates: string[];
+  /** Per-installment notes (same length as totalInstallments, empty string if none). */
+  paymentNotes: string[];
   note: string;
+  /** TruFunding or Other; when Other, providerName is the custom name. */
+  providerType: LoanProviderType;
+  /** Custom provider name when providerType === 'Other'. */
+  providerName: string;
+  /** Fee added to total; effective total = total + factoringFee, installment = effectiveTotal / totalInstallments. */
+  factoringFee: number;
 }
 
 /** App model: reserve (camelCase) */
@@ -26,6 +37,8 @@ export interface Reserve {
   note: string;
   paidCount: number;
   deductionDates: string[];
+  /** Per-deduction notes (same length as installments, empty string if none). */
+  deductionNotes: string[];
 }
 
 /** Supabase row: loans table (snake_case) */
@@ -41,7 +54,11 @@ export interface LoanRow {
   start_date: string;
   freq_days: number;
   payment_dates: string[];
+  payment_notes?: string[];
   note: string | null;
+  provider_type?: string;
+  provider_name?: string | null;
+  factoring_fee?: number;
 }
 
 /** Supabase row: reserves table (snake_case) */
@@ -56,6 +73,7 @@ export interface ReserveRow {
   note: string | null;
   paid_count: number;
   deduction_dates: string[];
+  deduction_notes?: string[];
 }
 
 export type PageId = 'overview' | 'loans' | 'reserves' | 'closed' | 'users';

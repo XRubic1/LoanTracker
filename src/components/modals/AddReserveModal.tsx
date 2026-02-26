@@ -36,6 +36,7 @@ export function AddReserveModal({ open, onClose, onAdd }: AddReserveModalProps) 
         note: note.trim(),
         paidCount: 0,
         deductionDates: [],
+        deductionNotes: [],
       });
       setClient('');
       setAmount('');

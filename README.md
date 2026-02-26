@@ -12,6 +12,7 @@ A multi-user loan and reserve tracking dashboard built with **React**, **TypeScr
    - Run `supabase/migrations/001_initial.sql` (creates `loans` and `reserves`).
    - Run `supabase/migrations/002_auth_multi_user.sql` (adds `owner_id`, `team_members`, and RLS for multi-user).
    - Run `supabase/migrations/003_fix_team_members_rls.sql` (fixes “permission denied for table users” by using JWT email instead of reading `auth.users`).
+   - Run `supabase/migrations/004_installment_notes.sql` (adds per-installment notes: `payment_notes` on loans, `deduction_notes` on reserves).
 
 ### 2. Configure the app
 

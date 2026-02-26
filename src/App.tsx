@@ -9,6 +9,8 @@ import { UsersPage } from '@/pages/UsersPage';
 import { AuthPage } from '@/pages/AuthPage';
 import { LoanDetailModal } from '@/components/modals/LoanDetailModal';
 import { ReserveDetailModal } from '@/components/modals/ReserveDetailModal';
+import { CloseInstallmentModal } from '@/components/modals/CloseInstallmentModal';
+import { CloseDeductionModal } from '@/components/modals/CloseDeductionModal';
 import { AddLoanModal } from '@/components/modals/AddLoanModal';
 import { AddReserveModal } from '@/components/modals/AddReserveModal';
 import { useAuth } from '@/contexts/AuthContext';
@@ -19,6 +21,8 @@ export default function App() {
   const [page, setPage] = useState<PageId>('overview');
   const [loanDetailId, setLoanDetailId] = useState<number | null>(null);
   const [reserveDetailId, setReserveDetailId] = useState<number | null>(null);
+  const [overviewCloseInstallmentLoanId, setOverviewCloseInstallmentLoanId] = useState<number | null>(null);
+  const [overviewCloseDeductionReserveId, setOverviewCloseDeductionReserveId] = useState<number | null>(null);
   const [addLoanOpen, setAddLoanOpen] = useState(false);
   const [addReserveOpen, setAddReserveOpen] = useState(false);
 
@@ -30,18 +34,30 @@ export default function App() {
     configMissing,
     refetch,
     addLoan,
+    updateLoanById,
     removeLoan,
     markLoanPaid,
     reverseLoanPayment,
+    closeLoan,
     addReserve,
+    updateReserveById,
     removeReserve,
     markReservePaid,
     reverseReserveDeduction,
+    closeReserve,
   } = useData(effectiveOwnerId ?? null);
 
   const selectedLoan = loanDetailId != null ? loans.find((l) => l.id === loanDetailId) ?? null : null;
   const selectedReserve =
     reserveDetailId != null ? reserves.find((r) => r.id === reserveDetailId) ?? null : null;
+  const overviewCloseInstallmentLoan =
+    overviewCloseInstallmentLoanId != null
+      ? loans.find((l) => l.id === overviewCloseInstallmentLoanId) ?? null
+      : null;
+  const overviewCloseDeductionReserve =
+    overviewCloseDeductionReserveId != null
+      ? reserves.find((r) => r.id === overviewCloseDeductionReserveId) ?? null
+      : null;
 
   const handleLoanMarkPaid = useCallback(async () => {
     if (loanDetailId == null) return;
@@ -74,6 +90,124 @@ export default function App() {
     await removeReserve(reserveDetailId);
     setReserveDetailId(null);
   }, [reserveDetailId, removeReserve]);
+
+  const handleCloseLoan = useCallback(async () => {
+    if (loanDetailId == null) return;
+    await closeLoan(loanDetailId);
+  }, [loanDetailId, closeLoan]);
+
+  const handleCloseReserve = useCallback(async () => {
+    if (reserveDetailId == null) return;
+    await closeReserve(reserveDetailId);
+  }, [reserveDetailId, closeReserve]);
+
+  const handleLoanUpdateInstallmentNote = useCallback(
+    async (index: number, note: string) => {
+      if (selectedLoan == null) return;
+      const notes = [...(selectedLoan.paymentNotes ?? [])];
+      while (notes.length <= index) notes.push('');
+      notes[index] = note;
+      await updateLoanById(selectedLoan.id, { ...selectedLoan, paymentNotes: notes });
+    },
+    [selectedLoan, updateLoanById]
+  );
+
+  /** Single update when closing an installment from LoanDetailModal (saves note + marks paid). */
+  const handleLoanCloseInstallmentWithNote = useCallback(
+    async (index: number, note: string) => {
+      if (selectedLoan == null || index !== selectedLoan.paidCount) return;
+      const loan = selectedLoan;
+      const paymentNotes = [...(loan.paymentNotes ?? [])];
+      while (paymentNotes.length <= index) paymentNotes.push('');
+      paymentNotes[index] = note;
+      const paymentDates = [...(loan.paymentDates ?? [])];
+      paymentDates.push(new Date().toISOString().split('T')[0]);
+      await updateLoanById(loan.id, {
+        ...loan,
+        paidCount: loan.paidCount + 1,
+        paymentDates,
+        paymentNotes,
+      });
+    },
+    [selectedLoan, updateLoanById]
+  );
+
+  const handleReserveUpdateDeductionNote = useCallback(
+    async (index: number, note: string) => {
+      if (selectedReserve == null) return;
+      const notes = [...(selectedReserve.deductionNotes ?? [])];
+      while (notes.length <= index) notes.push('');
+      notes[index] = note;
+      await updateReserveById(selectedReserve.id, {
+        ...selectedReserve,
+        deductionNotes: notes,
+      });
+    },
+    [selectedReserve, updateReserveById]
+  );
+
+  /** Single update when closing a deduction from ReserveDetailModal (saves note + marks deducted). */
+  const handleReserveCloseDeductionWithNote = useCallback(
+    async (index: number, note: string) => {
+      if (selectedReserve == null || index !== selectedReserve.paidCount) return;
+      const reserve = selectedReserve;
+      const deductionNotes = [...(reserve.deductionNotes ?? [])];
+      while (deductionNotes.length <= index) deductionNotes.push('');
+      deductionNotes[index] = note;
+      const deductionDates = [...(reserve.deductionDates ?? [])];
+      deductionDates.push(new Date().toISOString().split('T')[0]);
+      await updateReserveById(reserve.id, {
+        ...reserve,
+        paidCount: reserve.paidCount + 1,
+        deductionDates,
+        deductionNotes,
+      });
+    },
+    [selectedReserve, updateReserveById]
+  );
+
+  /** Single update: save note and mark next installment paid (avoids note being overwritten). */
+  const handleOverviewCloseInstallment = useCallback(
+    async (note: string) => {
+      if (overviewCloseInstallmentLoan == null) return;
+      const loan = overviewCloseInstallmentLoan;
+      const index = loan.paidCount;
+      const paymentNotes = [...(loan.paymentNotes ?? [])];
+      while (paymentNotes.length <= index) paymentNotes.push('');
+      paymentNotes[index] = note;
+      const paymentDates = [...(loan.paymentDates ?? [])];
+      const nextDate = new Date().toISOString().split('T')[0];
+      paymentDates.push(nextDate);
+      await updateLoanById(loan.id, {
+        ...loan,
+        paidCount: loan.paidCount + 1,
+        paymentDates,
+        paymentNotes,
+      });
+    },
+    [overviewCloseInstallmentLoan, updateLoanById]
+  );
+
+  /** Single update: save note and mark next deduction (avoids note being overwritten). */
+  const handleOverviewCloseDeduction = useCallback(
+    async (note: string) => {
+      if (overviewCloseDeductionReserve == null) return;
+      const reserve = overviewCloseDeductionReserve;
+      const index = reserve.paidCount;
+      const deductionNotes = [...(reserve.deductionNotes ?? [])];
+      while (deductionNotes.length <= index) deductionNotes.push('');
+      deductionNotes[index] = note;
+      const deductionDates = [...(reserve.deductionDates ?? [])];
+      deductionDates.push(new Date().toISOString().split('T')[0]);
+      await updateReserveById(reserve.id, {
+        ...reserve,
+        paidCount: reserve.paidCount + 1,
+        deductionDates,
+        deductionNotes,
+      });
+    },
+    [overviewCloseDeductionReserve, updateReserveById]
+  );
 
   // Wait for auth to be resolved before showing login or dashboard (avoids 401s and stuck state)
   if (authLoading) {
@@ -139,6 +273,8 @@ export default function App() {
             reserves={reserves}
             markLoanPaid={markLoanPaid}
             markReservePaid={markReservePaid}
+            onOpenCloseInstallment={setOverviewCloseInstallmentLoanId}
+            onOpenCloseDeduction={setOverviewCloseDeductionReserveId}
           />
         )}
         {page === 'loans' && (
@@ -159,7 +295,14 @@ export default function App() {
             onAddReserve={() => setAddReserveOpen(true)}
           />
         )}
-        {page === 'closed' && <ClosedPage loans={loans} reserves={reserves} />}
+        {page === 'closed' && (
+          <ClosedPage
+            loans={loans}
+            reserves={reserves}
+            onOpenLoan={setLoanDetailId}
+            onOpenReserve={setReserveDetailId}
+          />
+        )}
         {page === 'users' && <UsersPage />}
       </main>
 
@@ -170,6 +313,9 @@ export default function App() {
         onMarkPaid={handleLoanMarkPaid}
         onReverse={handleLoanReverse}
         onDelete={handleLoanDelete}
+        onCloseLoan={handleCloseLoan}
+        onUpdateInstallmentNote={handleLoanUpdateInstallmentNote}
+        onCloseInstallmentWithNote={handleLoanCloseInstallmentWithNote}
       />
       <ReserveDetailModal
         reserve={selectedReserve}
@@ -178,7 +324,26 @@ export default function App() {
         onMarkDeducted={handleReserveMarkDeducted}
         onReverse={handleReserveReverse}
         onDelete={handleReserveDelete}
+        onCloseReserve={handleCloseReserve}
+        onUpdateDeductionNote={handleReserveUpdateDeductionNote}
+        onCloseDeductionWithNote={handleReserveCloseDeductionWithNote}
       />
+      {page === 'overview' && (
+        <>
+          <CloseInstallmentModal
+            loan={overviewCloseInstallmentLoan}
+            open={overviewCloseInstallmentLoanId != null}
+            onClose={() => setOverviewCloseInstallmentLoanId(null)}
+            onCloseInstallment={handleOverviewCloseInstallment}
+          />
+          <CloseDeductionModal
+            reserve={overviewCloseDeductionReserve}
+            open={overviewCloseDeductionReserveId != null}
+            onClose={() => setOverviewCloseDeductionReserveId(null)}
+            onCloseDeduction={handleOverviewCloseDeduction}
+          />
+        </>
+      )}
       <AddLoanModal
         open={addLoanOpen}
         onClose={() => setAddLoanOpen(false)}

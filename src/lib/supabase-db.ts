@@ -1,8 +1,13 @@
-import type { Loan, Reserve, LoanRow, ReserveRow, TeamMember } from '@/types';
+import type { Loan, Reserve, LoanRow, ReserveRow, TeamMember, LoanProviderType } from '@/types';
 import { getSupabase } from './supabase';
 
 function loanFromRow(row: LoanRow | null): Loan | null {
   if (!row) return null;
+  const paymentDates = Array.isArray(row.payment_dates) ? row.payment_dates : [];
+  const rawNotes = Array.isArray(row.payment_notes) ? row.payment_notes : [];
+  const total = row.total_installments ?? 0;
+  const paymentNotes = Array.from({ length: total }, (_, i) => rawNotes[i] ?? '');
+  const providerType = (row.provider_type === 'Other' ? 'Other' : 'TruFunding') as LoanProviderType;
   return {
     id: row.id,
     owner_id: row.owner_id ?? undefined,
@@ -11,15 +16,22 @@ function loanFromRow(row: LoanRow | null): Loan | null {
     total: Number(row.total),
     installment: Number(row.installment),
     paidCount: row.paid_count ?? 0,
-    totalInstallments: row.total_installments,
+    totalInstallments: total,
     startDate: row.start_date,
     freqDays: row.freq_days ?? 7,
-    paymentDates: Array.isArray(row.payment_dates) ? row.payment_dates : [],
+    paymentDates,
+    paymentNotes,
     note: row.note ?? '',
+    providerType,
+    providerName: row.provider_name ?? '',
+    factoringFee: Number(row.factoring_fee ?? 0),
   };
 }
 
 function loanToRow(loan: Loan, ownerId?: string | null): Omit<LoanRow, 'id'> {
+  const total = loan.totalInstallments ?? 0;
+  const paymentNotes = (loan.paymentNotes ?? []).slice(0, total);
+  while (paymentNotes.length < total) paymentNotes.push('');
   return {
     owner_id: ownerId ?? null,
     client: loan.client,
@@ -27,41 +39,53 @@ function loanToRow(loan: Loan, ownerId?: string | null): Omit<LoanRow, 'id'> {
     total: loan.total,
     installment: loan.installment,
     paid_count: loan.paidCount ?? 0,
-    total_installments: loan.totalInstallments,
+    total_installments: total,
     start_date: loan.startDate,
     freq_days: loan.freqDays ?? 7,
     payment_dates: loan.paymentDates ?? [],
+    payment_notes: paymentNotes,
     note: loan.note || null,
+    provider_type: loan.providerType ?? 'TruFunding',
+    provider_name: loan.providerName || null,
+    factoring_fee: loan.factoringFee ?? 0,
   };
 }
 
 function reserveFromRow(row: ReserveRow | null): Reserve | null {
   if (!row) return null;
+  const installments = row.installments ?? 1;
+  const rawNotes = Array.isArray(row.deduction_notes) ? row.deduction_notes : [];
+  const deductionNotes = Array.from({ length: installments }, (_, i) => rawNotes[i] ?? '');
   return {
     id: row.id,
     owner_id: row.owner_id ?? undefined,
     client: row.client,
     amount: Number(row.amount),
-    installments: row.installments ?? 1,
+    installments,
     date: row.date,
     freqDays: row.freq_days ?? 7,
     note: row.note ?? '',
     paidCount: row.paid_count ?? 0,
     deductionDates: Array.isArray(row.deduction_dates) ? row.deduction_dates : [],
+    deductionNotes,
   };
 }
 
 function reserveToRow(reserve: Reserve, ownerId?: string | null): Omit<ReserveRow, 'id'> {
+  const installments = reserve.installments ?? 1;
+  const deductionNotes = (reserve.deductionNotes ?? []).slice(0, installments);
+  while (deductionNotes.length < installments) deductionNotes.push('');
   return {
     owner_id: ownerId ?? null,
     client: reserve.client,
     amount: reserve.amount,
-    installments: reserve.installments ?? 1,
+    installments,
     date: reserve.date,
     freq_days: reserve.freqDays ?? 7,
     note: reserve.note || null,
     paid_count: reserve.paidCount ?? 0,
     deduction_dates: reserve.deductionDates ?? [],
+    deduction_notes: deductionNotes,
   };
 }
 

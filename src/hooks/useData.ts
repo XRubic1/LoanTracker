@@ -24,11 +24,13 @@ export interface UseDataResult {
   removeLoan: (id: number) => Promise<void>;
   markLoanPaid: (id: number) => Promise<void>;
   reverseLoanPayment: (id: number) => Promise<void>;
+  closeLoan: (id: number) => Promise<void>;
   addReserve: (payload: Omit<Reserve, 'id'>) => Promise<Reserve>;
   updateReserveById: (id: number, reserve: Reserve) => Promise<Reserve>;
   removeReserve: (id: number) => Promise<void>;
   markReservePaid: (id: number) => Promise<void>;
   reverseReserveDeduction: (id: number) => Promise<void>;
+  closeReserve: (id: number) => Promise<void>;
 }
 
 export function useData(ownerId: string | null): UseDataResult {
@@ -105,6 +107,27 @@ export function useData(ownerId: string | null): UseDataResult {
     [loans, updateLoanById]
   );
 
+  /** Mark loan as fully paid (fill remaining payment_dates with today). */
+  const closeLoan = useCallback(
+    async (id: number) => {
+      const loan = loans.find((l) => l.id === id);
+      if (!loan || loan.paidCount >= loan.totalInstallments) return;
+      const today = new Date().toISOString().split('T')[0];
+      const paymentDates = [...(loan.paymentDates ?? [])];
+      while (paymentDates.length < loan.totalInstallments) paymentDates.push(today);
+      const paymentNotes = [...(loan.paymentNotes ?? [])];
+      while (paymentNotes.length < loan.totalInstallments) paymentNotes.push('');
+      const updated: Loan = {
+        ...loan,
+        paidCount: loan.totalInstallments,
+        paymentDates,
+        paymentNotes,
+      };
+      await updateLoanById(id, updated);
+    },
+    [loans, updateLoanById]
+  );
+
   const addReserve = useCallback(async (payload: Omit<Reserve, 'id'>) => {
     const added = await insertReserve(payload, ownerId);
     setReserves((prev) => [...prev, added]);
@@ -149,6 +172,27 @@ export function useData(ownerId: string | null): UseDataResult {
     [reserves, updateReserveById]
   );
 
+  /** Mark reserve as fully deducted (fill remaining deduction_dates with today). */
+  const closeReserve = useCallback(
+    async (id: number) => {
+      const reserve = reserves.find((r) => r.id === id);
+      if (!reserve || reserve.paidCount >= reserve.installments) return;
+      const today = new Date().toISOString().split('T')[0];
+      const deductionDates = [...(reserve.deductionDates ?? [])];
+      while (deductionDates.length < reserve.installments) deductionDates.push(today);
+      const deductionNotes = [...(reserve.deductionNotes ?? [])];
+      while (deductionNotes.length < reserve.installments) deductionNotes.push('');
+      const updated: Reserve = {
+        ...reserve,
+        paidCount: reserve.installments,
+        deductionDates,
+        deductionNotes,
+      };
+      await updateReserveById(id, updated);
+    },
+    [reserves, updateReserveById]
+  );
+
   return {
     loans,
     reserves,
@@ -161,10 +205,12 @@ export function useData(ownerId: string | null): UseDataResult {
     removeLoan,
     markLoanPaid,
     reverseLoanPayment,
+    closeLoan,
     addReserve,
     updateReserveById,
     removeReserve,
     markReservePaid,
     reverseReserveDeduction,
+    closeReserve,
   };
 }
