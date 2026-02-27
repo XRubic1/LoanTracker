@@ -8,8 +8,8 @@ interface CloseInstallmentModalProps {
   loan: Loan | null;
   open: boolean;
   onClose: () => void;
-  /** Saves the note and marks the next installment paid in a single update (avoids race). */
-  onCloseInstallment: (note: string) => Promise<void>;
+  /** Saves the note and marks the next installment paid in a single update. paidDate is YYYY-MM-DD (default today). */
+  onCloseInstallment: (note: string, paidDate: string) => Promise<void>;
 }
 
 export function CloseInstallmentModal({
@@ -19,12 +19,15 @@ export function CloseInstallmentModal({
   onCloseInstallment,
 }: CloseInstallmentModalProps) {
   const [note, setNote] = useState('');
+  const [closeDate, setCloseDate] = useState('');
 
+  const todayStr = () => new Date().toISOString().split('T')[0];
   const index = loan ? loan.paidCount : 0;
   useEffect(() => {
     if (loan && open) {
       const notes = loan.paymentNotes ?? [];
       setNote(notes[index] ?? '');
+      setCloseDate(todayStr());
     }
   }, [loan, index, open]);
 
@@ -36,7 +39,7 @@ export function CloseInstallmentModal({
   const paidDate = loan.paymentDates?.[index];
 
   const handleCloseInstallment = async () => {
-    await onCloseInstallment(note.trim());
+    await onCloseInstallment(note.trim(), closeDate || todayStr());
     onClose();
   };
 
@@ -69,6 +72,15 @@ export function CloseInstallmentModal({
             </div>
           )}
         </div>
+        <label className="block text-[11px] text-muted uppercase tracking-wider mb-1.5">
+          Close date
+        </label>
+        <input
+          type="date"
+          value={closeDate}
+          onChange={(e) => setCloseDate(e.target.value)}
+          className="w-full bg-surface border border-border rounded-lg py-2 px-3 text-[13px] text-text outline-none focus:border-accent mb-2"
+        />
         <label className="block text-[11px] text-muted uppercase tracking-wider mb-1.5">
           Note
         </label>

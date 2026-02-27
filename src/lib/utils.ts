@@ -172,3 +172,33 @@ export function isDueThisWeek(loan: Loan): boolean {
   return dueStr >= start && dueStr <= end;
 }
 
+/** Overdue = loan that has at least one scheduled installment whose due date is before today and not yet paid. */
+export function isLoanOverdue(loan: Loan): boolean {
+  return getLoanOverdueCount(loan) > 0;
+}
+
+/** Number of installments that are overdue (due date already passed). */
+export function getLoanOverdueCount(loan: Loan): number {
+  if (loan.paidCount >= loan.totalInstallments) return 0;
+  const freq = loan.freqDays ?? 7;
+  const todayStr = todayDateOnly();
+
+  // Compute how many installments should have been due by today based solely on the
+  // original schedule (start date + N * freq), independent of payment dates.
+  const [sy, sm, sd] = loan.startDate.split('-').map(Number);
+  const start = new Date(sy, sm - 1, sd);
+  const [ty, tm, td] = todayStr.split('-').map(Number);
+  const today = new Date(ty, tm - 1, td);
+
+  const diffMs = today.getTime() - start.getTime();
+  if (diffMs < 0) return 0; // loan hasn't started yet
+
+  const days = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+  let installmentsDueByToday = Math.floor(days / freq) + 1; // first installment at start date
+  installmentsDueByToday = Math.min(installmentsDueByToday, loan.totalInstallments);
+
+  const rawOverdue = installmentsDueByToday - loan.paidCount;
+  const maxRemaining = loan.totalInstallments - loan.paidCount;
+  return Math.max(0, Math.min(rawOverdue, maxRemaining));
+}
+

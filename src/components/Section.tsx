@@ -1,6 +1,6 @@
 interface SectionProps {
   title?: string;
-  count?: number;
+  count?: number | string;
   children: React.ReactNode;
 }
 

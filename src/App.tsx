@@ -112,22 +112,35 @@ export default function App() {
     [selectedLoan, updateLoanById]
   );
 
-  /** Single update when closing an installment from LoanDetailModal (saves note + marks paid). */
+  /** Single update when closing an installment from LoanDetailModal (saves note + marks paid). paidDate defaults to today. */
   const handleLoanCloseInstallmentWithNote = useCallback(
-    async (index: number, note: string) => {
+    async (index: number, note: string, paidDate?: string) => {
       if (selectedLoan == null || index !== selectedLoan.paidCount) return;
       const loan = selectedLoan;
       const paymentNotes = [...(loan.paymentNotes ?? [])];
       while (paymentNotes.length <= index) paymentNotes.push('');
       paymentNotes[index] = note;
       const paymentDates = [...(loan.paymentDates ?? [])];
-      paymentDates.push(new Date().toISOString().split('T')[0]);
+      paymentDates.push(paidDate ?? new Date().toISOString().split('T')[0]);
       await updateLoanById(loan.id, {
         ...loan,
         paidCount: loan.paidCount + 1,
         paymentDates,
         paymentNotes,
       });
+    },
+    [selectedLoan, updateLoanById]
+  );
+
+  /** Update the paid date for an already-closed installment. */
+  const handleLoanUpdatePaymentDate = useCallback(
+    async (index: number, date: string) => {
+      if (selectedLoan == null) return;
+      const loan = selectedLoan;
+      const paymentDates = [...(loan.paymentDates ?? [])];
+      while (paymentDates.length <= index) paymentDates.push('');
+      paymentDates[index] = date;
+      await updateLoanById(loan.id, { ...loan, paymentDates });
     },
     [selectedLoan, updateLoanById]
   );
@@ -168,7 +181,7 @@ export default function App() {
 
   /** Single update: save note and mark next installment paid (avoids note being overwritten). */
   const handleOverviewCloseInstallment = useCallback(
-    async (note: string) => {
+    async (note: string, paidDate?: string) => {
       if (overviewCloseInstallmentLoan == null) return;
       const loan = overviewCloseInstallmentLoan;
       const index = loan.paidCount;
@@ -176,8 +189,7 @@ export default function App() {
       while (paymentNotes.length <= index) paymentNotes.push('');
       paymentNotes[index] = note;
       const paymentDates = [...(loan.paymentDates ?? [])];
-      const nextDate = new Date().toISOString().split('T')[0];
-      paymentDates.push(nextDate);
+      paymentDates.push(paidDate ?? new Date().toISOString().split('T')[0]);
       await updateLoanById(loan.id, {
         ...loan,
         paidCount: loan.paidCount + 1,
@@ -212,7 +224,7 @@ export default function App() {
   // Wait for auth to be resolved before showing login or dashboard (avoids 401s and stuck state)
   if (authLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-bg text-muted2">
+      <div className="min-h-screen w-full flex items-center justify-center bg-bg text-muted2">
         <div className="text-center">
           <div className="w-8 h-8 border-2 border-accent/30 border-t-accent rounded-full animate-spin mx-auto mb-3" />
           <p className="text-sm">Loading…</p>
@@ -228,7 +240,7 @@ export default function App() {
   // Don't render dashboard until we have effectiveOwnerId (set after claimInvite / resolveEffectiveOwner)
   if (effectiveOwnerId == null) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-bg text-muted2">
+      <div className="min-h-screen w-full flex items-center justify-center bg-bg text-muted2">
         <div className="text-center">
           <div className="w-8 h-8 border-2 border-accent/30 border-t-accent rounded-full animate-spin mx-auto mb-3" />
           <p className="text-sm">Loading…</p>
@@ -314,6 +326,7 @@ export default function App() {
         onCloseLoan={handleCloseLoan}
         onUpdateInstallmentNote={handleLoanUpdateInstallmentNote}
         onCloseInstallmentWithNote={handleLoanCloseInstallmentWithNote}
+        onUpdatePaymentDate={handleLoanUpdatePaymentDate}
       />
       <ReserveDetailModal
         reserve={selectedReserve}

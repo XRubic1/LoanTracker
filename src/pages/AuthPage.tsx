@@ -36,8 +36,11 @@ export function AuthPage() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-bg px-4">
-      <div className="w-full max-w-sm bg-card border border-border rounded-2xl p-8 shadow-xl">
+    <div className="min-h-screen w-full flex items-center justify-center bg-bg px-4">
+      <div
+        key={mode}
+        className="w-full max-w-sm bg-card border border-border rounded-2xl p-8 shadow-xl animate-auth-switch"
+      >
         <h1 className="text-xl font-semibold text-text mb-1">Loan Dashboard</h1>
         <p className="text-muted2 text-sm mb-6">
           {mode === 'login' ? 'Sign in to your account' : 'Create an account'}

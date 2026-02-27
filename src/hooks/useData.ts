@@ -1,6 +1,6 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import type { Loan, Reserve } from '@/types';
-import { isConfigMissing } from '@/lib/supabase';
+import { isConfigMissing, getSupabase } from '@/lib/supabase';
 import {
   fetchLoans,
   fetchReserves,
@@ -62,6 +62,31 @@ export function useData(ownerId: string | null): UseDataResult {
   useEffect(() => {
     refetch();
   }, [refetch]);
+
+  // Realtime: refetch when loans or reserves change (any user/tab) so UI stays in sync
+  const refetchRef = useRef(refetch);
+  refetchRef.current = refetch;
+  useEffect(() => {
+    if (configMissing || ownerId == null) return;
+    const supabase = getSupabase();
+    if (!supabase) return;
+    const channel = supabase
+      .channel('loans-reserves-changes')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'loans' },
+        () => { refetchRef.current(); }
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'reserves' },
+        () => { refetchRef.current(); }
+      )
+      .subscribe();
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [configMissing, ownerId]);
 
   const addLoan = useCallback(async (payload: Omit<Loan, 'id'>) => {
     const added = await insertLoan(payload, ownerId);

@@ -12,8 +12,10 @@ interface LoanDetailModalProps {
   onDelete: () => void;
   onCloseLoan: () => void;
   onUpdateInstallmentNote: (index: number, note: string) => void;
-  /** When set, "Close installment" uses this single update (saves note + marks paid) to avoid race. */
-  onCloseInstallmentWithNote?: (index: number, note: string) => Promise<void>;
+  /** When set, "Close installment" uses this single update (saves note + marks paid) to avoid race. paidDate is YYYY-MM-DD. */
+  onCloseInstallmentWithNote?: (index: number, note: string, paidDate: string) => Promise<void>;
+  /** Update the paid date for an already-closed installment. */
+  onUpdatePaymentDate?: (index: number, date: string) => Promise<void>;
 }
 
 /** Small note icon (click to open installment popup) */
@@ -52,14 +54,20 @@ export function LoanDetailModal({
   onCloseLoan,
   onUpdateInstallmentNote,
   onCloseInstallmentWithNote,
+  onUpdatePaymentDate,
 }: LoanDetailModalProps) {
   const [selectedInstallmentIndex, setSelectedInstallmentIndex] = useState<number | null>(null);
   const [popupNote, setPopupNote] = useState('');
+  const [popupCloseDate, setPopupCloseDate] = useState('');
+
+  const todayStr = () => new Date().toISOString().split('T')[0];
 
   useEffect(() => {
     if (loan && selectedInstallmentIndex !== null) {
       const notes = loan.paymentNotes ?? [];
       setPopupNote(notes[selectedInstallmentIndex] ?? '');
+      const existingPaidDate = loan.paymentDates?.[selectedInstallmentIndex];
+      setPopupCloseDate(existingPaidDate ?? todayStr());
     }
   }, [loan, selectedInstallmentIndex]);
 
@@ -89,11 +97,11 @@ export function LoanDetailModal({
     setSelectedInstallmentIndex(null);
   };
 
-  /** Save note and close this installment (only when it's the next unpaid). */
+  /** Save note and close this installment (only when it's the next unpaid). Uses popupCloseDate. */
   const handleCloseInstallment = async () => {
     if (selectedInstallmentIndex === null) return;
     if (selectedInstallmentIndex === loan.paidCount && onCloseInstallmentWithNote) {
-      await onCloseInstallmentWithNote(selectedInstallmentIndex, popupNote.trim());
+      await onCloseInstallmentWithNote(selectedInstallmentIndex, popupNote.trim(), popupCloseDate || todayStr());
     } else {
       onUpdateInstallmentNote(selectedInstallmentIndex, popupNote.trim());
       if (selectedInstallmentIndex === loan.paidCount) {
@@ -108,6 +116,13 @@ export function LoanDetailModal({
     onUpdateInstallmentNote(selectedInstallmentIndex, popupNote.trim());
     closeInstallmentPopup();
   };
+
+  const handleSaveDate = async () => {
+    if (selectedInstallmentIndex === null || !onUpdatePaymentDate || !popupCloseDate) return;
+    await onUpdatePaymentDate(selectedInstallmentIndex, popupCloseDate);
+  };
+
+  const selectedIsPaid = selectedInstallmentIndex !== null && selectedInstallmentIndex < loan.paidCount;
 
   const isInstallmentPopupOpen = selectedInstallmentIndex !== null;
   const selectedIsNextUnpaid = selectedInstallmentIndex === loan.paidCount;
@@ -361,7 +376,7 @@ export function LoanDetailModal({
             <h3 id="installment-modal-title" className="text-base font-semibold mb-1">
               Installment #{selectedInstallmentIndex + 1}
             </h3>
-            <p className="text-[12px] text-muted2 mb-4">
+            <p className="text-[12px] text-muted2 mb-3">
               {(() => {
                 const d = new Date(loan.startDate);
                 d.setDate(d.getDate() + selectedInstallmentIndex * loan.freqDays);
@@ -376,6 +391,15 @@ export function LoanDetailModal({
                 );
               })()}
             </p>
+            <label className="block text-[11px] text-muted uppercase tracking-wider mb-1.5">
+              Close date
+            </label>
+            <input
+              type="date"
+              value={popupCloseDate}
+              onChange={(e) => setPopupCloseDate(e.target.value)}
+              className="w-full bg-surface border border-border rounded-lg py-2 px-3 text-[13px] text-text outline-none focus:border-accent mb-4"
+            />
             <label className="block text-[11px] text-muted uppercase tracking-wider mb-1.5">
               Note
             </label>
@@ -403,13 +427,24 @@ export function LoanDetailModal({
                   Close installment
                 </button>
               ) : (
-                <button
-                  type="button"
-                  onClick={handleSaveNoteOnly}
-                  className="py-1.5 px-3.5 rounded-lg border border-accent/50 text-accent text-xs font-medium hover:bg-accent/10"
-                >
-                  Save note
-                </button>
+                <>
+                  <button
+                    type="button"
+                    onClick={handleSaveNoteOnly}
+                    className="py-1.5 px-3.5 rounded-lg border border-accent/50 text-accent text-xs font-medium hover:bg-accent/10"
+                  >
+                    Save note
+                  </button>
+                  {selectedIsPaid && onUpdatePaymentDate && (
+                    <button
+                      type="button"
+                      onClick={handleSaveDate}
+                      className="py-1.5 px-3.5 rounded-lg border border-accent/50 text-accent text-xs font-medium hover:bg-accent/10"
+                    >
+                      Save date
+                    </button>
+                  )}
+                </>
               )}
             </div>
           </div>

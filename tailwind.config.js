@@ -3,6 +3,15 @@ export default {
   content: ['./index.html', './src/**/*.{js,ts,jsx,tsx}'],
   theme: {
     extend: {
+      keyframes: {
+        'auth-switch': {
+          '0%': { opacity: '0', transform: 'scale(0.97) translateY(4px)' },
+          '100%': { opacity: '1', transform: 'scale(1) translateY(0)' },
+        },
+      },
+      animation: {
+        'auth-switch': 'auth-switch 0.3s ease-out forwards',
+      },
       colors: {
         bg: '#0d0f14',
         surface: '#13161d',
