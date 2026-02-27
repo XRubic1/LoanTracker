@@ -25,11 +25,9 @@ const CHART_COLORS = ['#4f8ef7', '#7c5cfc', '#2ecc8f', '#f75f5f', '#f7c34f', '#f
 export function OverviewPage({
   loans,
   reserves,
-  markLoanPaid,
-  markReservePaid,
   onOpenCloseInstallment,
   onOpenCloseDeduction,
-}: Pick<UseDataResult, 'loans' | 'reserves' | 'markLoanPaid' | 'markReservePaid'> & {
+}: Pick<UseDataResult, 'loans' | 'reserves'> & {
   onOpenCloseInstallment: (loanId: number) => void;
   onOpenCloseDeduction: (reserveId: number) => void;
 }) {

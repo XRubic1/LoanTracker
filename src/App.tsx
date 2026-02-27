@@ -271,8 +271,6 @@ export default function App() {
           <OverviewPage
             loans={loans}
             reserves={reserves}
-            markLoanPaid={markLoanPaid}
-            markReservePaid={markReservePaid}
             onOpenCloseInstallment={setOverviewCloseInstallmentLoanId}
             onOpenCloseDeduction={setOverviewCloseDeductionReserveId}
           />

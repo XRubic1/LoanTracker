@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState } from 'react';
 import { Modal } from '@/components/Modal';
 import type { Loan, LoanProviderType } from '@/types';
 import { fmt } from '@/lib/utils';
