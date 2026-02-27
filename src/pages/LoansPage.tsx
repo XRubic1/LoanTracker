@@ -6,13 +6,14 @@ import { CheckBox } from '@/components/CheckBox';
 import { fmt, fmtDate, getLoanRemaining, getNextDueDate, isDueThisWeek, getLoanProviderDisplay } from '@/lib/utils';
 import type { UseDataResult } from '@/hooks/useData';
 
-type LoanFilter = 'all' | 'due' | 'active';
+type LoanFilter = 'all' | 'due' | 'active' | 'hidden';
 
 interface LoansPageProps
   extends Pick<
     UseDataResult,
     'loans' | 'markLoanPaid' | 'removeLoan'
   > {
+  runWithPasswordProtection: (action: () => void) => void;
   onOpenDetail: (id: number) => void;
   onAddLoan: () => void;
 }
@@ -40,18 +41,23 @@ export function LoansPage({
   loans,
   markLoanPaid,
   removeLoan,
+  runWithPasswordProtection,
   onOpenDetail,
   onAddLoan,
 }: LoansPageProps) {
   const [filter, setFilter] = useState<LoanFilter>('all');
 
   let list: Loan[] = [...loans];
-  if (filter === 'due') list = list.filter(isDueThisWeek);
-  if (filter === 'active') list = list.filter((l) => l.paidCount < l.totalInstallments);
+  if (filter === 'due') list = list.filter((l) => !l.hidden && isDueThisWeek(l));
+  if (filter === 'active') list = list.filter((l) => !l.hidden && l.paidCount < l.totalInstallments);
+  if (filter === 'hidden') list = list.filter((l) => l.hidden);
+  if (filter === 'all') list = list.filter((l) => !l.hidden);
 
   const handleDelete = (id: number) => {
-    if (!window.confirm('Delete this loan?')) return;
-    removeLoan(id);
+    runWithPasswordProtection(() => {
+      if (!window.confirm('Delete this loan?')) return;
+      removeLoan(id);
+    });
   };
 
   return (
@@ -68,7 +74,7 @@ export function LoansPage({
       </div>
 
       <div className="flex gap-1 mb-5 bg-surface p-1 rounded-[10px] w-fit">
-        {(['all', 'due', 'active'] as const).map((f) => (
+        {(['all', 'due', 'active', 'hidden'] as const).map((f) => (
           <button
             key={f}
             type="button"
@@ -77,7 +83,13 @@ export function LoansPage({
               filter === f ? 'bg-card text-text' : 'text-muted2'
             }`}
           >
-            {f === 'all' ? 'All' : f === 'due' ? 'Due This Week' : 'Active'}
+            {f === 'all'
+              ? 'All'
+              : f === 'due'
+                ? 'Due This Week'
+                : f === 'active'
+                  ? 'Active'
+                  : 'Hidden'}
           </button>
         ))}
       </div>

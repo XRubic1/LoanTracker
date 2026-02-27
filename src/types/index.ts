@@ -23,6 +23,8 @@ export interface Loan {
   providerName: string;
   /** Fee added to total; effective total = total + factoringFee, installment = effectiveTotal / totalInstallments. */
   factoringFee: number;
+  /** When true, loan is hidden from overview/loans lists (client inactive or cannot be completed). */
+  hidden: boolean;
 }
 
 /** App model: reserve (camelCase) */
@@ -59,6 +61,7 @@ export interface LoanRow {
   provider_type?: string;
   provider_name?: string | null;
   factoring_fee?: number;
+  hidden?: boolean;
 }
 
 /** Supabase row: reserves table (snake_case) */

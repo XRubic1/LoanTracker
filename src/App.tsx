@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useRef } from 'react';
 import type { PageId } from '@/types';
 import { Sidebar } from '@/components/Sidebar';
 import { OverviewPage } from '@/pages/OverviewPage';
@@ -13,6 +13,8 @@ import { CloseInstallmentModal } from '@/components/modals/CloseInstallmentModal
 import { CloseDeductionModal } from '@/components/modals/CloseDeductionModal';
 import { AddLoanModal } from '@/components/modals/AddLoanModal';
 import { AddReserveModal } from '@/components/modals/AddReserveModal';
+import type { Loan } from '@/types';
+import { PasswordConfirmModal } from '@/components/PasswordConfirmModal';
 import { useAuth } from '@/contexts/AuthContext';
 import { useData } from '@/hooks/useData';
 
@@ -25,6 +27,25 @@ export default function App() {
   const [overviewCloseDeductionReserveId, setOverviewCloseDeductionReserveId] = useState<number | null>(null);
   const [addLoanOpen, setAddLoanOpen] = useState(false);
   const [addReserveOpen, setAddReserveOpen] = useState(false);
+  const [passwordModalOpen, setPasswordModalOpen] = useState(false);
+  const pendingPasswordActionRef = useRef<(() => void) | null>(null);
+
+  /** Run a destructive action (delete/reverse) only after the user enters the correct password. */
+  const runWithPasswordProtection = useCallback((action: () => void) => {
+    pendingPasswordActionRef.current = action;
+    setPasswordModalOpen(true);
+  }, []);
+
+  const handlePasswordSuccess = useCallback(() => {
+    pendingPasswordActionRef.current?.();
+    pendingPasswordActionRef.current = null;
+    setPasswordModalOpen(false);
+  }, []);
+
+  const closePasswordModal = useCallback(() => {
+    setPasswordModalOpen(false);
+    pendingPasswordActionRef.current = null;
+  }, []);
 
   const {
     loans,
@@ -68,6 +89,12 @@ export default function App() {
     if (loanDetailId == null) return;
     await reverseLoanPayment(loanDetailId);
   }, [loanDetailId, reverseLoanPayment]);
+
+  const handleLoanToggleHidden = useCallback(async (hidden: boolean) => {
+    if (selectedLoan == null) return;
+    const updated: Loan = { ...selectedLoan, hidden };
+    await updateLoanById(selectedLoan.id, updated);
+  }, [selectedLoan, updateLoanById]);
 
   const handleLoanDelete = useCallback(async () => {
     if (loanDetailId == null) return;
@@ -292,6 +319,7 @@ export default function App() {
             loans={loans}
             markLoanPaid={markLoanPaid}
             removeLoan={removeLoan}
+            runWithPasswordProtection={runWithPasswordProtection}
             onOpenDetail={setLoanDetailId}
             onAddLoan={() => setAddLoanOpen(true)}
           />
@@ -301,6 +329,7 @@ export default function App() {
             reserves={reserves}
             markReservePaid={markReservePaid}
             removeReserve={removeReserve}
+            runWithPasswordProtection={runWithPasswordProtection}
             onOpenDetail={setReserveDetailId}
             onAddReserve={() => setAddReserveOpen(true)}
           />
@@ -323,6 +352,8 @@ export default function App() {
         onMarkPaid={handleLoanMarkPaid}
         onReverse={handleLoanReverse}
         onDelete={handleLoanDelete}
+        onToggleHidden={handleLoanToggleHidden}
+        runWithPasswordProtection={runWithPasswordProtection}
         onCloseLoan={handleCloseLoan}
         onUpdateInstallmentNote={handleLoanUpdateInstallmentNote}
         onCloseInstallmentWithNote={handleLoanCloseInstallmentWithNote}
@@ -335,6 +366,7 @@ export default function App() {
         onMarkDeducted={handleReserveMarkDeducted}
         onReverse={handleReserveReverse}
         onDelete={handleReserveDelete}
+        runWithPasswordProtection={runWithPasswordProtection}
         onCloseReserve={handleCloseReserve}
         onUpdateDeductionNote={handleReserveUpdateDeductionNote}
         onCloseDeductionWithNote={handleReserveCloseDeductionWithNote}
@@ -364,6 +396,12 @@ export default function App() {
         open={addReserveOpen}
         onClose={() => setAddReserveOpen(false)}
         onAdd={addReserve}
+      />
+      <PasswordConfirmModal
+        open={passwordModalOpen}
+        onClose={closePasswordModal}
+        onSuccess={handlePasswordSuccess}
+        message="Delete and reverse actions require a password."
       />
     </>
   );

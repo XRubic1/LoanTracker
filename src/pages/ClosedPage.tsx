@@ -12,7 +12,7 @@ interface ClosedPageProps extends Pick<UseDataResult, 'loans' | 'reserves'> {
 export function ClosedPage({ loans, reserves, onOpenLoan, onOpenReserve }: ClosedPageProps) {
   const [tab, setTab] = useState<'loans' | 'reserves'>('loans');
 
-  const closedLoans = loans.filter((l) => l.paidCount >= l.totalInstallments);
+  const closedLoans = loans.filter((l) => l.paidCount >= l.totalInstallments && !l.hidden);
   const closedReserves = reserves.filter((r) => r.paidCount >= r.installments);
 
   return (

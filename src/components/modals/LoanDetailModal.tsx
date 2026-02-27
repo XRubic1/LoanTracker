@@ -10,6 +10,10 @@ interface LoanDetailModalProps {
   onMarkPaid: () => void;
   onReverse: () => void;
   onDelete: () => void;
+  /** Toggle whether this loan is hidden from the dashboard lists. */
+  onToggleHidden: (hidden: boolean) => void;
+  /** Run destructive action only after password confirmation. */
+  runWithPasswordProtection: (action: () => void) => void;
   onCloseLoan: () => void;
   onUpdateInstallmentNote: (index: number, note: string) => void;
   /** When set, "Close installment" uses this single update (saves note + marks paid) to avoid race. paidDate is YYYY-MM-DD. */
@@ -51,6 +55,8 @@ export function LoanDetailModal({
   onMarkPaid,
   onReverse,
   onDelete,
+  onToggleHidden,
+  runWithPasswordProtection,
   onCloseLoan,
   onUpdateInstallmentNote,
   onCloseInstallmentWithNote,
@@ -79,8 +85,14 @@ export function LoanDetailModal({
   const notes = loan.paymentNotes ?? [];
 
   const handleDelete = () => {
-    if (!window.confirm('Delete this loan?')) return;
-    onDelete();
+    runWithPasswordProtection(() => {
+      if (!window.confirm('Delete this loan?')) return;
+      onDelete();
+    });
+  };
+
+  const handleReverse = () => {
+    runWithPasswordProtection(() => onReverse());
   };
 
   const handleCloseLoan = () => {
@@ -311,6 +323,27 @@ export function LoanDetailModal({
           <div className="flex flex-wrap gap-2.5 justify-end mt-5">
             <button
               type="button"
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                onToggleHidden(!(loan.hidden ?? false));
+              }}
+              className="mr-auto flex items-center gap-2 text-[11px] text-muted2 cursor-pointer rounded-md py-1.5 pr-2 pl-1 border-0 bg-transparent hover:bg-white/5 text-left"
+            >
+              <span
+                className={`flex items-center justify-center w-[22px] h-[22px] rounded-md border flex-shrink-0 transition-all
+                  ${(loan.hidden ?? false) ? 'bg-green border-green' : 'bg-surface border-border'}`}
+              >
+                {(loan.hidden ?? false) && (
+                  <svg className="w-3 h-3 stroke-white stroke-[2.5] fill-none" viewBox="0 0 12 12">
+                    <polyline points="2,6 5,9 10,3" />
+                  </svg>
+                )}
+              </span>
+              <span>{(loan.hidden ?? false) ? 'Hidden from dashboard lists' : 'Hide this loan from dashboard'}</span>
+            </button>
+            <button
+              type="button"
               onClick={handlePrint}
               className="py-1.5 px-3.5 rounded-lg border border-border text-muted2 text-xs font-medium bg-transparent hover:border-accent hover:text-accent"
               title="Print loan details (TRUFUNDING LLC)"
@@ -333,7 +366,7 @@ export function LoanDetailModal({
             </button>
             <button
               type="button"
-              onClick={onReverse}
+              onClick={handleReverse}
               disabled={!canReverse}
               className="py-1.5 px-3.5 rounded-lg border border-yellow/30 text-yellow text-xs font-medium bg-transparent hover:bg-yellow/10 disabled:opacity-50 disabled:cursor-not-allowed"
             >

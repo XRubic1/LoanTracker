@@ -25,6 +25,7 @@ function loanFromRow(row: LoanRow | null): Loan | null {
     providerType,
     providerName: row.provider_name ?? '',
     factoringFee: Number(row.factoring_fee ?? 0),
+    hidden: Boolean(row.hidden ?? false),
   };
 }
 
@@ -48,6 +49,7 @@ function loanToRow(loan: Loan, ownerId?: string | null): Omit<LoanRow, 'id'> {
     provider_type: loan.providerType ?? 'TruFunding',
     provider_name: loan.providerName || null,
     factoring_fee: loan.factoringFee ?? 0,
+    hidden: loan.hidden ?? false,
   };
 }
 

@@ -66,6 +66,42 @@ function getWeekBoundsDateOnly(): { start: string; end: string } {
   return { start: toStr(start), end: toStr(end) };
 }
 
+/** Next week (Mon–Sun after current week) as date-only strings. */
+function getNextWeekBoundsDateOnly(): { start: string; end: string } {
+  const { start } = getWeekBoundsDateOnly();
+  const [y, m, d] = start.split('-').map(Number);
+  const nextMon = new Date(y, m - 1, d);
+  nextMon.setDate(nextMon.getDate() + 7);
+  const nextSun = new Date(nextMon);
+  nextSun.setDate(nextMon.getDate() + 6);
+  const toStr = (date: Date) =>
+    `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+  return { start: toStr(nextMon), end: toStr(nextSun) };
+}
+
+/** True if date (YYYY-MM-DD) falls in the current week or the next week. */
+export function isDateThisOrNextWeek(dateStr: string): boolean {
+  const { start, end } = getWeekBoundsDateOnly();
+  if (dateStr >= start && dateStr <= end) return true;
+  const next = getNextWeekBoundsDateOnly();
+  return dateStr >= next.start && dateStr <= next.end;
+}
+
+/** Returns 'this_week' or 'next_week' if date is in current/next week; otherwise null. */
+export function getDateWeekLabel(dateStr: string): 'this_week' | 'next_week' | null {
+  const { start, end } = getWeekBoundsDateOnly();
+  if (dateStr >= start && dateStr <= end) return 'this_week';
+  const next = getNextWeekBoundsDateOnly();
+  if (dateStr >= next.start && dateStr <= next.end) return 'next_week';
+  return null;
+}
+
+/** New loan = no installments paid yet and first installment is due this or next week. */
+export function isNewLoan(loan: Loan): boolean {
+  if (loan.paidCount > 0) return false;
+  return isDateThisOrNextWeek(loan.startDate);
+}
+
 // --- Current week (computed from today so it's never stale) ---
 
 /** Week that contains today: Monday 00:00:00 through Sunday 23:59:59. (On Sunday we use the week Mon–Sun that includes that Sunday, not next week.) */
@@ -120,13 +156,26 @@ export function isReserveDueNow(r: Reserve): boolean {
   return nextDue <= todayMidnight;
 }
 
-/** Due this week = next due (as calendar date) is within the current week only. */
+/** Overdue = next deduction due date is before today (not yet deducted). */
+export function isReserveOverdue(r: Reserve): boolean {
+  if (r.paidCount >= r.installments) return false;
+  const dueStr = getReserveNextDueDateOnly(r);
+  if (!dueStr) return false;
+  const lastDeducted = r.deductionDates?.[r.deductionDates.length - 1];
+  if (lastDeducted && lastDeducted === todayDateOnly()) return false; // already deducted today
+  const today = todayDateOnly();
+  return dueStr < today;
+}
+
+/** Due this week = next due is within the current week OR reserve is overdue (so overdue reserves show here). */
 export function isReserveDueThisWeek(r: Reserve): boolean {
   if (r.paidCount >= r.installments) return false;
   const dueStr = getReserveNextDueDateOnly(r);
   if (!dueStr) return false;
   const lastDeducted = r.deductionDates?.[r.deductionDates.length - 1];
   if (lastDeducted && lastDeducted === todayDateOnly()) return false;
+  const today = todayDateOnly();
+  if (dueStr < today) return true; // overdue => show in "due this week"
   const { start, end } = getWeekBoundsDateOnly();
   return dueStr >= start && dueStr <= end;
 }
@@ -163,11 +212,13 @@ export function getLoanRemaining(loan: Loan): number {
   return Math.max(0, loan.total - loan.paidCount * loan.installment);
 }
 
-/** Due this week = next due (as calendar date) is within the current week only. */
+/** Due this week = next due is within the current week OR the next due is already overdue (so overdue loans also appear here). */
 export function isDueThisWeek(loan: Loan): boolean {
   if (loan.paidCount >= loan.totalInstallments) return false;
   const dueStr = getNextDueDateOnly(loan);
   if (!dueStr) return false;
+  const today = todayDateOnly();
+  if (dueStr < today) return true; // overdue installment we still want to take this week
   const { start, end } = getWeekBoundsDateOnly();
   return dueStr >= start && dueStr <= end;
 }

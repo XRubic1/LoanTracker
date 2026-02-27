@@ -10,6 +10,8 @@ interface ReserveDetailModalProps {
   onMarkDeducted: () => void;
   onReverse: () => void;
   onDelete: () => void;
+  /** Run destructive action only after password confirmation. */
+  runWithPasswordProtection: (action: () => void) => void;
   onCloseReserve: () => void;
   onUpdateDeductionNote: (index: number, note: string) => void;
   /** When set, "Close deduction" uses this single update (saves note + marks deducted) to avoid race. */
@@ -49,6 +51,7 @@ export function ReserveDetailModal({
   onMarkDeducted,
   onReverse,
   onDelete,
+  runWithPasswordProtection,
   onCloseReserve,
   onUpdateDeductionNote,
   onCloseDeductionWithNote,
@@ -73,8 +76,14 @@ export function ReserveDetailModal({
   const notes = reserve.deductionNotes ?? [];
 
   const handleDelete = () => {
-    if (!window.confirm('Delete this reserve?')) return;
-    onDelete();
+    runWithPasswordProtection(() => {
+      if (!window.confirm('Delete this reserve?')) return;
+      onDelete();
+    });
+  };
+
+  const handleReverse = () => {
+    runWithPasswordProtection(() => onReverse());
   };
 
   const handleCloseReserve = () => {
@@ -215,7 +224,7 @@ export function ReserveDetailModal({
             </button>
             <button
               type="button"
-              onClick={onReverse}
+              onClick={handleReverse}
               disabled={!canReverse}
               className="py-1.5 px-3.5 rounded-lg border border-yellow/30 text-yellow text-xs font-medium bg-transparent hover:bg-yellow/10 disabled:opacity-50 disabled:cursor-not-allowed"
             >

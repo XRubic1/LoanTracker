@@ -11,9 +11,12 @@ import {
   getLoanRemaining,
   getNextDueDate,
   getReserveNextDueDate,
+  getDateWeekLabel,
   isDueThisWeek,
   isLoanOverdue,
+  isNewLoan,
   isReserveDueThisWeek,
+  isReserveOverdue,
   isToday,
   getLoanProviderDisplay,
   getLoanBasePerInstallment,
@@ -36,8 +39,10 @@ export function OverviewPage({
   const chartRef = useRef<HTMLCanvasElement>(null);
   const chartInstance = useRef<Chart | null>(null);
 
-  const activeLoans = loans.filter((l) => l.paidCount < l.totalInstallments);
-  const closedLoans = loans.filter((l) => l.paidCount >= l.totalInstallments);
+  const visibleLoans = loans.filter((l) => !l.hidden);
+  const activeLoans = visibleLoans.filter((l) => l.paidCount < l.totalInstallments);
+  const closedLoans = visibleLoans.filter((l) => l.paidCount >= l.totalInstallments);
+  const newLoans = activeLoans.filter(isNewLoan);
   const dueLoans = activeLoans.filter(isDueThisWeek);
   const overdueLoans = activeLoans.filter(isLoanOverdue);
   const totalOutstanding = activeLoans.reduce((s, l) => s + getLoanRemaining(l), 0);
@@ -97,6 +102,44 @@ export function OverviewPage({
           {getWeekRange()}
         </span>
       </div>
+
+      {newLoans.length > 0 && (
+        <div
+          className="mb-6 rounded-xl border-2 border-accent/50 bg-gradient-to-r from-accent/20 to-accent/5 px-4 py-3.5 flex items-start gap-4 shadow-lg shadow-accent/10 ring-1 ring-accent/20"
+          role="alert"
+        >
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-accent/25 text-accent" aria-hidden>
+            <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+            </svg>
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="font-semibold text-text text-[14px]">
+              {newLoans.length} new loan{newLoans.length !== 1 ? 's' : ''} — first installment due soon
+            </p>
+            <ul className="mt-2 flex flex-wrap gap-2">
+              {newLoans.map((l) => {
+                const weekLabel = getDateWeekLabel(l.startDate);
+                const isThisWeek = weekLabel === 'this_week';
+                return (
+                  <li key={l.id} className="inline-flex items-center gap-1.5">
+                    <span className="text-[13px] text-text font-medium">{l.client}</span>
+                    <span
+                      className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wider ${
+                        isThisWeek
+                          ? 'bg-yellow/20 text-yellow ring-1 ring-yellow/40'
+                          : 'bg-accent/20 text-accent ring-1 ring-accent/40'
+                      }`}
+                    >
+                      {isThisWeek ? 'This week' : 'Next week'}
+                    </span>
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
+        </div>
+      )}
 
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4 mb-7">
         <StatCard
@@ -164,14 +207,7 @@ export function OverviewPage({
                 const nextDue = getNextDueDate(l);
                 const overdueCount = getLoanOverdueCount(l);
                 return (
-                  <tr
-                    key={l.id}
-                    role="button"
-                    tabIndex={0}
-                    onClick={() => onOpenCloseInstallment(l.id)}
-                    onKeyDown={(e) => e.key === 'Enter' && onOpenCloseInstallment(l.id)}
-                    className="hover:bg-white/[0.015] transition-colors cursor-pointer"
-                  >
+                  <tr key={l.id} className="transition-colors">
                     <td className="py-2.5 pr-3 border-b border-border/40 align-middle text-[13px]">
                       <div className="font-medium text-text">{l.client}</div>
                       <div className="text-[11px] text-muted font-mono mt-0.5">
@@ -311,6 +347,7 @@ export function OverviewPage({
                 const perInst = r.amount / r.installments;
                 const nextDue = getReserveNextDueDate(r);
                 const isDueToday = nextDue && isToday(nextDue);
+                const isOverdue = isReserveOverdue(r);
                 return (
                   <div
                     key={r.id}
@@ -334,15 +371,15 @@ export function OverviewPage({
                     <div className="flex items-center gap-2.5">
                       <span className="font-mono font-medium text-accent2">{fmt(perInst)}</span>
                       <span
-                        className={`font-mono text-[11px] ${isDueToday ? 'text-yellow' : 'text-muted2'}`}
+                        className={`font-mono text-[11px] ${isDueToday ? 'text-yellow' : isOverdue ? 'text-red' : 'text-muted2'}`}
                       >
                         {nextDue ? fmtDate(nextDue) : '—'}
                       </span>
                       {isDueToday ? (
                         <Badge variant="due">Today</Badge>
-                      ) : (
+                      ) : isOverdue ? (
                         <Badge variant="overdue">Overdue</Badge>
-                      )}
+                      ) : null}
                     </div>
                   </div>
                 );

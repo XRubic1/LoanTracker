@@ -66,6 +66,7 @@ export function AddLoanModal({ open, onClose, onAdd }: AddLoanModalProps) {
         providerType,
         providerName: providerType === 'Other' ? providerName.trim() : '',
         factoringFee: fee,
+        hidden: false,
       });
       setClient('');
       setRef('');

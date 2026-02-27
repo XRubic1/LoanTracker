@@ -12,6 +12,7 @@ import type { UseDataResult } from '@/hooks/useData';
 
 interface ReservesPageProps
   extends Pick<UseDataResult, 'reserves' | 'markReservePaid' | 'removeReserve'> {
+  runWithPasswordProtection: (action: () => void) => void;
   onOpenDetail: (id: number) => void;
   onAddReserve: () => void;
 }
@@ -39,12 +40,15 @@ export function ReservesPage({
   reserves,
   markReservePaid,
   removeReserve,
+  runWithPasswordProtection,
   onOpenDetail,
   onAddReserve,
 }: ReservesPageProps) {
   const handleDelete = (id: number) => {
-    if (!window.confirm('Delete this reserve?')) return;
-    removeReserve(id);
+    runWithPasswordProtection(() => {
+      if (!window.confirm('Delete this reserve?')) return;
+      removeReserve(id);
+    });
   };
 
   return (
