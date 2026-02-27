@@ -1,6 +1,6 @@
+import { useState } from 'react';
 import { Section } from '@/components/Section';
 import { Badge } from '@/components/Badge';
-import { CheckBox } from '@/components/CheckBox';
 import {
   fmt,
   fmtDate,
@@ -17,39 +17,21 @@ interface ReservesPageProps
   onAddReserve: () => void;
 }
 
-function DelButton({ onClick }: { onClick: () => void }) {
-  return (
-    <button
-      type="button"
-      onClick={(e) => {
-        e.stopPropagation();
-        onClick();
-      }}
-      className="w-[26px] h-[26px] rounded-md border-0 bg-transparent text-muted flex items-center justify-center transition-colors hover:bg-red/10 hover:text-red"
-    >
-      <svg className="w-3.5 h-3.5 stroke-currentColor stroke-2 fill-none" viewBox="0 0 24 24">
-        <polyline points="3 6 5 6 21 6" />
-        <path d="M19 6l-1 14H6L5 6" />
-        <path d="M10 11v6M14 11v6" />
-      </svg>
-    </button>
-  );
-}
-
 export function ReservesPage({
   reserves,
-  markReservePaid,
-  removeReserve,
-  runWithPasswordProtection,
+  markReservePaid: _markReservePaid, // provided but not used in this list view
+  removeReserve: _removeReserve,
+  runWithPasswordProtection: _runWithPasswordProtection,
   onOpenDetail,
   onAddReserve,
 }: ReservesPageProps) {
-  const handleDelete = (id: number) => {
-    runWithPasswordProtection(() => {
-      if (!window.confirm('Delete this reserve?')) return;
-      removeReserve(id);
-    });
-  };
+  const [hideClosed, setHideClosed] = useState(true); // start with closed reserves hidden
+
+  let list = [...reserves];
+  // Optionally hide fully paid reserves in this list view (closed reserves are shown on the Closed tab instead)
+  if (hideClosed) {
+    list = list.filter((r) => r.paidCount < r.installments);
+  }
 
   return (
     <>
@@ -61,6 +43,27 @@ export function ReservesPage({
           className="inline-flex items-center gap-1.5 py-1.5 px-3.5 rounded-lg border-0 bg-accent text-white text-xs font-medium transition-colors hover:bg-[#3a7de8]"
         >
           + Add Reserve
+        </button>
+      </div>
+
+      <div className="flex items-center justify-end mb-5">
+        <button
+          type="button"
+          onClick={() => setHideClosed((v) => !v)}
+          className={`inline-flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-md border transition-colors ${
+            hideClosed
+              ? 'border-accent bg-accent/10 text-accent'
+              : 'border-border bg-surface text-muted2 hover:text-text'
+          }`}
+        >
+          <span
+            className={`w-[14px] h-[14px] rounded-[4px] border flex items-center justify-center text-[10px] ${
+              hideClosed ? 'bg-accent border-accent text-white' : 'border-border'
+            }`}
+          >
+            {hideClosed ? '✓' : ''}
+          </span>
+          <span>Hide closed reserves</span>
         </button>
       </div>
 
@@ -90,14 +93,14 @@ export function ReservesPage({
             </tr>
           </thead>
           <tbody>
-            {reserves.length === 0 ? (
+            {list.length === 0 ? (
               <tr>
                 <td colSpan={8} className="text-center py-10 text-muted text-[13px]">
                   No reserves
                 </td>
               </tr>
             ) : (
-              reserves.map((r) => {
+              list.map((r) => {
                 const isClosed = r.paidCount >= r.installments;
                 const nextDue = getReserveNextDueDate(r);
                 const isDueNow = isReserveDueNow(r);
@@ -145,16 +148,7 @@ export function ReservesPage({
                       {lastDeducted}
                     </td>
                     <td className="py-2.5 pr-3 border-b border-border/40 align-middle">{status}</td>
-                    <td className="py-2.5 pr-3 border-b border-border/40 align-middle" onClick={(e) => e.stopPropagation()}>
-                      <div className="flex items-center gap-1">
-                        <CheckBox
-                          checked={isClosed}
-                          onToggle={() => !isClosed && markReservePaid(r.id)}
-                          disabled={isClosed}
-                        />
-                        <DelButton onClick={() => handleDelete(r.id)} />
-                      </div>
-                    </td>
+                    <td className="py-2.5 pr-3 border-b border-border/40 align-middle" />
                   </tr>
                 );
               })

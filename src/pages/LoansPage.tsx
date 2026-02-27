@@ -2,7 +2,6 @@ import { useState } from 'react';
 import type { Loan } from '@/types';
 import { Section } from '@/components/Section';
 import { Badge } from '@/components/Badge';
-import { CheckBox } from '@/components/CheckBox';
 import { fmt, fmtDate, getLoanRemaining, getNextDueDate, isDueThisWeek, getLoanProviderDisplay } from '@/lib/utils';
 import type { UseDataResult } from '@/hooks/useData';
 
@@ -18,34 +17,16 @@ interface LoansPageProps
   onAddLoan: () => void;
 }
 
-function DelButton({ onClick }: { onClick: () => void }) {
-  return (
-    <button
-      type="button"
-      onClick={(e) => {
-        e.stopPropagation();
-        onClick();
-      }}
-      className="w-[26px] h-[26px] rounded-md border-0 bg-transparent text-muted flex items-center justify-center transition-colors hover:bg-red/10 hover:text-red"
-    >
-      <svg className="w-3.5 h-3.5 stroke-currentColor stroke-2 fill-none" viewBox="0 0 24 24">
-        <polyline points="3 6 5 6 21 6" />
-        <path d="M19 6l-1 14H6L5 6" />
-        <path d="M10 11v6M14 11v6" />
-      </svg>
-    </button>
-  );
-}
-
 export function LoansPage({
   loans,
-  markLoanPaid,
-  removeLoan,
-  runWithPasswordProtection,
+  markLoanPaid: _markLoanPaid, // provided but not used in this list view
+  removeLoan: _removeLoan,
+  runWithPasswordProtection: _runWithPasswordProtection,
   onOpenDetail,
   onAddLoan,
 }: LoansPageProps) {
   const [filter, setFilter] = useState<LoanFilter>('all');
+  const [hideClosed, setHideClosed] = useState(true); // start with closed loans hidden
 
   let list: Loan[] = [...loans];
   if (filter === 'due') list = list.filter((l) => !l.hidden && isDueThisWeek(l));
@@ -53,12 +34,10 @@ export function LoansPage({
   if (filter === 'hidden') list = list.filter((l) => l.hidden);
   if (filter === 'all') list = list.filter((l) => !l.hidden);
 
-  const handleDelete = (id: number) => {
-    runWithPasswordProtection(() => {
-      if (!window.confirm('Delete this loan?')) return;
-      removeLoan(id);
-    });
-  };
+  // Optional: hide fully paid loans in this list view (closed loans are shown on the Closed tab instead)
+  if (hideClosed) {
+    list = list.filter((l) => l.paidCount < l.totalInstallments);
+  }
 
   return (
     <>
@@ -73,25 +52,45 @@ export function LoansPage({
         </button>
       </div>
 
-      <div className="flex gap-1 mb-5 bg-surface p-1 rounded-[10px] w-fit">
-        {(['all', 'due', 'active', 'hidden'] as const).map((f) => (
-          <button
-            key={f}
-            type="button"
-            onClick={() => setFilter(f)}
-            className={`py-1.5 px-4 rounded-md text-[13px] font-medium transition-colors ${
-              filter === f ? 'bg-card text-text' : 'text-muted2'
+      <div className="flex items-center justify-between mb-5 gap-4">
+        <div className="flex gap-1 bg-surface p-1 rounded-[10px] w-fit">
+          {(['all', 'due', 'active', 'hidden'] as const).map((f) => (
+            <button
+              key={f}
+              type="button"
+              onClick={() => setFilter(f)}
+              className={`py-1.5 px-4 rounded-md text-[13px] font-medium transition-colors ${
+                filter === f ? 'bg-card text-text' : 'text-muted2'
+              }`}
+            >
+              {f === 'all'
+                ? 'All'
+                : f === 'due'
+                  ? 'Due This Week'
+                  : f === 'active'
+                    ? 'Active'
+                    : 'Hidden'}
+            </button>
+          ))}
+        </div>
+        <button
+          type="button"
+          onClick={() => setHideClosed((v) => !v)}
+          className={`inline-flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-md border transition-colors ${
+            hideClosed
+              ? 'border-accent bg-accent/10 text-accent'
+              : 'border-border bg-surface text-muted2 hover:text-text'
+          }`}
+        >
+          <span
+            className={`w-[14px] h-[14px] rounded-[4px] border flex items-center justify-center text-[10px] ${
+              hideClosed ? 'bg-accent border-accent text-white' : 'border-border'
             }`}
           >
-            {f === 'all'
-              ? 'All'
-              : f === 'due'
-                ? 'Due This Week'
-                : f === 'active'
-                  ? 'Active'
-                  : 'Hidden'}
-          </button>
-        ))}
+            {hideClosed ? '✓' : ''}
+          </span>
+          <span>Hide closed loans</span>
+        </button>
       </div>
 
       <Section title="Loans">
@@ -193,16 +192,7 @@ export function LoansPage({
                       {nd ? fmtDate(nd) : '—'}
                     </td>
                     <td className="py-2.5 pr-3 border-b border-border/40 align-middle">{status}</td>
-                    <td className="py-2.5 pr-3 border-b border-border/40 align-middle" onClick={(e) => e.stopPropagation()}>
-                      <div className="flex items-center gap-1">
-                        <CheckBox
-                          checked={isClosed}
-                          onToggle={() => !isClosed && markLoanPaid(l.id)}
-                          disabled={isClosed}
-                        />
-                        <DelButton onClick={() => handleDelete(l.id)} />
-                      </div>
-                    </td>
+                    <td className="py-2.5 pr-3 border-b border-border/40 align-middle" />
                   </tr>
                 );
               })
