@@ -21,7 +21,6 @@ import {
   getLoanProviderDisplay,
   getLoanBasePerInstallment,
   getLoanFeePerInstallment,
-  getLoanOverdueCount,
 } from '@/lib/utils';
 import type { UseDataResult } from '@/hooks/useData';
 
@@ -44,11 +43,8 @@ export function OverviewPage({
   const closedLoans = visibleLoans.filter((l) => l.paidCount >= l.totalInstallments);
   const newLoans = activeLoans.filter(isNewLoan);
   const dueLoans = activeLoans.filter(isDueThisWeek);
-  const overdueLoans = activeLoans.filter(isLoanOverdue);
   const totalOutstanding = activeLoans.reduce((s, l) => s + getLoanRemaining(l), 0);
   const weekDueAmount = dueLoans.reduce((s, l) => s + l.installment, 0);
-  const overdueAmount = overdueLoans.reduce((s, l) => s + l.installment, 0);
-  const totalOverdueInstallments = overdueLoans.reduce((s, l) => s + getLoanOverdueCount(l), 0);
   const resWeek = reserves.filter(isReserveDueThisWeek);
   const resWeekTotal = resWeek.reduce((s, r) => s + r.amount / r.installments, 0);
   const upcoming = activeLoans
@@ -149,12 +145,6 @@ export function OverviewPage({
           sub={`${activeLoans.length} active loans`}
         />
         <StatCard
-          label="Overdue"
-          value={fmt(overdueAmount)}
-          valueClassName="text-red"
-          sub={`${totalOverdueInstallments} installments overdue`}
-        />
-        <StatCard
           label="Due This Week"
           value={fmt(weekDueAmount)}
           valueClassName="text-yellow"
@@ -173,87 +163,6 @@ export function OverviewPage({
           sub="fully repaid"
         />
       </div>
-
-      {overdueLoans.length > 0 && (
-        <div className="mb-7">
-          <Section title="Overdue — Loans (missed payments)" count={`${overdueLoans.length} loans · ${totalOverdueInstallments} overdue`}>
-          <table className="w-full border-collapse">
-            <thead>
-              <tr>
-                <th className="text-[10px] text-muted uppercase tracking-widest py-0 pb-2.5 pr-3 text-left border-b border-border whitespace-nowrap">
-                  Client
-                </th>
-                <th className="text-[10px] text-muted uppercase tracking-widest py-0 pb-2.5 pr-3 text-left border-b border-border">
-                  Provider
-                </th>
-                <th className="text-[10px] text-muted uppercase tracking-widest py-0 pb-2.5 pr-3 text-left border-b border-border">
-                  Was due
-                </th>
-                <th className="text-[10px] text-muted uppercase tracking-widest py-0 pb-2.5 pr-3 text-left border-b border-border">
-                  Installment
-                </th>
-                <th className="text-[10px] text-muted uppercase tracking-widest py-0 pb-2.5 pr-3 text-left border-b border-border">
-                  Remaining
-                </th>
-                <th className="text-[10px] text-muted uppercase tracking-widest py-0 pb-2.5 pr-3 text-left border-b border-border">
-                  Status
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {overdueLoans.map((l) => {
-                const rem = getLoanRemaining(l);
-                const left = l.totalInstallments - l.paidCount;
-                const nextDue = getNextDueDate(l);
-                const overdueCount = getLoanOverdueCount(l);
-                return (
-                  <tr key={l.id} className="transition-colors">
-                    <td className="py-2.5 pr-3 border-b border-border/40 align-middle text-[13px]">
-                      <div className="font-medium text-text">{l.client}</div>
-                      <div className="text-[11px] text-muted font-mono mt-0.5">
-                        {l.ref}
-                        <span className="ml-1.5 text-muted2">· {left} left</span>
-                        <span className="ml-1.5 text-red">· {overdueCount} overdue</span>
-                      </div>
-                    </td>
-                    <td className="py-2.5 pr-3 border-b border-border/40 align-middle text-[12px]">
-                      <span>{getLoanProviderDisplay(l)}</span>
-                      {l.factoringFee != null && l.factoringFee > 0 && (
-                        <div className="text-[10px] text-muted2">Fee {fmt(l.factoringFee)}</div>
-                      )}
-                    </td>
-                    <td className="py-2.5 pr-3 border-b border-border/40 align-middle font-mono text-[11px] text-red">
-                      {nextDue ? fmtDate(nextDue) : '—'}
-                    </td>
-                    <td className="py-2.5 pr-3 border-b border-border/40 align-middle">
-                      <div className="font-mono font-medium text-yellow">
-                        {l.factoringFee != null && l.factoringFee > 0 ? (
-                          <>
-                            <div>{fmt(getLoanBasePerInstallment(l))}</div>
-                            <div className="text-[11px] text-muted2 font-normal">
-                              +{fmt(getLoanFeePerInstallment(l))} = {fmt(l.installment)}
-                            </div>
-                          </>
-                        ) : (
-                          fmt(l.installment)
-                        )}
-                      </div>
-                    </td>
-                    <td className="py-2.5 pr-3 border-b border-border/40 align-middle">
-                      <span className="font-mono font-medium">{fmt(rem)}</span>
-                      <div className="text-[10px] text-muted mt-0.5">{left} left</div>
-                    </td>
-                    <td className="py-2.5 pr-3 border-b border-border/40 align-middle">
-                      <Badge variant="overdue">{overdueCount} overdue</Badge>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-          </Section>
-        </div>
-      )}
 
       <div className="grid grid-cols-2 gap-5 mb-7">
         <Section title="Due This Week — Loans" count={dueLoans.length}>

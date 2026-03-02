@@ -53,8 +53,8 @@ function addDaysDateOnly(dateStr: string, days: number): string {
   return `${y2}-${String(m2 + 1).padStart(2, '0')}-${String(d2).padStart(2, '0')}`;
 }
 
-/** Current week (Mon–Sun containing today) as date-only strings. */
-function getWeekBoundsDateOnly(): { start: string; end: string } {
+/** Current week (Mon–Sun containing today) as date-only strings. Exported for debug. */
+export function getWeekBoundsDateOnly(): { start: string; end: string } {
   const t = new Date();
   const daysToMonday = (t.getDay() + 6) % 7;
   const start = new Date(t);
@@ -189,7 +189,7 @@ function getReserveNextDueDateOnly(r: Reserve): string | null {
   return addDaysDateOnly(r.date, r.paidCount * freq);
 }
 
-// --- Loan: next due date and due-this-week (each installment has a due date; due this week = that date is before or in current week) ---
+// --- Loan: next due date, due-this-week, and first overdue date ---
 
 /** Next due = last payment date + freq when payment_dates exist (backdating), else start + paidCount * freq. Returns Date for display. */
 export function getNextDueDate(loan: Loan): Date | null {
@@ -223,33 +223,57 @@ export function isDueThisWeek(loan: Loan): boolean {
   return dueStr >= start && dueStr <= end;
 }
 
-/** Overdue = loan that has at least one scheduled installment whose due date is before today and not yet paid. */
-export function isLoanOverdue(loan: Loan): boolean {
-  return getLoanOverdueCount(loan) > 0;
-}
-
-/** Number of installments that are overdue (due date already passed). */
-export function getLoanOverdueCount(loan: Loan): number {
-  if (loan.paidCount >= loan.totalInstallments) return 0;
+/** First unpaid scheduled due date as YYYY-MM-DD (start_date + paidCount * freq). Null if none. */
+export function getFirstOverdueDateOnly(loan: Loan): string | null {
+  if (loan.paidCount >= loan.totalInstallments) return null;
   const freq = loan.freqDays ?? 7;
   const todayStr = todayDateOnly();
 
-  // Compute how many installments should have been due by today based solely on the
-  // original schedule (start date + N * freq), independent of payment dates.
   const [sy, sm, sd] = loan.startDate.split('-').map(Number);
   const start = new Date(sy, sm - 1, sd);
   const [ty, tm, td] = todayStr.split('-').map(Number);
   const today = new Date(ty, tm - 1, td);
 
   const diffMs = today.getTime() - start.getTime();
-  if (diffMs < 0) return 0; // loan hasn't started yet
+  if (diffMs <= 0) return null; // no installments due yet
 
   const days = Math.floor(diffMs / (1000 * 60 * 60 * 24));
   let installmentsDueByToday = Math.floor(days / freq) + 1; // first installment at start date
   installmentsDueByToday = Math.min(installmentsDueByToday, loan.totalInstallments);
 
-  const rawOverdue = installmentsDueByToday - loan.paidCount;
-  const maxRemaining = loan.totalInstallments - loan.paidCount;
-  return Math.max(0, Math.min(rawOverdue, maxRemaining));
+  if (installmentsDueByToday <= loan.paidCount) return null; // nothing past due by schedule
+
+  const firstOverdueIndex = loan.paidCount;
+  return addDaysDateOnly(loan.startDate, firstOverdueIndex * freq);
+}
+
+/** Next Monday after the given date (YYYY-MM-DD). If date is Monday, returns date + 7. */
+export function getNextMondayAfterDateOnly(dateStr: string): string {
+  const [y, m, d] = dateStr.split('-').map(Number);
+  const date = new Date(y, m - 1, d);
+  const dayOfWeek = date.getDay(); // 0 Sun, 1 Mon, ..., 6 Sat
+  const daysToAdd = dayOfWeek === 0 ? 1 : dayOfWeek === 1 ? 7 : (8 - dayOfWeek) % 7;
+  date.setDate(date.getDate() + daysToAdd);
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+}
+
+/** Overdue = at least one unpaid installment is past its grace period (grace = until next Monday after due date). */
+export function isLoanOverdue(loan: Loan): boolean {
+  return getLoanOverdueCount(loan) > 0;
+}
+
+/** Number of installments that are past grace: due date D, grace until next Monday after D; count if today >= that Monday. */
+export function getLoanOverdueCount(loan: Loan): number {
+  if (loan.paidCount >= loan.totalInstallments) return 0;
+  const freq = loan.freqDays ?? 7;
+  const todayStr = todayDateOnly();
+  let count = 0;
+  for (let i = loan.paidCount; i < loan.totalInstallments; i++) {
+    const dueStr = addDaysDateOnly(loan.startDate, i * freq);
+    if (dueStr >= todayStr) break; // not due yet
+    const graceEndStr = getNextMondayAfterDateOnly(dueStr);
+    if (todayStr >= graceEndStr) count++;
+  }
+  return count;
 }
 
