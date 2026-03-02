@@ -246,7 +246,7 @@ export function OverviewPage({
         </Section>
 
         <Section title="Reserves Due This Week" count={resWeek.length}>
-          <div className="max-h-[320px] overflow-y-auto scrollable">
+          <div className="max-h-[420px] overflow-y-auto scrollable">
             {resWeek.length === 0 ? (
               <div className="text-center py-10 text-muted text-[13px]">
                 No reserve deductions this week
