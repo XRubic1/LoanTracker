@@ -1,4 +1,15 @@
-import type { ClientInsurance } from '@/types';
+import type { ClientInsurance, InsuranceVerification } from '@/types';
+
+/** True if insurance verification is missing or older than 7 days (show Overview warning). */
+export function insuranceNeedsVerification(verification: InsuranceVerification | null): boolean {
+  if (!verification?.last_checked_date) return true;
+  const checked = new Date(verification.last_checked_date);
+  if (isNaN(checked.getTime())) return true;
+  const now = new Date();
+  const msPerDay = 24 * 60 * 60 * 1000;
+  const daysSince = (now.getTime() - checked.getTime()) / msPerDay;
+  return daysSince > 7;
+}
 
 /**
  * Whether this client insurance record should be shown as a warning (cancellation, inactive, or expired).

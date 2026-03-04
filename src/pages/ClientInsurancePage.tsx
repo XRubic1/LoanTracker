@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { Section } from '@/components/Section';
+import { Modal } from '@/components/Modal';
 import {
   getClientInsuranceStatusLabel,
   isClientInsuranceWarning,
@@ -9,17 +10,40 @@ import {
 import { printCancellationReport } from '@/lib/printClientInsurance';
 import type { UseDataResult } from '@/hooks/useData';
 
-interface ClientInsurancePageProps extends Pick<UseDataResult, 'clientInsurance' | 'addClientInsurance'> {
+interface ClientInsurancePageProps extends Pick<
+  UseDataResult,
+  'clientInsurance' | 'addClientInsurance' | 'insuranceVerification' | 'updateInsuranceVerification'
+> {
   onAddClient: () => void;
   onViewClient: (id: number) => void;
 }
 
 export function ClientInsurancePage({
   clientInsurance,
+  insuranceVerification,
+  updateInsuranceVerification,
   onAddClient,
   onViewClient,
 }: ClientInsurancePageProps) {
   const [hideInactive, setHideInactive] = useState(true);
+  const [recordVerificationOpen, setRecordVerificationOpen] = useState(false);
+  const [recordDate, setRecordDate] = useState(() => new Date().toISOString().split('T')[0]);
+  const [recordCheckedBy, setRecordCheckedBy] = useState('');
+  const [savingVerification, setSavingVerification] = useState(false);
+
+  const handleRecordVerification = async () => {
+    const name = recordCheckedBy.trim();
+    if (!name) return;
+    setSavingVerification(true);
+    try {
+      await updateInsuranceVerification({ last_checked_date: recordDate, checked_by: name });
+      setRecordVerificationOpen(false);
+      setRecordCheckedBy('');
+      setRecordDate(new Date().toISOString().split('T')[0]);
+    } finally {
+      setSavingVerification(false);
+    }
+  };
 
   const list = hideInactive
     ? clientInsurance.filter((c) => !isClientInsuranceInactiveOrOut(c))
@@ -27,6 +51,38 @@ export function ClientInsurancePage({
 
   return (
     <>
+      {/* Last verified: date + name; button to record verification */}
+      <div className="mb-4 rounded-xl border border-border bg-card/50 px-4 py-3 flex flex-wrap items-center justify-between gap-3">
+        <div className="text-[13px] text-muted2">
+          {insuranceVerification?.last_checked_date && insuranceVerification?.checked_by ? (
+            <>
+              Last verified:{' '}
+              <span className="text-text font-medium">
+                {new Date(insuranceVerification.last_checked_date).toLocaleDateString('en-US', {
+                  month: 'short',
+                  day: 'numeric',
+                  year: 'numeric',
+                })}
+              </span>
+              {' by '}
+              <span className="text-text font-medium">{insuranceVerification.checked_by}</span>
+            </>
+          ) : (
+            <span className="text-muted">Not verified yet. Record a verification after reviewing client insurance.</span>
+          )}
+        </div>
+        <button
+          type="button"
+          onClick={() => setRecordVerificationOpen(true)}
+          className="inline-flex items-center gap-1.5 py-1.5 px-3.5 rounded-lg border border-border text-xs font-medium text-muted2 bg-transparent transition-all hover:border-accent hover:text-accent hover:bg-accent/5"
+        >
+          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+          Record verification
+        </button>
+      </div>
+
       <div className="flex flex-col gap-3 mb-7 sm:flex-row sm:items-center sm:justify-between">
         <h1 className="text-[22px] font-semibold">Client Insurance</h1>
         <div className="flex flex-wrap gap-2 justify-start sm:justify-end items-center">
@@ -153,6 +209,54 @@ export function ClientInsurancePage({
           </tbody>
         </table>
       </Section>
+
+      <Modal
+        open={recordVerificationOpen}
+        onClose={() => !savingVerification && setRecordVerificationOpen(false)}
+        title="Record insurance verification"
+      >
+        <p className="text-[13px] text-muted2 mb-4">
+          Set the date and name of the person who reviewed client insurance. This is checked weekly; the Overview will show a warning if not verified within 7 days.
+        </p>
+        <div className="space-y-4">
+          <div>
+            <label className="block text-xs font-medium text-muted2 mb-1.5">Date checked</label>
+            <input
+              type="date"
+              value={recordDate}
+              onChange={(e) => setRecordDate(e.target.value)}
+              className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-[13px] text-text"
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-muted2 mb-1.5">Checked by</label>
+            <input
+              type="text"
+              value={recordCheckedBy}
+              onChange={(e) => setRecordCheckedBy(e.target.value)}
+              placeholder="Name of reviewer"
+              className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-[13px] text-text placeholder:text-muted2"
+            />
+          </div>
+        </div>
+        <div className="flex justify-end gap-2 mt-6">
+          <button
+            type="button"
+            onClick={() => !savingVerification && setRecordVerificationOpen(false)}
+            className="py-1.5 px-3.5 rounded-lg border border-border text-muted2 text-xs font-medium hover:border-accent hover:text-accent"
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            onClick={handleRecordVerification}
+            disabled={!recordCheckedBy.trim() || savingVerification}
+            className="py-1.5 px-3.5 rounded-lg border-0 bg-accent text-white text-xs font-medium disabled:opacity-50 disabled:cursor-not-allowed hover:bg-[#3a7de8]"
+          >
+            {savingVerification ? 'Saving…' : 'Save'}
+          </button>
+        </div>
+      </Modal>
     </>
   );
 }

@@ -103,6 +103,22 @@ export interface ClientInsuranceRow {
   expiration_date: string | null;
 }
 
+/** Single record per owner: when insurance was last verified and by whom. */
+export interface InsuranceVerification {
+  id: number;
+  owner_id: string | null;
+  last_checked_date: string | null;
+  checked_by: string | null;
+}
+
+/** Supabase row: insurance_verification table (snake_case). */
+export interface InsuranceVerificationRow {
+  id: number;
+  owner_id: string | null;
+  last_checked_date: string | null;
+  checked_by: string | null;
+}
+
 /** Team member (owner's invited user) */
 export interface TeamMember {
   owner_id: string;

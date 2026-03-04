@@ -74,9 +74,11 @@ export default function App() {
     reverseReserveDeduction,
     closeReserve,
     clientInsurance,
+    insuranceVerification,
     addClientInsurance,
     updateClientInsuranceById,
     removeClientInsurance,
+    updateInsuranceVerification,
   } = useData(effectiveOwnerId ?? null);
 
   const selectedClientInsurance =
@@ -331,6 +333,7 @@ export default function App() {
             loans={loans}
             reserves={reserves}
             clientInsurance={clientInsurance}
+            insuranceVerification={insuranceVerification}
             onOpenCloseInstallment={setOverviewCloseInstallmentLoanId}
             onOpenCloseDeduction={setOverviewCloseDeductionReserveId}
           />
@@ -366,7 +369,9 @@ export default function App() {
         {page === 'clientInsurance' && (
           <ClientInsurancePage
             clientInsurance={clientInsurance}
+            insuranceVerification={insuranceVerification}
             addClientInsurance={addClientInsurance}
+            updateInsuranceVerification={updateInsuranceVerification}
             onAddClient={() => setAddClientInsuranceOpen(true)}
             onViewClient={setClientInsuranceDetailId}
           />

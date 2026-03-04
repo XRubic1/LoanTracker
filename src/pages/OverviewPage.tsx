@@ -24,7 +24,7 @@ import {
 } from '@/lib/utils';
 import { useState } from 'react';
 import type { UseDataResult } from '@/hooks/useData';
-import { isClientInsuranceCancellationWithDate } from '@/lib/clientInsuranceUtils';
+import { isClientInsuranceCancellationWithDate, insuranceNeedsVerification } from '@/lib/clientInsuranceUtils';
 import { Modal } from '@/components/Modal';
 
 const CHART_COLORS = ['#4f8ef7', '#7c5cfc', '#2ecc8f', '#f75f5f', '#f7c34f', '#f77f4f', '#4fc3f7'];
@@ -33,9 +33,10 @@ export function OverviewPage({
   loans,
   reserves,
   clientInsurance = [],
+  insuranceVerification = null,
   onOpenCloseInstallment,
   onOpenCloseDeduction,
-}: Pick<UseDataResult, 'loans' | 'reserves' | 'clientInsurance'> & {
+}: Pick<UseDataResult, 'loans' | 'reserves' | 'clientInsurance' | 'insuranceVerification'> & {
   onOpenCloseInstallment: (loanId: number) => void;
   onOpenCloseDeduction: (reserveId: number) => void;
 }) {
@@ -67,6 +68,10 @@ export function OverviewPage({
     .map(({ _sortDate: _, ...c }) => c);
 
   const [cancellationPopupOpen, setCancellationPopupOpen] = useState(false);
+
+  /** Show warning when client insurance exists but hasn't been verified this week (>7 days). */
+  const showInsuranceNeedsVerification =
+    clientInsurance.length > 0 && insuranceNeedsVerification(insuranceVerification);
 
   useEffect(() => {
     if (!chartRef.current || activeLoans.length === 0) return;
@@ -112,6 +117,28 @@ export function OverviewPage({
           {getWeekRange()}
         </span>
       </div>
+
+      {showInsuranceNeedsVerification && (
+        <div
+          className="mb-6 w-full rounded-xl border-2 border-amber-500/50 bg-gradient-to-r from-amber-500/20 to-amber-500/5 px-4 py-3.5 flex items-center gap-4 shadow-lg shadow-amber-500/10 ring-1 ring-amber-500/20"
+          role="alert"
+        >
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-amber-500/25 text-amber-500" aria-hidden>
+            <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+            </svg>
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="font-semibold text-text text-[14px]">INSURANCE NEEDS VERIFICATION</p>
+            <p className="mt-1 text-[12px] text-muted2">
+              Client insurance has not been verified this week. Go to Client Insurance and record a verification after review.
+              {insuranceVerification?.last_checked_date && insuranceVerification?.checked_by && (
+                <> Last verified: {new Date(insuranceVerification.last_checked_date).toLocaleDateString('en-US')} by {insuranceVerification.checked_by}.</>
+              )}
+            </p>
+          </div>
+        </div>
+      )}
 
       {cancellationWithDate.length > 0 && (
         <>

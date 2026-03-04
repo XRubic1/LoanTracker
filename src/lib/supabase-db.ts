@@ -1,4 +1,15 @@
-import type { Loan, Reserve, LoanRow, ReserveRow, TeamMember, LoanProviderType, ClientInsurance, ClientInsuranceRow } from '@/types';
+import type {
+  Loan,
+  Reserve,
+  LoanRow,
+  ReserveRow,
+  TeamMember,
+  LoanProviderType,
+  ClientInsurance,
+  ClientInsuranceRow,
+  InsuranceVerification,
+  InsuranceVerificationRow,
+} from '@/types';
 import { getSupabase } from './supabase';
 
 function clientInsuranceFromRow(row: ClientInsuranceRow | null): ClientInsurance | null {
@@ -226,6 +237,52 @@ export async function deleteClientInsuranceById(id: number): Promise<void> {
   if (!supabase) throw new Error('Supabase not configured');
   const { error } = await supabase.from('client_insurance').delete().eq('id', id);
   if (error) throw error;
+}
+
+// --- Insurance verification (one row per owner: last checked date + checked by) ---
+
+function verificationFromRow(row: InsuranceVerificationRow | null): InsuranceVerification | null {
+  if (!row) return null;
+  return {
+    id: row.id,
+    owner_id: row.owner_id ?? null,
+    last_checked_date: row.last_checked_date ?? null,
+    checked_by: row.checked_by ?? null,
+  };
+}
+
+/** Fetches the current owner's insurance verification record (at most one). */
+export async function fetchInsuranceVerification(): Promise<InsuranceVerification | null> {
+  const supabase = getSupabase();
+  if (!supabase) throw new Error('Supabase not configured');
+  const { data, error } = await supabase
+    .from('insurance_verification')
+    .select('*')
+    .limit(1)
+    .maybeSingle();
+  if (error) throw error;
+  return verificationFromRow(data as InsuranceVerificationRow | null);
+}
+
+/** Creates or updates the insurance verification record for the given owner. */
+export async function upsertInsuranceVerification(
+  ownerId: string,
+  payload: { last_checked_date: string; checked_by: string }
+): Promise<InsuranceVerification> {
+  const supabase = getSupabase();
+  if (!supabase) throw new Error('Supabase not configured');
+  const row = {
+    owner_id: ownerId,
+    last_checked_date: payload.last_checked_date,
+    checked_by: payload.checked_by || null,
+  };
+  const { data, error } = await supabase
+    .from('insurance_verification')
+    .upsert(row, { onConflict: 'owner_id' })
+    .select('*')
+    .single();
+  if (error) throw error;
+  return verificationFromRow(data as InsuranceVerificationRow)!;
 }
 
 // --- Team members (for Users page) ---

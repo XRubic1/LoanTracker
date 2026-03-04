@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import type { Loan, Reserve, ClientInsurance } from '@/types';
+import type { Loan, Reserve, ClientInsurance, InsuranceVerification } from '@/types';
 import { isConfigMissing, getSupabase } from '@/lib/supabase';
 import {
   fetchLoans,
@@ -14,12 +14,15 @@ import {
   insertClientInsurance,
   updateClientInsurance,
   deleteClientInsuranceById,
+  fetchInsuranceVerification,
+  upsertInsuranceVerification,
 } from '@/lib/supabase-db';
 
 export interface UseDataResult {
   loans: Loan[];
   reserves: Reserve[];
   clientInsurance: ClientInsurance[];
+  insuranceVerification: InsuranceVerification | null;
   loading: boolean;
   error: string | null;
   configMissing: boolean;
@@ -39,12 +42,16 @@ export interface UseDataResult {
   addClientInsurance: (payload: Omit<ClientInsurance, 'id'>) => Promise<ClientInsurance>;
   updateClientInsuranceById: (id: number, record: ClientInsurance) => Promise<ClientInsurance>;
   removeClientInsurance: (id: number) => Promise<void>;
+  updateInsuranceVerification: (
+    payload: { last_checked_date: string; checked_by: string }
+  ) => Promise<InsuranceVerification>;
 }
 
 export function useData(ownerId: string | null): UseDataResult {
   const [loans, setLoans] = useState<Loan[]>([]);
   const [reserves, setReserves] = useState<Reserve[]>([]);
   const [clientInsurance, setClientInsurance] = useState<ClientInsurance[]>([]);
+  const [insuranceVerification, setInsuranceVerification] = useState<InsuranceVerification | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -61,12 +68,18 @@ export function useData(ownerId: string | null): UseDataResult {
       const [loansData, reservesData] = await Promise.all([fetchLoans(), fetchReserves()]);
       setLoans(loansData);
       setReserves(reservesData);
-      // Client insurance table may not exist yet (run 008_client_insurance.sql); avoid failing the whole load.
+      // Client insurance and insurance_verification may not exist yet; avoid failing the whole load.
       try {
         const clientInsuranceData = await fetchClientInsurance();
         setClientInsurance(clientInsuranceData);
       } catch {
         setClientInsurance([]);
+      }
+      try {
+        const verification = await fetchInsuranceVerification();
+        setInsuranceVerification(verification);
+      } catch {
+        setInsuranceVerification(null);
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
@@ -101,6 +114,11 @@ export function useData(ownerId: string | null): UseDataResult {
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'client_insurance' },
+        () => { refetchRef.current(); }
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'insurance_verification' },
         () => { refetchRef.current(); }
       )
       .subscribe();
@@ -258,10 +276,21 @@ export function useData(ownerId: string | null): UseDataResult {
     setClientInsurance((prev) => prev.filter((r) => r.id !== id));
   }, []);
 
+  const updateInsuranceVerification = useCallback(
+    async (payload: { last_checked_date: string; checked_by: string }) => {
+      if (!ownerId) throw new Error('Must be signed in to record insurance verification');
+      const updated = await upsertInsuranceVerification(ownerId, payload);
+      setInsuranceVerification(updated);
+      return updated;
+    },
+    [ownerId]
+  );
+
   return {
     loans,
     reserves,
     clientInsurance,
+    insuranceVerification,
     loading,
     error,
     configMissing,
@@ -281,5 +310,6 @@ export function useData(ownerId: string | null): UseDataResult {
     addClientInsurance,
     updateClientInsuranceById,
     removeClientInsurance,
+    updateInsuranceVerification,
   };
 }
