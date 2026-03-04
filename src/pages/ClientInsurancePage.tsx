@@ -1,6 +1,5 @@
 import { Section } from '@/components/Section';
 import { getClientInsuranceStatusLabel, isClientInsuranceWarning } from '@/lib/clientInsuranceUtils';
-import type { ClientInsurance } from '@/types';
 import type { UseDataResult } from '@/hooks/useData';
 
 interface ClientInsurancePageProps extends Pick<UseDataResult, 'clientInsurance' | 'addClientInsurance'> {

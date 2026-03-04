@@ -449,8 +449,9 @@ export default function App() {
         open={editClientInsuranceId != null}
         onClose={() => setEditClientInsuranceId(null)}
         onSave={async (id, record) => {
-          await updateClientInsuranceById(id, record);
+          const updated = await updateClientInsuranceById(id, record);
           setEditClientInsuranceId(null);
+          return updated;
         }}
       />
       <PasswordConfirmModal
