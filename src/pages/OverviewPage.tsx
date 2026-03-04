@@ -23,15 +23,17 @@ import {
   getLoanFeePerInstallment,
 } from '@/lib/utils';
 import type { UseDataResult } from '@/hooks/useData';
+import { isClientInsuranceWarning } from '@/lib/clientInsuranceUtils';
 
 const CHART_COLORS = ['#4f8ef7', '#7c5cfc', '#2ecc8f', '#f75f5f', '#f7c34f', '#f77f4f', '#4fc3f7'];
 
 export function OverviewPage({
   loans,
   reserves,
+  clientInsurance = [],
   onOpenCloseInstallment,
   onOpenCloseDeduction,
-}: Pick<UseDataResult, 'loans' | 'reserves'> & {
+}: Pick<UseDataResult, 'loans' | 'reserves' | 'clientInsurance'> & {
   onOpenCloseInstallment: (loanId: number) => void;
   onOpenCloseDeduction: (reserveId: number) => void;
 }) {
@@ -55,6 +57,8 @@ export function OverviewPage({
     .filter((l) => l.nextDate)
     .sort((a, b) => a.nextDate!.getTime() - b.nextDate!.getTime())
     .slice(0, 6);
+
+  const insuranceWarnings = clientInsurance.filter(isClientInsuranceWarning);
 
   useEffect(() => {
     if (!chartRef.current || activeLoans.length === 0) return;
@@ -100,6 +104,35 @@ export function OverviewPage({
           {getWeekRange()}
         </span>
       </div>
+
+      {insuranceWarnings.length > 0 && (
+        <div
+          className="mb-6 rounded-xl border-2 border-yellow/50 bg-gradient-to-r from-yellow/20 to-yellow/5 px-4 py-3.5 flex items-start gap-4 shadow-lg shadow-yellow/10 ring-1 ring-yellow/20"
+          role="alert"
+        >
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-yellow/25 text-yellow" aria-hidden>
+            <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+            </svg>
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="font-semibold text-text text-[14px]">
+              Client insurance: {insuranceWarnings.length} client{insuranceWarnings.length !== 1 ? 's' : ''} with cancellation, inactive, or expired status
+            </p>
+            <ul className="mt-2 flex flex-wrap gap-2">
+              {insuranceWarnings.slice(0, 12).map((c) => (
+                <li key={c.id} className="text-[13px] text-text">
+                  {c.client} <span className="text-muted2">({c.status})</span>
+                </li>
+              ))}
+              {insuranceWarnings.length > 12 && (
+                <li className="text-[13px] text-muted2">+{insuranceWarnings.length - 12} more — check Client Insurance tab</li>
+              )}
+            </ul>
+            <p className="mt-2 text-[12px] text-muted2">Check the Client Insurance tab for details.</p>
+          </div>
+        </div>
+      )}
 
       {newLoans.length > 0 && (
         <div

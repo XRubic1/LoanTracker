@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import type { Loan, Reserve } from '@/types';
+import type { Loan, Reserve, ClientInsurance } from '@/types';
 import { isConfigMissing, getSupabase } from '@/lib/supabase';
 import {
   fetchLoans,
@@ -10,11 +10,16 @@ import {
   insertReserve,
   updateReserve,
   deleteReserveById,
+  fetchClientInsurance,
+  insertClientInsurance,
+  updateClientInsurance,
+  deleteClientInsuranceById,
 } from '@/lib/supabase-db';
 
 export interface UseDataResult {
   loans: Loan[];
   reserves: Reserve[];
+  clientInsurance: ClientInsurance[];
   loading: boolean;
   error: string | null;
   configMissing: boolean;
@@ -31,11 +36,15 @@ export interface UseDataResult {
   markReservePaid: (id: number) => Promise<void>;
   reverseReserveDeduction: (id: number) => Promise<void>;
   closeReserve: (id: number) => Promise<void>;
+  addClientInsurance: (payload: Omit<ClientInsurance, 'id'>) => Promise<ClientInsurance>;
+  updateClientInsuranceById: (id: number, record: ClientInsurance) => Promise<ClientInsurance>;
+  removeClientInsurance: (id: number) => Promise<void>;
 }
 
 export function useData(ownerId: string | null): UseDataResult {
   const [loans, setLoans] = useState<Loan[]>([]);
   const [reserves, setReserves] = useState<Reserve[]>([]);
+  const [clientInsurance, setClientInsurance] = useState<ClientInsurance[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -52,6 +61,13 @@ export function useData(ownerId: string | null): UseDataResult {
       const [loansData, reservesData] = await Promise.all([fetchLoans(), fetchReserves()]);
       setLoans(loansData);
       setReserves(reservesData);
+      // Client insurance table may not exist yet (run 008_client_insurance.sql); avoid failing the whole load.
+      try {
+        const clientInsuranceData = await fetchClientInsurance();
+        setClientInsurance(clientInsuranceData);
+      } catch {
+        setClientInsurance([]);
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
@@ -71,7 +87,7 @@ export function useData(ownerId: string | null): UseDataResult {
     const supabase = getSupabase();
     if (!supabase) return;
     const channel = supabase
-      .channel('loans-reserves-changes')
+      .channel('loans-reserves-client-insurance-changes')
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'loans' },
@@ -80,6 +96,11 @@ export function useData(ownerId: string | null): UseDataResult {
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'reserves' },
+        () => { refetchRef.current(); }
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'client_insurance' },
         () => { refetchRef.current(); }
       )
       .subscribe();
@@ -218,9 +239,29 @@ export function useData(ownerId: string | null): UseDataResult {
     [reserves, updateReserveById]
   );
 
+  const addClientInsurance = useCallback(async (payload: Omit<ClientInsurance, 'id'>) => {
+    const added = await insertClientInsurance(payload, ownerId);
+    setClientInsurance((prev) => [...prev, added].sort((a, b) => a.client.localeCompare(b.client)));
+    return added;
+  }, [ownerId]);
+
+  const updateClientInsuranceById = useCallback(async (id: number, record: ClientInsurance) => {
+    const updated = await updateClientInsurance(id, record);
+    setClientInsurance((prev) =>
+      prev.map((r) => (r.id === id ? updated : r)).sort((a, b) => a.client.localeCompare(b.client))
+    );
+    return updated;
+  }, []);
+
+  const removeClientInsurance = useCallback(async (id: number) => {
+    await deleteClientInsuranceById(id);
+    setClientInsurance((prev) => prev.filter((r) => r.id !== id));
+  }, []);
+
   return {
     loans,
     reserves,
+    clientInsurance,
     loading,
     error,
     configMissing,
@@ -237,5 +278,8 @@ export function useData(ownerId: string | null): UseDataResult {
     markReservePaid,
     reverseReserveDeduction,
     closeReserve,
+    addClientInsurance,
+    updateClientInsuranceById,
+    removeClientInsurance,
   };
 }

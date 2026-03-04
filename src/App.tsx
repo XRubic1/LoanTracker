@@ -5,6 +5,7 @@ import { OverviewPage } from '@/pages/OverviewPage';
 import { LoansPage } from '@/pages/LoansPage';
 import { ReservesPage } from '@/pages/ReservesPage';
 import { ClosedPage } from '@/pages/ClosedPage';
+import { ClientInsurancePage } from '@/pages/ClientInsurancePage';
 import { UsersPage } from '@/pages/UsersPage';
 import { AuthPage } from '@/pages/AuthPage';
 import { LoanDetailModal } from '@/components/modals/LoanDetailModal';
@@ -13,6 +14,9 @@ import { CloseInstallmentModal } from '@/components/modals/CloseInstallmentModal
 import { CloseDeductionModal } from '@/components/modals/CloseDeductionModal';
 import { AddLoanModal } from '@/components/modals/AddLoanModal';
 import { AddReserveModal } from '@/components/modals/AddReserveModal';
+import { AddClientInsuranceModal } from '@/components/modals/AddClientInsuranceModal';
+import { ClientInsuranceDetailModal } from '@/components/modals/ClientInsuranceDetailModal';
+import { EditClientInsuranceModal } from '@/components/modals/EditClientInsuranceModal';
 import type { Loan } from '@/types';
 import { PasswordConfirmModal } from '@/components/PasswordConfirmModal';
 import { useAuth } from '@/contexts/AuthContext';
@@ -27,6 +31,9 @@ export default function App() {
   const [overviewCloseDeductionReserveId, setOverviewCloseDeductionReserveId] = useState<number | null>(null);
   const [addLoanOpen, setAddLoanOpen] = useState(false);
   const [addReserveOpen, setAddReserveOpen] = useState(false);
+  const [addClientInsuranceOpen, setAddClientInsuranceOpen] = useState(false);
+  const [clientInsuranceDetailId, setClientInsuranceDetailId] = useState<number | null>(null);
+  const [editClientInsuranceId, setEditClientInsuranceId] = useState<number | null>(null);
   const [passwordModalOpen, setPasswordModalOpen] = useState(false);
   const pendingPasswordActionRef = useRef<(() => void) | null>(null);
 
@@ -66,7 +73,20 @@ export default function App() {
     markReservePaid,
     reverseReserveDeduction,
     closeReserve,
+    clientInsurance,
+    addClientInsurance,
+    updateClientInsuranceById,
+    removeClientInsurance,
   } = useData(effectiveOwnerId ?? null);
+
+  const selectedClientInsurance =
+    clientInsuranceDetailId != null
+      ? clientInsurance.find((c) => c.id === clientInsuranceDetailId) ?? null
+      : null;
+  const editingClientInsurance =
+    editClientInsuranceId != null
+      ? clientInsurance.find((c) => c.id === editClientInsuranceId) ?? null
+      : null;
 
   const selectedLoan = loanDetailId != null ? loans.find((l) => l.id === loanDetailId) ?? null : null;
   const selectedReserve =
@@ -310,6 +330,7 @@ export default function App() {
           <OverviewPage
             loans={loans}
             reserves={reserves}
+            clientInsurance={clientInsurance}
             onOpenCloseInstallment={setOverviewCloseInstallmentLoanId}
             onOpenCloseDeduction={setOverviewCloseDeductionReserveId}
           />
@@ -340,6 +361,14 @@ export default function App() {
             reserves={reserves}
             onOpenLoan={setLoanDetailId}
             onOpenReserve={setReserveDetailId}
+          />
+        )}
+        {page === 'clientInsurance' && (
+          <ClientInsurancePage
+            clientInsurance={clientInsurance}
+            addClientInsurance={addClientInsurance}
+            onAddClient={() => setAddClientInsuranceOpen(true)}
+            onViewClient={setClientInsuranceDetailId}
           />
         )}
         {page === 'users' && <UsersPage />}
@@ -396,6 +425,33 @@ export default function App() {
         open={addReserveOpen}
         onClose={() => setAddReserveOpen(false)}
         onAdd={addReserve}
+      />
+      <AddClientInsuranceModal
+        open={addClientInsuranceOpen}
+        onClose={() => setAddClientInsuranceOpen(false)}
+        onAdd={addClientInsurance}
+      />
+      <ClientInsuranceDetailModal
+        clientInsurance={selectedClientInsurance}
+        open={clientInsuranceDetailId != null}
+        onClose={() => setClientInsuranceDetailId(null)}
+        onEdit={(id) => {
+          setClientInsuranceDetailId(null);
+          setEditClientInsuranceId(id);
+        }}
+        onDelete={async (id) => {
+          await removeClientInsurance(id);
+          setClientInsuranceDetailId(null);
+        }}
+      />
+      <EditClientInsuranceModal
+        clientInsurance={editingClientInsurance}
+        open={editClientInsuranceId != null}
+        onClose={() => setEditClientInsuranceId(null)}
+        onSave={async (id, record) => {
+          await updateClientInsuranceById(id, record);
+          setEditClientInsuranceId(null);
+        }}
       />
       <PasswordConfirmModal
         open={passwordModalOpen}

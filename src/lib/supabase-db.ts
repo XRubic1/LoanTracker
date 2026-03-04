@@ -1,5 +1,17 @@
-import type { Loan, Reserve, LoanRow, ReserveRow, TeamMember, LoanProviderType } from '@/types';
+import type { Loan, Reserve, LoanRow, ReserveRow, TeamMember, LoanProviderType, ClientInsurance, ClientInsuranceRow } from '@/types';
 import { getSupabase } from './supabase';
+
+function clientInsuranceFromRow(row: ClientInsuranceRow | null): ClientInsurance | null {
+  if (!row) return null;
+  return {
+    id: row.id,
+    owner_id: row.owner_id ?? undefined,
+    client: row.client,
+    mc: row.mc,
+    status: row.status ?? 'OK',
+    expiration_date: row.expiration_date ?? null,
+  };
+}
 
 function loanFromRow(row: LoanRow | null): Loan | null {
   if (!row) return null;
@@ -160,6 +172,59 @@ export async function deleteReserveById(id: number): Promise<void> {
   const supabase = getSupabase();
   if (!supabase) throw new Error('Supabase not configured');
   const { error } = await supabase.from('reserves').delete().eq('id', id);
+  if (error) throw error;
+}
+
+// --- Client Insurance ---
+
+export async function fetchClientInsurance(): Promise<ClientInsurance[]> {
+  const supabase = getSupabase();
+  if (!supabase) throw new Error('Supabase not configured');
+  const { data, error } = await supabase
+    .from('client_insurance')
+    .select('*')
+    .order('client', { ascending: true });
+  if (error) throw error;
+  return (data as ClientInsuranceRow[] || []).map((row) => clientInsuranceFromRow(row)!);
+}
+
+export async function insertClientInsurance(
+  payload: Omit<ClientInsurance, 'id'>,
+  ownerId?: string | null
+): Promise<ClientInsurance> {
+  const supabase = getSupabase();
+  if (!supabase) throw new Error('Supabase not configured');
+  const row = {
+    owner_id: ownerId ?? null,
+    client: payload.client,
+    mc: payload.mc,
+    status: payload.status ?? 'OK',
+    expiration_date: payload.expiration_date ?? null,
+  };
+  const { data, error } = await supabase.from('client_insurance').insert(row).select('*').single();
+  if (error) throw error;
+  return clientInsuranceFromRow(data as ClientInsuranceRow)!;
+}
+
+export async function updateClientInsurance(id: number, record: ClientInsurance): Promise<ClientInsurance> {
+  const supabase = getSupabase();
+  if (!supabase) throw new Error('Supabase not configured');
+  const row = {
+    owner_id: record.owner_id ?? null,
+    client: record.client,
+    mc: record.mc,
+    status: record.status ?? 'OK',
+    expiration_date: record.expiration_date ?? null,
+  };
+  const { data, error } = await supabase.from('client_insurance').update(row).eq('id', id).select('*').single();
+  if (error) throw error;
+  return clientInsuranceFromRow(data as ClientInsuranceRow)!;
+}
+
+export async function deleteClientInsuranceById(id: number): Promise<void> {
+  const supabase = getSupabase();
+  if (!supabase) throw new Error('Supabase not configured');
+  const { error } = await supabase.from('client_insurance').delete().eq('id', id);
   if (error) throw error;
 }
 

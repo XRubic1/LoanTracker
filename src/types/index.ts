@@ -79,7 +79,29 @@ export interface ReserveRow {
   deduction_notes?: string[];
 }
 
-export type PageId = 'overview' | 'loans' | 'reserves' | 'closed' | 'users';
+export type PageId = 'overview' | 'loans' | 'reserves' | 'closed' | 'users' | 'clientInsurance';
+
+/** Client insurance: client name, MC number, status (OK, inactive, cancellation, date, etc.). */
+export interface ClientInsurance {
+  id: number;
+  owner_id?: string | null;
+  client: string;
+  mc: string;
+  /** Display status: OK, inactive, cancellation 02/20, insurance cancelled, or date like 05/26/2026. */
+  status: string;
+  /** Optional expiration date (when status is or was a date). */
+  expiration_date: string | null;
+}
+
+/** Supabase row: client_insurance table (snake_case). */
+export interface ClientInsuranceRow {
+  id: number;
+  owner_id: string | null;
+  client: string;
+  mc: string;
+  status: string;
+  expiration_date: string | null;
+}
 
 /** Team member (owner's invited user) */
 export interface TeamMember {
