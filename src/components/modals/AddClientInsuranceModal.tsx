@@ -2,6 +2,16 @@ import { useState } from 'react';
 import { Modal } from '@/components/Modal';
 import type { ClientInsurance } from '@/types';
 
+type StatusOption = 'OK' | 'Inactive' | 'Cancellation' | 'OUT';
+
+function statusToValue(opt: StatusOption): string {
+  if (opt === 'OK') return 'OK';
+  if (opt === 'Inactive') return 'inactive';
+  if (opt === 'OUT') return 'out';
+  if (opt === 'Cancellation') return 'cancellation';
+  return 'OK';
+}
+
 interface AddClientInsuranceModalProps {
   open: boolean;
   onClose: () => void;
@@ -11,7 +21,7 @@ interface AddClientInsuranceModalProps {
 export function AddClientInsuranceModal({ open, onClose, onAdd }: AddClientInsuranceModalProps) {
   const [client, setClient] = useState('');
   const [mc, setMc] = useState('');
-  const [status, setStatus] = useState('OK');
+  const [status, setStatus] = useState<StatusOption>('OK');
   const [cancellationDate, setCancellationDate] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
@@ -20,12 +30,16 @@ export function AddClientInsuranceModal({ open, onClose, onAdd }: AddClientInsur
       window.alert('Client and MC are required.');
       return;
     }
+    if (status === 'Cancellation' && !cancellationDate.trim()) {
+      window.alert('Please set a date when Cancellation is selected.');
+      return;
+    }
     setSubmitting(true);
     try {
       await onAdd({
         client: client.trim(),
         mc: mc.trim(),
-        status: status.trim() || 'OK',
+        status: statusToValue(status),
         expiration_date: cancellationDate.trim() || null,
       });
       setClient('');
@@ -69,17 +83,20 @@ export function AddClientInsuranceModal({ open, onClose, onAdd }: AddClientInsur
         </div>
         <div>
           <label className="block text-[11px] text-muted uppercase tracking-wider mb-1.5">Status</label>
-          <input
-            type="text"
+          <select
             value={status}
-            onChange={(e) => setStatus(e.target.value)}
-            placeholder="OK, inactive, cancellation 02/20, or date (MM/DD/YYYY)"
+            onChange={(e) => setStatus(e.target.value as StatusOption)}
             className="w-full bg-surface border border-border rounded-lg py-2 px-3 text-[13px] text-text outline-none focus:border-accent"
-          />
+          >
+            <option value="OK">OK</option>
+            <option value="Inactive">Inactive</option>
+            <option value="Cancellation">Cancellation</option>
+            <option value="OUT">OUT</option>
+          </select>
         </div>
         <div>
           <label className="block text-[11px] text-muted uppercase tracking-wider mb-1.5">
-            Cancellation
+            Cancellation{status === 'Cancellation' ? ' (required)' : ''}
           </label>
           <input
             type="date"

@@ -1,5 +1,12 @@
+import { useState } from 'react';
 import { Section } from '@/components/Section';
-import { getClientInsuranceStatusLabel, isClientInsuranceWarning } from '@/lib/clientInsuranceUtils';
+import {
+  getClientInsuranceStatusLabel,
+  isClientInsuranceWarning,
+  isClientInsuranceOut,
+  isClientInsuranceInactiveOrOut,
+} from '@/lib/clientInsuranceUtils';
+import { printCancellationReport } from '@/lib/printClientInsurance';
 import type { UseDataResult } from '@/hooks/useData';
 
 interface ClientInsurancePageProps extends Pick<UseDataResult, 'clientInsurance' | 'addClientInsurance'> {
@@ -12,11 +19,45 @@ export function ClientInsurancePage({
   onAddClient,
   onViewClient,
 }: ClientInsurancePageProps) {
+  const [hideInactive, setHideInactive] = useState(true);
+
+  const list = hideInactive
+    ? clientInsurance.filter((c) => !isClientInsuranceInactiveOrOut(c))
+    : clientInsurance;
+
   return (
     <>
       <div className="flex flex-col gap-3 mb-7 sm:flex-row sm:items-center sm:justify-between">
         <h1 className="text-[22px] font-semibold">Client Insurance</h1>
-        <div className="flex flex-wrap gap-2 justify-start sm:justify-end">
+        <div className="flex flex-wrap gap-2 justify-start sm:justify-end items-center">
+          <button
+            type="button"
+            onClick={() => setHideInactive((v) => !v)}
+            className={`inline-flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-md border transition-colors ${
+              hideInactive
+                ? 'border-accent bg-accent/10 text-accent'
+                : 'border-border bg-surface text-muted2 hover:text-text'
+            }`}
+          >
+            <span
+              className={`w-[14px] h-[14px] rounded-[4px] border flex items-center justify-center text-[10px] ${
+                hideInactive ? 'bg-accent border-accent text-white' : 'border-border'
+              }`}
+            >
+              {hideInactive ? '✓' : ''}
+            </span>
+            <span>Hide Inactive clients</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => printCancellationReport(clientInsurance)}
+            className="inline-flex items-center gap-1.5 py-1.5 px-3.5 rounded-lg border border-border text-xs font-medium text-muted2 bg-transparent transition-all hover:border-accent hover:text-accent hover:bg-accent/5"
+          >
+            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeWidth={1.6} strokeLinecap="round" strokeLinejoin="round" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
+            </svg>
+            Print cancellation report
+          </button>
           <button
             type="button"
             onClick={onAddClient}
@@ -27,7 +68,7 @@ export function ClientInsurancePage({
         </div>
       </div>
 
-      <Section title="Clients" count={clientInsurance.length}>
+      <Section title="Clients" count={list.length}>
         <table className="w-full border-collapse">
           <thead>
             <tr>
@@ -44,14 +85,17 @@ export function ClientInsurancePage({
             </tr>
           </thead>
           <tbody>
-            {clientInsurance.length === 0 ? (
+            {list.length === 0 ? (
               <tr>
                 <td colSpan={4} className="text-center py-10 text-muted text-[13px]">
-                  No clients yet. Add a client or run the seed SQL to load initial data.
+                  {clientInsurance.length === 0
+                    ? 'No clients yet. Add a client or run the seed SQL to load initial data.'
+                    : 'No clients to show. Turn off "Hide Inactive clients" to see Inactive and OUT.'}
                 </td>
               </tr>
             ) : (
-              clientInsurance.map((c) => {
+              list.map((c) => {
+                const isOut = isClientInsuranceOut(c);
                 const isWarning = isClientInsuranceWarning(c);
                 const statusLabel = getClientInsuranceStatusLabel(c);
                 const copyMc = () => {
@@ -81,11 +125,13 @@ export function ClientInsurancePage({
                     <td className="py-2.5 pr-3 border-b border-border/40 align-middle">
                       <span
                         className={
-                          isWarning
-                            ? 'text-yellow font-medium'
-                            : statusLabel.toLowerCase() === 'ok'
-                              ? 'text-green'
-                              : ''
+                          isOut
+                            ? 'text-red font-medium'
+                            : isWarning
+                              ? 'text-yellow font-medium'
+                              : statusLabel.toLowerCase() === 'ok'
+                                ? 'text-green'
+                                : ''
                         }
                       >
                         {statusLabel}

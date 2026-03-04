@@ -2,13 +2,14 @@ import { useState, useEffect } from 'react';
 import { Modal } from '@/components/Modal';
 import type { ClientInsurance } from '@/types';
 
-export type StatusOption = 'OK' | 'Inactive' | 'Cancellation';
+export type StatusOption = 'OK' | 'Inactive' | 'Cancellation' | 'OUT';
 
 /** Parse existing status into dropdown value. Cancellation date comes from expiration_date. */
 function parseStatusOption(status: string): StatusOption {
   const s = (status ?? '').trim().toLowerCase();
   if (!s) return 'OK';
   if (s === 'inactive') return 'Inactive';
+  if (s === 'out') return 'OUT';
   if (s.startsWith('cancellation') || s.includes('cancellation')) return 'Cancellation';
   return 'OK';
 }
@@ -17,6 +18,7 @@ function parseStatusOption(status: string): StatusOption {
 function buildStatus(option: StatusOption): string {
   if (option === 'OK') return 'OK';
   if (option === 'Inactive') return 'inactive';
+  if (option === 'OUT') return 'out';
   if (option === 'Cancellation') return 'cancellation';
   return 'OK';
 }
@@ -47,6 +49,10 @@ export function EditClientInsuranceModal({
 
   const handleSubmit = async () => {
     if (!clientInsurance) return;
+    if (option === 'Cancellation' && !cancellationDate.trim()) {
+      window.alert('Please set a date when Cancellation is selected.');
+      return;
+    }
     setSubmitting(true);
     try {
       const status = buildStatus(option);
@@ -91,12 +97,13 @@ export function EditClientInsuranceModal({
             <option value="OK">OK</option>
             <option value="Inactive">Inactive</option>
             <option value="Cancellation">Cancellation</option>
+            <option value="OUT">OUT</option>
           </select>
         </div>
 
         <div>
           <label className="block text-[11px] text-muted uppercase tracking-wider mb-1.5">
-            Cancellation
+            Cancellation{option === 'Cancellation' ? ' (required)' : ''}
           </label>
           <input
             type="date"

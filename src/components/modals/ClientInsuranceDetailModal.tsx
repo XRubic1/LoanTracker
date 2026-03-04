@@ -1,6 +1,6 @@
 import { Modal } from '@/components/Modal';
 import type { ClientInsurance } from '@/types';
-import { getClientInsuranceStatusLabel, isClientInsuranceWarning } from '@/lib/clientInsuranceUtils';
+import { getClientInsuranceStatusLabel, isClientInsuranceWarning, isClientInsuranceOut } from '@/lib/clientInsuranceUtils';
 
 interface ClientInsuranceDetailModalProps {
   clientInsurance: ClientInsurance | null;
@@ -19,6 +19,7 @@ export function ClientInsuranceDetailModal({
 }: ClientInsuranceDetailModalProps) {
   if (!clientInsurance) return null;
 
+  const isOut = isClientInsuranceOut(clientInsurance);
   const isWarning = isClientInsuranceWarning(clientInsurance);
   const statusLabel = getClientInsuranceStatusLabel(clientInsurance);
 
@@ -43,7 +44,7 @@ export function ClientInsuranceDetailModal({
           <span className="text-muted2">Status</span>
           <span
             className={`font-medium ${
-              isWarning ? 'text-yellow' : statusLabel.toLowerCase() === 'ok' ? 'text-green' : ''
+              isOut ? 'text-red' : isWarning ? 'text-yellow' : statusLabel.toLowerCase() === 'ok' ? 'text-green' : ''
             }`}
           >
             {statusLabel}

@@ -22,8 +22,10 @@ import {
   getLoanBasePerInstallment,
   getLoanFeePerInstallment,
 } from '@/lib/utils';
+import { useState } from 'react';
 import type { UseDataResult } from '@/hooks/useData';
-import { isClientInsuranceWarning } from '@/lib/clientInsuranceUtils';
+import { isClientInsuranceCancellationWithDate } from '@/lib/clientInsuranceUtils';
+import { Modal } from '@/components/Modal';
 
 const CHART_COLORS = ['#4f8ef7', '#7c5cfc', '#2ecc8f', '#f75f5f', '#f7c34f', '#f77f4f', '#4fc3f7'];
 
@@ -58,7 +60,13 @@ export function OverviewPage({
     .sort((a, b) => a.nextDate!.getTime() - b.nextDate!.getTime())
     .slice(0, 6);
 
-  const insuranceWarnings = clientInsurance.filter(isClientInsuranceWarning);
+  const cancellationWithDate = clientInsurance
+    .filter(isClientInsuranceCancellationWithDate)
+    .map((c) => ({ ...c, _sortDate: c.expiration_date ? new Date(c.expiration_date).getTime() : 0 }))
+    .sort((a, b) => a._sortDate - b._sortDate)
+    .map(({ _sortDate: _, ...c }) => c);
+
+  const [cancellationPopupOpen, setCancellationPopupOpen] = useState(false);
 
   useEffect(() => {
     if (!chartRef.current || activeLoans.length === 0) return;
@@ -105,33 +113,80 @@ export function OverviewPage({
         </span>
       </div>
 
-      {insuranceWarnings.length > 0 && (
-        <div
-          className="mb-6 rounded-xl border-2 border-yellow/50 bg-gradient-to-r from-yellow/20 to-yellow/5 px-4 py-3.5 flex items-start gap-4 shadow-lg shadow-yellow/10 ring-1 ring-yellow/20"
-          role="alert"
-        >
-          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-yellow/25 text-yellow" aria-hidden>
-            <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+      {cancellationWithDate.length > 0 && (
+        <>
+          <button
+            type="button"
+            onClick={() => setCancellationPopupOpen(true)}
+            className="mb-6 w-full text-left rounded-xl border-2 border-yellow/50 bg-gradient-to-r from-yellow/20 to-yellow/5 px-4 py-3.5 flex items-start gap-4 shadow-lg shadow-yellow/10 ring-1 ring-yellow/20 hover:ring-yellow/40 transition-colors"
+            role="alert"
+          >
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-yellow/25 text-yellow" aria-hidden>
+              <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+              </svg>
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="font-semibold text-text text-[14px]">
+                Client insurance: {cancellationWithDate.length} client{cancellationWithDate.length !== 1 ? 's' : ''} with cancellation and date
+              </p>
+              <p className="mt-1 text-[12px] text-muted2">Click to show client, MC and cancellation date</p>
+            </div>
+            <svg className="w-5 h-5 text-yellow/70 shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
             </svg>
-          </div>
-          <div className="flex-1 min-w-0">
-            <p className="font-semibold text-text text-[14px]">
-              Client insurance: {insuranceWarnings.length} client{insuranceWarnings.length !== 1 ? 's' : ''} with cancellation, inactive, or expired status
-            </p>
-            <ul className="mt-2 flex flex-wrap gap-2">
-              {insuranceWarnings.slice(0, 12).map((c) => (
-                <li key={c.id} className="text-[13px] text-text">
-                  {c.client} <span className="text-muted2">({c.status})</span>
-                </li>
-              ))}
-              {insuranceWarnings.length > 12 && (
-                <li className="text-[13px] text-muted2">+{insuranceWarnings.length - 12} more — check Client Insurance tab</li>
-              )}
-            </ul>
-            <p className="mt-2 text-[12px] text-muted2">Check the Client Insurance tab for details.</p>
-          </div>
-        </div>
+          </button>
+
+          <Modal
+            open={cancellationPopupOpen}
+            onClose={() => setCancellationPopupOpen(false)}
+            title="Clients with cancellation (by date, oldest first)"
+          >
+            <div className="max-h-[70vh] overflow-y-auto">
+              <table className="w-full border-collapse text-[13px]">
+                <thead>
+                  <tr>
+                    <th className="text-[10px] text-muted uppercase tracking-widest py-2 pr-3 text-left border-b border-border">
+                      Client
+                    </th>
+                    <th className="text-[10px] text-muted uppercase tracking-widest py-2 pr-3 text-left border-b border-border">
+                      MC
+                    </th>
+                    <th className="text-[10px] text-muted uppercase tracking-widest py-2 pr-3 text-left border-b border-border">
+                      Cancellation
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {cancellationWithDate.map((c) => (
+                    <tr key={c.id} className="border-b border-border/40">
+                      <td className="py-2.5 pr-3 font-medium">{c.client}</td>
+                      <td className="py-2.5 pr-3 font-mono">{c.mc}</td>
+                      <td className="py-2.5 pr-3 font-mono text-muted2">
+                        {c.expiration_date
+                          ? new Date(c.expiration_date).toLocaleDateString('en-US', {
+                              month: 'short',
+                              day: 'numeric',
+                              year: 'numeric',
+                            })
+                          : '—'}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <div className="flex justify-end pt-4">
+              <button
+                type="button"
+                onClick={() => setCancellationPopupOpen(false)}
+                className="py-1.5 px-3.5 rounded-lg border border-border text-muted2 text-xs font-medium hover:border-accent hover:text-accent"
+              >
+                Close
+              </button>
+            </div>
+          </Modal>
+        </>
       )}
 
       {newLoans.length > 0 && (
