@@ -7,10 +7,19 @@ import type {
   LoanProviderType,
   ClientInsurance,
   ClientInsuranceRow,
+  ClientInsuranceCancellationAudit,
+  ClientInsuranceCancellationAuditRow,
   InsuranceVerification,
   InsuranceVerificationRow,
 } from '@/types';
 import { getSupabase } from './supabase';
+
+/** True when status indicates cancellation and we have an expiration/cancellation date. */
+function isCancellationWithDate(status: string, expirationDate: string | null): boolean {
+  const s = (status ?? '').trim().toLowerCase();
+  if (!s.includes('cancellation')) return false;
+  return !!(expirationDate && expirationDate.trim());
+}
 
 function clientInsuranceFromRow(row: ClientInsuranceRow | null): ClientInsurance | null {
   if (!row) return null;
@@ -21,6 +30,7 @@ function clientInsuranceFromRow(row: ClientInsuranceRow | null): ClientInsurance
     mc: row.mc,
     status: row.status ?? 'OK',
     expiration_date: row.expiration_date ?? null,
+    last_cancellation_date: row.last_cancellation_date ?? null,
   };
 }
 
@@ -211,10 +221,17 @@ export async function insertClientInsurance(
     mc: payload.mc,
     status: payload.status ?? 'OK',
     expiration_date: payload.expiration_date ?? null,
+    last_cancellation_date: isCancellationWithDate(payload.status ?? '', payload.expiration_date ?? null)
+      ? payload.expiration_date
+      : null,
   };
   const { data, error } = await supabase.from('client_insurance').insert(row).select('*').single();
   if (error) throw error;
-  return clientInsuranceFromRow(data as ClientInsuranceRow)!;
+  const inserted = clientInsuranceFromRow(data as ClientInsuranceRow)!;
+  if (isCancellationWithDate(payload.status ?? '', payload.expiration_date ?? null) && payload.expiration_date) {
+    await insertCancellationAuditRow(inserted.id, payload.expiration_date);
+  }
+  return inserted;
 }
 
 export async function updateClientInsurance(id: number, record: ClientInsurance): Promise<ClientInsurance> {
@@ -226,10 +243,17 @@ export async function updateClientInsurance(id: number, record: ClientInsurance)
     mc: record.mc,
     status: record.status ?? 'OK',
     expiration_date: record.expiration_date ?? null,
+    last_cancellation_date: isCancellationWithDate(record.status ?? '', record.expiration_date ?? null)
+      ? record.expiration_date
+      : record.last_cancellation_date ?? null,
   };
   const { data, error } = await supabase.from('client_insurance').update(row).eq('id', id).select('*').single();
   if (error) throw error;
-  return clientInsuranceFromRow(data as ClientInsuranceRow)!;
+  const updated = clientInsuranceFromRow(data as ClientInsuranceRow)!;
+  if (isCancellationWithDate(record.status ?? '', record.expiration_date ?? null) && record.expiration_date) {
+    await insertCancellationAuditRow(id, record.expiration_date);
+  }
+  return updated;
 }
 
 export async function deleteClientInsuranceById(id: number): Promise<void> {
@@ -237,6 +261,45 @@ export async function deleteClientInsuranceById(id: number): Promise<void> {
   if (!supabase) throw new Error('Supabase not configured');
   const { error } = await supabase.from('client_insurance').delete().eq('id', id);
   if (error) throw error;
+}
+
+// --- Cancellation audit (full history per client) ---
+
+function cancellationAuditFromRow(row: ClientInsuranceCancellationAuditRow | null): ClientInsuranceCancellationAudit | null {
+  if (!row) return null;
+  return {
+    id: row.id,
+    client_insurance_id: row.client_insurance_id,
+    cancellation_date: row.cancellation_date,
+    created_at: row.created_at,
+  };
+}
+
+/** Inserts one audit row (called when client is saved with cancellation + date). */
+async function insertCancellationAuditRow(clientInsuranceId: number, cancellationDate: string): Promise<void> {
+  const supabase = getSupabase();
+  if (!supabase) return;
+  await supabase.from('client_insurance_cancellation_audit').insert({
+    client_insurance_id: clientInsuranceId,
+    cancellation_date: cancellationDate,
+  });
+}
+
+/** Fetches full cancellation history for a client (for Audit button). Newest first. */
+export async function fetchCancellationAuditByClientId(
+  clientInsuranceId: number
+): Promise<ClientInsuranceCancellationAudit[]> {
+  const supabase = getSupabase();
+  if (!supabase) throw new Error('Supabase not configured');
+  const { data, error } = await supabase
+    .from('client_insurance_cancellation_audit')
+    .select('*')
+    .eq('client_insurance_id', clientInsuranceId)
+    .order('cancellation_date', { ascending: false });
+  if (error) throw error;
+  return (data as ClientInsuranceCancellationAuditRow[] || []).map((row) =>
+    cancellationAuditFromRow(row)!
+  );
 }
 
 // --- Insurance verification (one row per owner: last checked date + checked by) ---

@@ -91,6 +91,8 @@ export interface ClientInsurance {
   status: string;
   /** Optional expiration date (when status is or was a date). */
   expiration_date: string | null;
+  /** Audit: last date this client was in cancellation (kept when status changes back). */
+  last_cancellation_date: string | null;
 }
 
 /** Supabase row: client_insurance table (snake_case). */
@@ -101,6 +103,23 @@ export interface ClientInsuranceRow {
   mc: string;
   status: string;
   expiration_date: string | null;
+  last_cancellation_date?: string | null;
+}
+
+/** One row per cancellation event (full history for Audit). */
+export interface ClientInsuranceCancellationAudit {
+  id: number;
+  client_insurance_id: number;
+  cancellation_date: string;
+  created_at?: string;
+}
+
+/** Supabase row: client_insurance_cancellation_audit table (snake_case). */
+export interface ClientInsuranceCancellationAuditRow {
+  id: number;
+  client_insurance_id: number;
+  cancellation_date: string;
+  created_at?: string;
 }
 
 /** Single record per owner: when insurance was last verified and by whom. */

@@ -41,6 +41,7 @@ export function AddClientInsuranceModal({ open, onClose, onAdd }: AddClientInsur
         mc: mc.trim(),
         status: statusToValue(status),
         expiration_date: cancellationDate.trim() || null,
+        last_cancellation_date: null,
       });
       setClient('');
       setMc('');
