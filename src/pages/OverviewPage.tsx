@@ -48,7 +48,9 @@ export function OverviewPage({
   const resWeek = reserves.filter(isReserveDueThisWeek);
   const resWeekTotal = resWeek.reduce((s, r) => s + r.amount / r.installments, 0);
   const upcoming = activeLoans
-    .filter((l) => !isDueThisWeek(l) && !isLoanOverdue(l))
+    // Include loans that are either overdue or not scheduled for this week,
+    // as long as they still have installments left.
+    .filter((l) => isLoanOverdue(l) || !isDueThisWeek(l))
     .map((l) => ({ ...l, nextDate: getNextDueDate(l) }))
     .filter((l) => l.nextDate)
     .sort((a, b) => a.nextDate!.getTime() - b.nextDate!.getTime())
