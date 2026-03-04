@@ -69,7 +69,7 @@ export function OverviewPage({
 
   const [cancellationPopupOpen, setCancellationPopupOpen] = useState(false);
 
-  /** Show warning when client insurance exists but hasn't been verified this week (>7 days). */
+  /** Show warning when client insurance exists but hasn't been verified this week (Mon–Sun). */
   const showInsuranceNeedsVerification =
     clientInsurance.length > 0 && insuranceNeedsVerification(insuranceVerification);
 

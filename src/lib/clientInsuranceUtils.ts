@@ -1,14 +1,26 @@
 import type { ClientInsurance, InsuranceVerification } from '@/types';
 
-/** True if insurance verification is missing or older than 7 days (show Overview warning). */
+/**
+ * Returns the Monday 00:00 of the week containing the given date (week = Monday–Sunday).
+ * Sunday is considered the last day of the previous week.
+ */
+function getMondayOfWeek(d: Date): Date {
+  const m = new Date(d);
+  m.setHours(0, 0, 0, 0);
+  const day = m.getDay(); // 0=Sun, 1=Mon, ..., 6=Sat
+  const daysToMonday = day === 0 ? 6 : day - 1;
+  m.setDate(m.getDate() - daysToMonday);
+  return m;
+}
+
+/** True if insurance verification is missing or not in the current week (Mon–Sun). Show Overview warning every new week until verified. */
 export function insuranceNeedsVerification(verification: InsuranceVerification | null): boolean {
   if (!verification?.last_checked_date) return true;
   const checked = new Date(verification.last_checked_date);
   if (isNaN(checked.getTime())) return true;
-  const now = new Date();
-  const msPerDay = 24 * 60 * 60 * 1000;
-  const daysSince = (now.getTime() - checked.getTime()) / msPerDay;
-  return daysSince > 7;
+  const thisWeekMonday = getMondayOfWeek(new Date());
+  const checkedWeekMonday = getMondayOfWeek(checked);
+  return thisWeekMonday.getTime() !== checkedWeekMonday.getTime();
 }
 
 /**

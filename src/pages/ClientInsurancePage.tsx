@@ -216,7 +216,7 @@ export function ClientInsurancePage({
         title="Record insurance verification"
       >
         <p className="text-[13px] text-muted2 mb-4">
-          Set the date and name of the person who reviewed client insurance. This is checked weekly; the Overview will show a warning if not verified within 7 days.
+          Set the date and name of the person who reviewed client insurance. Verification is per week (Monday–Sunday); the Overview will show a warning each new week until you verify.
         </p>
         <div className="space-y-4">
           <div>
