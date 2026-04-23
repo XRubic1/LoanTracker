@@ -3,6 +3,7 @@ import { Section } from '@/components/Section';
 import { Modal } from '@/components/Modal';
 import {
   getClientInsuranceStatusLabel,
+  isClientInsuranceCancellationSoon,
   isClientInsuranceWarning,
   isClientInsuranceOut,
   isClientInsuranceInactiveOrOut,
@@ -26,10 +27,21 @@ export function ClientInsurancePage({
   onViewClient,
 }: ClientInsurancePageProps) {
   const [hideInactive, setHideInactive] = useState(true);
+  const [statusFilter, setStatusFilter] = useState('all');
+  const [searchQuery, setSearchQuery] = useState('');
   const [recordVerificationOpen, setRecordVerificationOpen] = useState(false);
   const [recordDate, setRecordDate] = useState(() => new Date().toISOString().split('T')[0]);
   const [recordCheckedBy, setRecordCheckedBy] = useState('');
   const [savingVerification, setSavingVerification] = useState(false);
+
+  /** Maps record status to filter dropdown value. */
+  const getFilterValueFromRecord = (status: string): string => {
+    const normalizedStatus = (status ?? '').trim().toLowerCase();
+    if (normalizedStatus === 'ok') return 'ok';
+    if (normalizedStatus === 'out') return 'out';
+    if (normalizedStatus.includes('cancellation')) return 'cancellation';
+    return 'all';
+  };
 
   const handleRecordVerification = async () => {
     const name = recordCheckedBy.trim();
@@ -45,9 +57,25 @@ export function ClientInsurancePage({
     }
   };
 
-  const list = hideInactive
-    ? clientInsurance.filter((c) => !isClientInsuranceInactiveOrOut(c))
-    : clientInsurance;
+  const normalizedSearch = searchQuery.trim().toLowerCase();
+  const list = clientInsurance
+    .filter((c) => !hideInactive || !isClientInsuranceInactiveOrOut(c))
+    .filter((c) => {
+      const normalizedStatus = (c.status ?? '').trim().toLowerCase();
+      if (statusFilter === 'all') return true;
+      if (statusFilter === 'ok') return normalizedStatus === 'ok';
+      if (statusFilter === 'out') return normalizedStatus === 'out';
+      if (statusFilter === 'cancellation') return normalizedStatus.includes('cancellation');
+      return true;
+    })
+    .filter((c) => {
+      if (!normalizedSearch) return true;
+      return (
+        c.client.toLowerCase().includes(normalizedSearch) ||
+        c.mc.toLowerCase().includes(normalizedSearch) ||
+        getClientInsuranceStatusLabel(c).toLowerCase().includes(normalizedSearch)
+      );
+    });
 
   return (
     <>
@@ -124,6 +152,29 @@ export function ClientInsurancePage({
         </div>
       </div>
 
+      <div className="mb-5 grid grid-cols-1 gap-2 sm:grid-cols-[minmax(0,1fr)_220px]">
+        <div className="relative">
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="Search by client, MC, or status"
+            className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-[13px] text-text placeholder:text-muted2"
+          />
+        </div>
+        <select
+          value={statusFilter}
+          onChange={(e) => setStatusFilter(e.target.value)}
+          className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-[13px] text-text"
+          aria-label="Filter by status"
+        >
+          <option value="all">All statuses</option>
+          <option value="ok">OK</option>
+          <option value="out">OUT</option>
+          <option value="cancellation">Cancellation</option>
+        </select>
+      </div>
+
       <Section title="Clients" count={list.length}>
         <table className="w-full border-collapse">
           <thead>
@@ -153,14 +204,30 @@ export function ClientInsurancePage({
               list.map((c) => {
                 const isOut = isClientInsuranceOut(c);
                 const isWarning = isClientInsuranceWarning(c);
+                const isCancellationSoon = isClientInsuranceCancellationSoon(c, 10);
                 const statusLabel = getClientInsuranceStatusLabel(c);
+                const statusFilterValue = getFilterValueFromRecord(c.status);
                 const copyMc = () => {
                   navigator.clipboard.writeText(c.mc).then(() => {}, () => {});
+                };
+                const applyClientFilter = () => {
+                  setSearchQuery((prev) => (prev.trim().toLowerCase() === c.client.toLowerCase() ? '' : c.client));
+                };
+                const applyStatusFilter = () => {
+                  if (statusFilterValue === 'all') return;
+                  setStatusFilter((prev) => (prev === statusFilterValue ? 'all' : statusFilterValue));
                 };
                 return (
                   <tr key={c.id} className="hover:bg-white/[0.015] transition-colors">
                     <td className="py-2.5 pr-3 border-b border-border/40 align-middle">
-                      <div className="font-medium text-text">{c.client}</div>
+                      <button
+                        type="button"
+                        onClick={applyClientFilter}
+                        className="font-medium text-text hover:text-accent transition-colors"
+                        title="Filter by this client"
+                      >
+                        {c.client}
+                      </button>
                     </td>
                     <td className="py-2.5 pr-3 border-b border-border/40 align-middle">
                       <div className="flex items-center gap-1.5 font-mono text-[13px]">
@@ -179,19 +246,22 @@ export function ClientInsurancePage({
                       </div>
                     </td>
                     <td className="py-2.5 pr-3 border-b border-border/40 align-middle">
-                      <span
+                      <button
+                        type="button"
+                        onClick={applyStatusFilter}
+                        title={statusFilterValue === 'all' ? 'Status not available in quick filter' : 'Filter by this status'}
                         className={
-                          isOut
-                            ? 'text-red font-medium'
+                          isOut || isCancellationSoon
+                            ? 'text-red font-medium hover:opacity-80 transition-opacity'
                             : isWarning
-                              ? 'text-yellow font-medium'
+                              ? 'text-yellow font-medium hover:opacity-80 transition-opacity'
                               : statusLabel.toLowerCase() === 'ok'
-                                ? 'text-green'
-                                : ''
+                                ? 'text-green hover:opacity-80 transition-opacity'
+                                : 'hover:text-accent transition-colors'
                         }
                       >
                         {statusLabel}
-                      </span>
+                      </button>
                     </td>
                     <td className="py-2.5 pr-3 border-b border-border/40 align-middle">
                       <button

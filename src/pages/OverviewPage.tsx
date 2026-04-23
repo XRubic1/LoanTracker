@@ -24,7 +24,12 @@ import {
 } from '@/lib/utils';
 import { useState } from 'react';
 import type { UseDataResult } from '@/hooks/useData';
-import { isClientInsuranceCancellationWithDate, insuranceNeedsVerification } from '@/lib/clientInsuranceUtils';
+import {
+  getDaysUntilCancellation,
+  isClientInsuranceCancellationSoon,
+  isClientInsuranceCancellationWithDate,
+  insuranceNeedsVerification,
+} from '@/lib/clientInsuranceUtils';
 import { Modal } from '@/components/Modal';
 
 const CHART_COLORS = ['#4f8ef7', '#7c5cfc', '#2ecc8f', '#f75f5f', '#f7c34f', '#f77f4f', '#4fc3f7'];
@@ -66,6 +71,11 @@ export function OverviewPage({
     .map((c) => ({ ...c, _sortDate: c.expiration_date ? new Date(c.expiration_date).getTime() : 0 }))
     .sort((a, b) => a._sortDate - b._sortDate)
     .map(({ _sortDate: _, ...c }) => c);
+
+  const cancellationSoon = cancellationWithDate
+    .filter((c) => isClientInsuranceCancellationSoon(c, 7))
+    .map((c) => ({ ...c, daysUntil: getDaysUntilCancellation(c) ?? 0 }))
+    .sort((a, b) => a.daysUntil - b.daysUntil);
 
   const [cancellationPopupOpen, setCancellationPopupOpen] = useState(false);
 
@@ -145,21 +155,52 @@ export function OverviewPage({
           <button
             type="button"
             onClick={() => setCancellationPopupOpen(true)}
-            className="mb-6 w-full text-left rounded-xl border-2 border-yellow/50 bg-gradient-to-r from-yellow/20 to-yellow/5 px-4 py-3.5 flex items-start gap-4 shadow-lg shadow-yellow/10 ring-1 ring-yellow/20 hover:ring-yellow/40 transition-colors"
+            className={`mb-6 w-full text-left rounded-xl border-2 px-4 py-3.5 flex items-start gap-4 shadow-lg ring-1 transition-colors ${
+              cancellationSoon.length > 0
+                ? 'border-red/70 bg-gradient-to-r from-red/25 to-red/5 shadow-red/20 ring-red/30 hover:ring-red/50 animate-pulse'
+                : 'border-yellow/50 bg-gradient-to-r from-yellow/20 to-yellow/5 shadow-yellow/10 ring-yellow/20 hover:ring-yellow/40'
+            }`}
             role="alert"
           >
-            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-yellow/25 text-yellow" aria-hidden>
+            <div
+              className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full ${
+                cancellationSoon.length > 0 ? 'bg-red/25 text-red' : 'bg-yellow/25 text-yellow'
+              }`}
+              aria-hidden
+            >
               <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
               </svg>
             </div>
             <div className="flex-1 min-w-0">
               <p className="font-semibold text-text text-[14px]">
-                Client insurance: {cancellationWithDate.length} client{cancellationWithDate.length !== 1 ? 's' : ''} with cancellation and date
+                {cancellationSoon.length > 0
+                  ? `${cancellationSoon.length === 1 ? 'Client' : 'Clients'} about to get insurance cancelled`
+                  : `Client insurance: ${cancellationWithDate.length} client${cancellationWithDate.length !== 1 ? 's' : ''} with cancellation and date`}
               </p>
-              <p className="mt-1 text-[12px] text-muted2">Click to show client, MC and cancellation date</p>
+              <p className="mt-1 text-[12px] text-muted2">
+                {cancellationSoon.length > 0
+                  ? `${cancellationSoon
+                      .slice(0, 3)
+                      .map((c) => {
+                        const cancellationDate = c.expiration_date
+                          ? new Date(c.expiration_date).toLocaleDateString('en-US', {
+                              month: 'short',
+                              day: 'numeric',
+                            })
+                          : 'No date';
+                        return `${c.client} (${cancellationDate}, in ${c.daysUntil} day${c.daysUntil === 1 ? '' : 's'})`;
+                      })
+                      .join(', ')}${cancellationSoon.length > 3 ? ` +${cancellationSoon.length - 3} more` : ''}`
+                  : 'Click to show client, MC and cancellation date.'}
+              </p>
             </div>
-            <svg className="w-5 h-5 text-yellow/70 shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg
+              className={`w-5 h-5 shrink-0 mt-0.5 ${cancellationSoon.length > 0 ? 'text-red/80' : 'text-yellow/70'}`}
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
             </svg>
           </button>

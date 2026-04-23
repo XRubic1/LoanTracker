@@ -59,6 +59,28 @@ export function isClientInsuranceCancellationWithDate(c: ClientInsurance): boole
 }
 
 /**
+ * Returns whole days until cancellation date.
+ * - 0 means today
+ * - positive means future date
+ * - negative means already passed
+ */
+export function getDaysUntilCancellation(c: ClientInsurance): number | null {
+  if (!isClientInsuranceCancellationWithDate(c) || !c.expiration_date) return null;
+  const target = new Date(c.expiration_date);
+  if (isNaN(target.getTime())) return null;
+  const now = new Date();
+  const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+  const startOfTarget = new Date(target.getFullYear(), target.getMonth(), target.getDate()).getTime();
+  return Math.round((startOfTarget - startOfToday) / (1000 * 60 * 60 * 24));
+}
+
+/** True when cancellation date is approaching within the next N days (default 7). */
+export function isClientInsuranceCancellationSoon(c: ClientInsurance, withinDays = 7): boolean {
+  const daysUntil = getDaysUntilCancellation(c);
+  return daysUntil != null && daysUntil >= 0 && daysUntil <= withinDays;
+}
+
+/**
  * Short label for status display (OK, Inactive, Cancellation with date if set).
  */
 export function getClientInsuranceStatusLabel(c: ClientInsurance): string {
