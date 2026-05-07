@@ -37,6 +37,7 @@ export function ClientInsurancePage({
   const getFilterValueFromRecord = (status: string): string => {
     const normalizedStatus = (status ?? '').trim().toLowerCase();
     if (normalizedStatus === 'ok') return 'ok';
+    if (normalizedStatus === 'inactive') return 'inactive';
     if (normalizedStatus === 'out') return 'out';
     if (normalizedStatus.includes('cancellation')) return 'cancellation';
     return 'all';
@@ -63,6 +64,7 @@ export function ClientInsurancePage({
       const normalizedStatus = (c.status ?? '').trim().toLowerCase();
       if (statusFilter === 'all') return true;
       if (statusFilter === 'ok') return normalizedStatus === 'ok';
+      if (statusFilter === 'inactive') return normalizedStatus === 'inactive';
       if (statusFilter === 'out') return normalizedStatus === 'out';
       if (statusFilter === 'cancellation') return normalizedStatus.includes('cancellation');
       return true;
@@ -169,6 +171,7 @@ export function ClientInsurancePage({
         >
           <option value="all">All statuses</option>
           <option value="ok">OK</option>
+          <option value="inactive">Inactive</option>
           <option value="out">OUT</option>
           <option value="cancellation">Cancellation</option>
         </select>
