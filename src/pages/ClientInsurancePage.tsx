@@ -6,7 +6,6 @@ import {
   isClientInsuranceCancellationSoon,
   isClientInsuranceWarning,
   isClientInsuranceOut,
-  isClientInsuranceInactiveOrOut,
 } from '@/lib/clientInsuranceUtils';
 import { printCancellationReport } from '@/lib/printClientInsurance';
 import type { UseDataResult } from '@/hooks/useData';
@@ -59,7 +58,7 @@ export function ClientInsurancePage({
 
   const normalizedSearch = searchQuery.trim().toLowerCase();
   const list = clientInsurance
-    .filter((c) => !hideInactive || !isClientInsuranceInactiveOrOut(c))
+    .filter((c) => !hideInactive || !isClientInsuranceOut(c))
     .filter((c) => {
       const normalizedStatus = (c.status ?? '').trim().toLowerCase();
       if (statusFilter === 'all') return true;
@@ -130,7 +129,7 @@ export function ClientInsurancePage({
             >
               {hideInactive ? '✓' : ''}
             </span>
-            <span>Hide Inactive clients</span>
+            <span>Hide OUT clients</span>
           </button>
           <button
             type="button"
@@ -197,7 +196,7 @@ export function ClientInsurancePage({
                 <td colSpan={4} className="text-center py-10 text-muted text-[13px]">
                   {clientInsurance.length === 0
                     ? 'No clients yet. Add a client or run the seed SQL to load initial data.'
-                    : 'No clients to show. Turn off "Hide Inactive clients" to see Inactive and OUT.'}
+                    : 'No clients to show. Turn off "Hide OUT clients" to see OUT clients.'}
                 </td>
               </tr>
             ) : (
