@@ -18,6 +18,7 @@ import {
   upsertInsuranceVerification,
   fetchAaaPayments,
   insertAaaPayment,
+  updateAaaPayment,
 } from '@/lib/supabase-db';
 
 export interface UseDataResult {
@@ -49,6 +50,7 @@ export interface UseDataResult {
     payload: { last_checked_date: string; checked_by: string }
   ) => Promise<InsuranceVerification>;
   addAaaPayment: (payload: Omit<AaaPayment, 'id' | 'createdAt'>) => Promise<AaaPayment>;
+  updateAaaPaymentById: (id: number, payment: AaaPayment) => Promise<AaaPayment>;
 }
 
 export function useData(ownerId: string | null): UseDataResult {
@@ -311,6 +313,12 @@ export function useData(ownerId: string | null): UseDataResult {
     [ownerId]
   );
 
+  const updateAaaPaymentById = useCallback(async (id: number, payment: AaaPayment) => {
+    const updated = await updateAaaPayment(id, payment);
+    setAaaPayments((prev) => prev.map((p) => (p.id === id ? updated : p)));
+    return updated;
+  }, []);
+
   return {
     loans,
     reserves,
@@ -338,5 +346,6 @@ export function useData(ownerId: string | null): UseDataResult {
     removeClientInsurance,
     updateInsuranceVerification,
     addAaaPayment,
+    updateAaaPaymentById,
   };
 }

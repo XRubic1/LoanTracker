@@ -18,6 +18,7 @@ import { AddReserveModal } from '@/components/modals/AddReserveModal';
 import { AddClientInsuranceModal } from '@/components/modals/AddClientInsuranceModal';
 import { ClientInsuranceDetailModal } from '@/components/modals/ClientInsuranceDetailModal';
 import { EditClientInsuranceModal } from '@/components/modals/EditClientInsuranceModal';
+import { EditAaaPaymentModal } from '@/components/modals/EditAaaPaymentModal';
 import type { Loan } from '@/types';
 import { PasswordConfirmModal } from '@/components/PasswordConfirmModal';
 import { useAuth } from '@/contexts/AuthContext';
@@ -35,6 +36,7 @@ export default function App() {
   const [addClientInsuranceOpen, setAddClientInsuranceOpen] = useState(false);
   const [clientInsuranceDetailId, setClientInsuranceDetailId] = useState<number | null>(null);
   const [editClientInsuranceId, setEditClientInsuranceId] = useState<number | null>(null);
+  const [editAaaPaymentId, setEditAaaPaymentId] = useState<number | null>(null);
   const [passwordModalOpen, setPasswordModalOpen] = useState(false);
   const pendingPasswordActionRef = useRef<(() => void) | null>(null);
 
@@ -82,6 +84,7 @@ export default function App() {
     updateInsuranceVerification,
     aaaPayments,
     addAaaPayment,
+    updateAaaPaymentById,
   } = useData(effectiveOwnerId ?? null);
 
   const selectedClientInsurance =
@@ -92,6 +95,8 @@ export default function App() {
     editClientInsuranceId != null
       ? clientInsurance.find((c) => c.id === editClientInsuranceId) ?? null
       : null;
+  const editingAaaPayment =
+    editAaaPaymentId != null ? aaaPayments.find((p) => p.id === editAaaPaymentId) ?? null : null;
 
   const selectedLoan = loanDetailId != null ? loans.find((l) => l.id === loanDetailId) ?? null : null;
   const selectedReserve =
@@ -370,10 +375,15 @@ export default function App() {
             addAaaPayment={addAaaPayment}
             onOpenLoan={setLoanDetailId}
             onOpenReserve={setReserveDetailId}
+            onEditAaaPayment={setEditAaaPaymentId}
           />
         )}
         {page === 'aaaPayments' && (
-          <AaaPaymentsPage aaaPayments={aaaPayments} addAaaPayment={addAaaPayment} />
+          <AaaPaymentsPage
+            aaaPayments={aaaPayments}
+            addAaaPayment={addAaaPayment}
+            onEditPayment={setEditAaaPaymentId}
+          />
         )}
         {page === 'clientInsurance' && (
           <ClientInsurancePage
@@ -465,6 +475,16 @@ export default function App() {
         onSave={async (id, record) => {
           const updated = await updateClientInsuranceById(id, record);
           setEditClientInsuranceId(null);
+          return updated;
+        }}
+      />
+      <EditAaaPaymentModal
+        payment={editingAaaPayment}
+        open={editAaaPaymentId != null}
+        onClose={() => setEditAaaPaymentId(null)}
+        onSave={async (id, record) => {
+          const updated = await updateAaaPaymentById(id, record);
+          setEditAaaPaymentId(null);
           return updated;
         }}
       />

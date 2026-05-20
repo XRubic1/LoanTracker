@@ -450,3 +450,18 @@ export async function insertAaaPayment(
   if (error) throw error;
   return aaaPaymentFromRow(data as AaaPaymentRow)!;
 }
+
+export async function updateAaaPayment(id: number, payment: AaaPayment): Promise<AaaPayment> {
+  const supabase = getSupabase();
+  if (!supabase) throw new Error('Supabase not configured');
+  const row = {
+    owner_id: payment.owner_id ?? null,
+    client: payment.client,
+    payee: payment.payee,
+    amount: payment.amount,
+    payment_date: payment.paymentDate,
+  };
+  const { data, error } = await supabase.from('aaa_payments').update(row).eq('id', id).select('*').single();
+  if (error) throw error;
+  return aaaPaymentFromRow(data as AaaPaymentRow)!;
+}
