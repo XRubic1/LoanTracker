@@ -79,7 +79,47 @@ export interface ReserveRow {
   deduction_notes?: string[];
 }
 
-export type PageId = 'overview' | 'loans' | 'reserves' | 'closed' | 'users' | 'clientInsurance';
+/** AAA entity receiving a payment */
+export const AAA_PAYEES = [
+  'AAA Lease',
+  'AAA Mega Fuel',
+  'AAA Equipment',
+  'BJK Fuel',
+] as const;
+
+export type AaaPayee = (typeof AAA_PAYEES)[number];
+
+/** App model: AAA payment (camelCase) */
+export interface AaaPayment {
+  id: number;
+  owner_id?: string | null;
+  client: string;
+  payee: AaaPayee;
+  amount: number;
+  /** Date the payment was made (YYYY-MM-DD). */
+  paymentDate: string;
+  createdAt: string;
+}
+
+/** Supabase row: aaa_payments table (snake_case) */
+export interface AaaPaymentRow {
+  id: number;
+  owner_id: string | null;
+  client: string;
+  payee: string;
+  amount: number;
+  payment_date?: string;
+  created_at: string;
+}
+
+export type PageId =
+  | 'overview'
+  | 'loans'
+  | 'reserves'
+  | 'closed'
+  | 'aaaPayments'
+  | 'users'
+  | 'clientInsurance';
 
 /** Client insurance: client name, MC number, status (OK, inactive, cancellation, date, etc.). */
 export interface ClientInsurance {

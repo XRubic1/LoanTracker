@@ -1,19 +1,42 @@
 import { useState } from 'react';
 import { Section } from '@/components/Section';
 import { Badge } from '@/components/Badge';
+import { AaaPaymentForm } from '@/components/AaaPaymentForm';
 import { fmt, fmtDate } from '@/lib/utils';
 import type { UseDataResult } from '@/hooks/useData';
 
-interface ClosedPageProps extends Pick<UseDataResult, 'loans' | 'reserves'> {
+interface ClosedPageProps extends Pick<UseDataResult, 'loans' | 'reserves' | 'aaaPayments' | 'addAaaPayment'> {
   onOpenLoan: (id: number) => void;
   onOpenReserve: (id: number) => void;
 }
 
-export function ClosedPage({ loans, reserves, onOpenLoan, onOpenReserve }: ClosedPageProps) {
-  const [tab, setTab] = useState<'loans' | 'reserves'>('loans');
+type ClosedTab = 'loans' | 'reserves' | 'aaa';
+
+export function ClosedPage({
+  loans,
+  reserves,
+  aaaPayments,
+  addAaaPayment,
+  onOpenLoan,
+  onOpenReserve,
+}: ClosedPageProps) {
+  const [tab, setTab] = useState<ClosedTab>('loans');
 
   const closedLoans = loans.filter((l) => l.paidCount >= l.totalInstallments && !l.hidden);
   const closedReserves = reserves.filter((r) => r.paidCount >= r.installments);
+
+  const tabBtn = (id: ClosedTab, label: string) => (
+    <button
+      key={id}
+      type="button"
+      onClick={() => setTab(id)}
+      className={`py-1.5 px-4 rounded-md text-[13px] font-medium transition-colors ${
+        tab === id ? 'bg-card text-text' : 'text-muted2 hover:text-text'
+      }`}
+    >
+      {label}
+    </button>
+  );
 
   return (
     <>
@@ -21,29 +44,14 @@ export function ClosedPage({ loans, reserves, onOpenLoan, onOpenReserve }: Close
         <h1 className="text-[22px] font-semibold">Closed</h1>
       </div>
 
-      <div className="flex gap-1 mb-5 bg-surface p-1 rounded-[10px] w-fit">
-        <button
-          type="button"
-          onClick={() => setTab('loans')}
-          className={`py-1.5 px-4 rounded-md text-[13px] font-medium transition-colors ${
-            tab === 'loans' ? 'bg-card text-text' : 'text-muted2'
-          }`}
-        >
-          Loans
-        </button>
-        <button
-          type="button"
-          onClick={() => setTab('reserves')}
-          className={`py-1.5 px-4 rounded-md text-[13px] font-medium transition-colors ${
-            tab === 'reserves' ? 'bg-card text-text' : 'text-muted2'
-          }`}
-        >
-          Reserves
-        </button>
+      <div className="flex flex-wrap gap-1 mb-5 bg-surface p-1 rounded-[10px] w-fit">
+        {tabBtn('loans', 'Loans')}
+        {tabBtn('reserves', 'Reserves')}
+        {tabBtn('aaa', 'AAA Payment')}
       </div>
 
       {tab === 'loans' && (
-        <Section title="Closed loans">
+        <Section title="Closed loans" count={closedLoans.length}>
           {closedLoans.length === 0 ? (
             <div className="text-center py-10 text-muted text-[13px]">No closed loans yet</div>
           ) : (
@@ -98,7 +106,7 @@ export function ClosedPage({ loans, reserves, onOpenLoan, onOpenReserve }: Close
       )}
 
       {tab === 'reserves' && (
-        <Section title="Closed reserves">
+        <Section title="Closed reserves" count={closedReserves.length}>
           {closedReserves.length === 0 ? (
             <div className="text-center py-10 text-muted text-[13px]">No closed reserves yet</div>
           ) : (
@@ -165,6 +173,57 @@ export function ClosedPage({ loans, reserves, onOpenLoan, onOpenReserve }: Close
             </table>
           )}
         </Section>
+      )}
+
+      {tab === 'aaa' && (
+        <div className="space-y-5">
+          <Section title="Record AAA payment">
+            <AaaPaymentForm onSubmit={async (payload) => { await addAaaPayment(payload); }} />
+          </Section>
+
+          <Section title="AAA payment history" count={aaaPayments.length}>
+            {aaaPayments.length === 0 ? (
+              <div className="text-center py-10 text-muted text-[13px]">No AAA payments recorded yet</div>
+            ) : (
+              <table className="w-full border-collapse">
+                <thead>
+                  <tr>
+                    <th className="text-[10px] text-muted uppercase tracking-widest py-0 pb-2.5 pr-3 text-left border-b border-border">
+                      Date
+                    </th>
+                    <th className="text-[10px] text-muted uppercase tracking-widest py-0 pb-2.5 pr-3 text-left border-b border-border">
+                      Client
+                    </th>
+                    <th className="text-[10px] text-muted uppercase tracking-widest py-0 pb-2.5 pr-3 text-left border-b border-border">
+                      Payee
+                    </th>
+                    <th className="text-[10px] text-muted uppercase tracking-widest py-0 pb-2.5 pr-3 text-left border-b border-border">
+                      Amount
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {aaaPayments.map((p) => (
+                    <tr key={p.id} className="hover:bg-white/[0.015] transition-colors">
+                      <td className="py-2.5 pr-3 border-b border-border/40 align-middle font-mono text-xs text-muted2">
+                        {fmtDate(p.paymentDate)}
+                      </td>
+                      <td className="py-2.5 pr-3 border-b border-border/40 align-middle font-medium text-text">
+                        {p.client}
+                      </td>
+                      <td className="py-2.5 pr-3 border-b border-border/40 align-middle">
+                        <Badge variant="closed">{p.payee}</Badge>
+                      </td>
+                      <td className="py-2.5 pr-3 border-b border-border/40 align-middle font-mono font-medium text-green">
+                        {fmt(p.amount)}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </Section>
+        </div>
       )}
     </>
   );

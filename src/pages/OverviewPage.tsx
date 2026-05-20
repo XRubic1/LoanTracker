@@ -13,7 +13,7 @@ import {
   getReserveNextDueDate,
   getDateWeekLabel,
   isDueThisWeek,
-  isLoanOverdue,
+  isLoanPastDue,
   isNewLoan,
   isReserveDueThisWeek,
   isReserveOverdue,
@@ -31,6 +31,7 @@ import {
   insuranceNeedsVerification,
 } from '@/lib/clientInsuranceUtils';
 import { Modal } from '@/components/Modal';
+import { AaaPaymentForm } from '@/components/AaaPaymentForm';
 
 const CHART_COLORS = ['#4f8ef7', '#7c5cfc', '#2ecc8f', '#f75f5f', '#f7c34f', '#f77f4f', '#4fc3f7'];
 
@@ -39,9 +40,13 @@ export function OverviewPage({
   reserves,
   clientInsurance = [],
   insuranceVerification = null,
+  addAaaPayment,
   onOpenCloseInstallment,
   onOpenCloseDeduction,
-}: Pick<UseDataResult, 'loans' | 'reserves' | 'clientInsurance' | 'insuranceVerification'> & {
+}: Pick<
+  UseDataResult,
+  'loans' | 'reserves' | 'clientInsurance' | 'insuranceVerification' | 'addAaaPayment'
+> & {
   onOpenCloseInstallment: (loanId: number) => void;
   onOpenCloseDeduction: (reserveId: number) => void;
 }) {
@@ -58,9 +63,7 @@ export function OverviewPage({
   const resWeek = reserves.filter(isReserveDueThisWeek);
   const resWeekTotal = resWeek.reduce((s, r) => s + r.amount / r.installments, 0);
   const upcoming = activeLoans
-    // Include loans that are either overdue or not scheduled for this week,
-    // as long as they still have installments left.
-    .filter((l) => isLoanOverdue(l) || !isDueThisWeek(l))
+    .filter((l) => !isDueThisWeek(l))
     .map((l) => ({ ...l, nextDate: getNextDueDate(l) }))
     .filter((l) => l.nextDate)
     .sort((a, b) => a.nextDate!.getTime() - b.nextDate!.getTime())
@@ -320,6 +323,14 @@ export function OverviewPage({
           valueClassName="text-green"
           sub="fully repaid"
         />
+        <div className="bg-card border border-border rounded-2xl p-3.5 flex flex-col justify-center">
+          <AaaPaymentForm
+            compact
+            onSubmit={async (payload) => {
+              await addAaaPayment(payload);
+            }}
+          />
+        </div>
       </div>
 
       <div className="grid grid-cols-2 gap-5 mb-7">
@@ -355,6 +366,7 @@ export function OverviewPage({
                 dueLoans.map((l) => {
                   const rem = getLoanRemaining(l);
                   const left = l.totalInstallments - l.paidCount;
+                  const pastDue = isLoanPastDue(l);
                   return (
                     <tr
                       key={l.id}
@@ -393,7 +405,11 @@ export function OverviewPage({
                         <div className="text-[10px] text-muted mt-0.5">{left} left</div>
                       </td>
                       <td className="py-2.5 pr-3 border-b border-border/40 align-middle">
-                        <Badge variant="due">Due</Badge>
+                        {pastDue ? (
+                          <Badge variant="overdue">Past Due</Badge>
+                        ) : (
+                          <Badge variant="due">Due</Badge>
+                        )}
                       </td>
                     </tr>
                   );

@@ -11,7 +11,11 @@ import type {
   ClientInsuranceCancellationAuditRow,
   InsuranceVerification,
   InsuranceVerificationRow,
+  AaaPayment,
+  AaaPaymentRow,
+  AaaPayee,
 } from '@/types';
+import { AAA_PAYEES } from '@/types';
 import { getSupabase } from './supabase';
 
 /** True when status indicates cancellation and we have an expiration/cancellation date. */
@@ -393,4 +397,56 @@ export async function removeTeamMember(ownerId: string, email: string): Promise<
     .eq('owner_id', ownerId)
     .eq('email', email);
   if (error) throw error;
+}
+
+// --- AAA Payments ---
+
+function isAaaPayee(value: string): value is AaaPayee {
+  return (AAA_PAYEES as readonly string[]).includes(value);
+}
+
+function aaaPaymentFromRow(row: AaaPaymentRow | null): AaaPayment | null {
+  if (!row) return null;
+  const payee = isAaaPayee(row.payee) ? row.payee : 'AAA Lease';
+  const paymentDate =
+    row.payment_date ?? (row.created_at ? row.created_at.split('T')[0] : new Date().toISOString().split('T')[0]);
+  return {
+    id: row.id,
+    owner_id: row.owner_id ?? undefined,
+    client: row.client,
+    payee,
+    amount: Number(row.amount),
+    paymentDate,
+    createdAt: row.created_at,
+  };
+}
+
+export async function fetchAaaPayments(): Promise<AaaPayment[]> {
+  const supabase = getSupabase();
+  if (!supabase) throw new Error('Supabase not configured');
+  const { data, error } = await supabase
+    .from('aaa_payments')
+    .select('*')
+    .order('payment_date', { ascending: false })
+    .order('created_at', { ascending: false });
+  if (error) throw error;
+  return (data as AaaPaymentRow[] || []).map((row) => aaaPaymentFromRow(row)!);
+}
+
+export async function insertAaaPayment(
+  payload: Omit<AaaPayment, 'id' | 'createdAt'>,
+  ownerId?: string | null
+): Promise<AaaPayment> {
+  const supabase = getSupabase();
+  if (!supabase) throw new Error('Supabase not configured');
+  const row = {
+    owner_id: ownerId ?? null,
+    client: payload.client,
+    payee: payload.payee,
+    amount: payload.amount,
+    payment_date: payload.paymentDate,
+  };
+  const { data, error } = await supabase.from('aaa_payments').insert(row).select('*').single();
+  if (error) throw error;
+  return aaaPaymentFromRow(data as AaaPaymentRow)!;
 }

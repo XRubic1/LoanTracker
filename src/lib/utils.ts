@@ -191,7 +191,7 @@ function getReserveNextDueDateOnly(r: Reserve): string | null {
 
 // --- Loan: next due date, due-this-week, and first overdue date ---
 
-/** Next due = last payment date + freq when payment_dates exist (backdating), else start + paidCount * freq. Returns Date for display. */
+/** Next scheduled due date (fixed calendar from start; late payments do not shift future installments). */
 export function getNextDueDate(loan: Loan): Date | null {
   const str = getNextDueDateOnly(loan);
   if (!str) return null;
@@ -199,13 +199,19 @@ export function getNextDueDate(loan: Loan): Date | null {
   return new Date(y, m - 1, d);
 }
 
-/** Next due as YYYY-MM-DD (date-only, no timezone shift). */
+/** Next scheduled installment due as YYYY-MM-DD: startDate + paidCount × freqDays. */
 function getNextDueDateOnly(loan: Loan): string | null {
   if (loan.paidCount >= loan.totalInstallments) return null;
   const freq = loan.freqDays ?? 7;
-  const dates = loan.paymentDates ?? [];
-  if (dates.length > 0) return addDaysDateOnly(dates[dates.length - 1], freq);
   return addDaysDateOnly(loan.startDate, loan.paidCount * freq);
+}
+
+/** Past due = scheduled next installment due date is before today and not yet paid. */
+export function isLoanPastDue(loan: Loan): boolean {
+  if (loan.paidCount >= loan.totalInstallments) return false;
+  const dueStr = getNextDueDateOnly(loan);
+  if (!dueStr) return false;
+  return dueStr < todayDateOnly();
 }
 
 export function getLoanRemaining(loan: Loan): number {

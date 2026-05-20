@@ -5,6 +5,7 @@ import { OverviewPage } from '@/pages/OverviewPage';
 import { LoansPage } from '@/pages/LoansPage';
 import { ReservesPage } from '@/pages/ReservesPage';
 import { ClosedPage } from '@/pages/ClosedPage';
+import { AaaPaymentsPage } from '@/pages/AaaPaymentsPage';
 import { ClientInsurancePage } from '@/pages/ClientInsurancePage';
 import { UsersPage } from '@/pages/UsersPage';
 import { AuthPage } from '@/pages/AuthPage';
@@ -79,6 +80,8 @@ export default function App() {
     updateClientInsuranceById,
     removeClientInsurance,
     updateInsuranceVerification,
+    aaaPayments,
+    addAaaPayment,
   } = useData(effectiveOwnerId ?? null);
 
   const selectedClientInsurance =
@@ -334,6 +337,7 @@ export default function App() {
             reserves={reserves}
             clientInsurance={clientInsurance}
             insuranceVerification={insuranceVerification}
+            addAaaPayment={addAaaPayment}
             onOpenCloseInstallment={setOverviewCloseInstallmentLoanId}
             onOpenCloseDeduction={setOverviewCloseDeductionReserveId}
           />
@@ -362,9 +366,14 @@ export default function App() {
           <ClosedPage
             loans={loans}
             reserves={reserves}
+            aaaPayments={aaaPayments}
+            addAaaPayment={addAaaPayment}
             onOpenLoan={setLoanDetailId}
             onOpenReserve={setReserveDetailId}
           />
+        )}
+        {page === 'aaaPayments' && (
+          <AaaPaymentsPage aaaPayments={aaaPayments} addAaaPayment={addAaaPayment} />
         )}
         {page === 'clientInsurance' && (
           <ClientInsurancePage

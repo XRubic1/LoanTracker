@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import type { Loan, Reserve, ClientInsurance, InsuranceVerification } from '@/types';
+import type { Loan, Reserve, ClientInsurance, InsuranceVerification, AaaPayment } from '@/types';
 import { isConfigMissing, getSupabase } from '@/lib/supabase';
 import {
   fetchLoans,
@@ -16,11 +16,14 @@ import {
   deleteClientInsuranceById,
   fetchInsuranceVerification,
   upsertInsuranceVerification,
+  fetchAaaPayments,
+  insertAaaPayment,
 } from '@/lib/supabase-db';
 
 export interface UseDataResult {
   loans: Loan[];
   reserves: Reserve[];
+  aaaPayments: AaaPayment[];
   clientInsurance: ClientInsurance[];
   insuranceVerification: InsuranceVerification | null;
   loading: boolean;
@@ -45,11 +48,13 @@ export interface UseDataResult {
   updateInsuranceVerification: (
     payload: { last_checked_date: string; checked_by: string }
   ) => Promise<InsuranceVerification>;
+  addAaaPayment: (payload: Omit<AaaPayment, 'id' | 'createdAt'>) => Promise<AaaPayment>;
 }
 
 export function useData(ownerId: string | null): UseDataResult {
   const [loans, setLoans] = useState<Loan[]>([]);
   const [reserves, setReserves] = useState<Reserve[]>([]);
+  const [aaaPayments, setAaaPayments] = useState<AaaPayment[]>([]);
   const [clientInsurance, setClientInsurance] = useState<ClientInsurance[]>([]);
   const [insuranceVerification, setInsuranceVerification] = useState<InsuranceVerification | null>(null);
   const [loading, setLoading] = useState(true);
@@ -80,6 +85,12 @@ export function useData(ownerId: string | null): UseDataResult {
         setInsuranceVerification(verification);
       } catch {
         setInsuranceVerification(null);
+      }
+      try {
+        const aaaData = await fetchAaaPayments();
+        setAaaPayments(aaaData);
+      } catch {
+        setAaaPayments([]);
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
@@ -119,6 +130,11 @@ export function useData(ownerId: string | null): UseDataResult {
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'insurance_verification' },
+        () => { refetchRef.current(); }
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'aaa_payments' },
         () => { refetchRef.current(); }
       )
       .subscribe();
@@ -286,9 +302,19 @@ export function useData(ownerId: string | null): UseDataResult {
     [ownerId]
   );
 
+  const addAaaPayment = useCallback(
+    async (payload: Omit<AaaPayment, 'id' | 'createdAt'>) => {
+      const added = await insertAaaPayment(payload, ownerId);
+      setAaaPayments((prev) => [added, ...prev]);
+      return added;
+    },
+    [ownerId]
+  );
+
   return {
     loans,
     reserves,
+    aaaPayments,
     clientInsurance,
     insuranceVerification,
     loading,
@@ -311,5 +337,6 @@ export function useData(ownerId: string | null): UseDataResult {
     updateClientInsuranceById,
     removeClientInsurance,
     updateInsuranceVerification,
+    addAaaPayment,
   };
 }

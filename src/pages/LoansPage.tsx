@@ -2,7 +2,7 @@ import { useState } from 'react';
 import type { Loan } from '@/types';
 import { Section } from '@/components/Section';
 import { Badge } from '@/components/Badge';
-import { fmt, fmtDate, getLoanRemaining, getNextDueDate, isDueThisWeek, getLoanProviderDisplay } from '@/lib/utils';
+import { fmt, fmtDate, getLoanRemaining, getNextDueDate, isDueThisWeek, isLoanPastDue, getLoanProviderDisplay } from '@/lib/utils';
 import type { UseDataResult } from '@/hooks/useData';
 import { printOpenLoans, printOpenLoansSummary } from '@/lib/printLoans';
 
@@ -215,9 +215,12 @@ export function LoansPage({
                 const nd = getNextDueDate(l);
                 const isClosed = l.paidCount >= l.totalInstallments;
                 const isDue = isDueThisWeek(l);
+                const pastDue = isLoanPastDue(l);
                 const status =
                   isClosed ? (
                     <Badge variant="closed">Closed</Badge>
+                  ) : pastDue ? (
+                    <Badge variant="overdue">Past Due</Badge>
                   ) : isDue ? (
                     <Badge variant="due">Due</Badge>
                   ) : (
@@ -263,7 +266,7 @@ export function LoansPage({
                         <div className="flex-1 h-1 bg-border rounded overflow-hidden">
                           <div
                             className={`h-full rounded transition-[width] ${
-                              isClosed ? 'bg-green' : isDue ? 'bg-yellow' : 'bg-accent'
+                              isClosed ? 'bg-green' : pastDue ? 'bg-red' : isDue ? 'bg-yellow' : 'bg-accent'
                             }`}
                             style={{ width: `${pct}%` }}
                           />
