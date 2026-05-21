@@ -133,6 +133,14 @@ export interface ClientInsurance {
   expiration_date: string | null;
   /** Audit: last date this client was in cancellation (kept when status changes back). */
   last_cancellation_date: string | null;
+  /** New-client onboarding: track start date and verification review. */
+  is_new_client: boolean;
+  /** Date the client started working with us (YYYY-MM-DD). */
+  started_date: string | null;
+  /** User confirmed new-client review is complete. */
+  new_client_reviewed: boolean;
+  /** Days after started_date until review is due (default 30; extendable). */
+  verification_days: number;
 }
 
 /** Supabase row: client_insurance table (snake_case). */
@@ -144,6 +152,10 @@ export interface ClientInsuranceRow {
   status: string;
   expiration_date: string | null;
   last_cancellation_date?: string | null;
+  is_new_client?: boolean;
+  started_date?: string | null;
+  new_client_reviewed?: boolean;
+  verification_days?: number;
 }
 
 /** One row per cancellation event (full history for Audit). */

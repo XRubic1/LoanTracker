@@ -4,7 +4,8 @@ import { Section } from '@/components/Section';
 import { Badge } from '@/components/Badge';
 import { fmt, fmtDate, getLoanRemaining, getNextDueDate, isDueThisWeek, isLoanPastDue, getLoanProviderDisplay } from '@/lib/utils';
 import type { UseDataResult } from '@/hooks/useData';
-import { printOpenLoans, printOpenLoansSummary } from '@/lib/printLoans';
+import { exportOpenLoansSummaryExcel } from '@/lib/exportLoansExcel';
+import { printOpenLoans } from '@/lib/printLoans';
 
 type LoanFilter = 'all' | 'due' | 'active' | 'hidden';
 
@@ -92,12 +93,12 @@ export function LoansPage({
                   type="button"
                   onClick={() => {
                     setPrintMenuOpen(false);
-                    printOpenLoansSummary(loans);
+                    void exportOpenLoansSummaryExcel(loans);
                   }}
                   className="dropdown-item"
                 >
-                  <div className="dropdown-item-title">Short report (one sheet)</div>
-                  <div className="dropdown-item-desc">Compact table of all open loans</div>
+                  <div className="dropdown-item-title">Excel summary</div>
+                  <div className="dropdown-item-desc">Download .xlsx of all open loans</div>
                 </button>
                 <button
                   type="button"

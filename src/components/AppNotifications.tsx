@@ -4,6 +4,7 @@ import { Modal } from '@/components/Modal';
 import { getDateWeekLabel } from '@/lib/utils';
 import {
   getDaysUntilCancellation,
+  getNewClientsNeedingReview,
   isClientInsuranceCancellationSoon,
   isClientInsuranceCancellationWithDate,
 } from '@/lib/clientInsuranceUtils';
@@ -17,6 +18,7 @@ interface AppNotificationsProps {
 
 export function AppNotifications({ loans, clientInsurance }: AppNotificationsProps) {
   const [cancellationPopupOpen, setCancellationPopupOpen] = useState(false);
+  const [newClientPopupOpen, setNewClientPopupOpen] = useState(false);
 
   if (!hasActiveNotifications(loans, clientInsurance)) return null;
 
@@ -35,8 +37,11 @@ export function AppNotifications({ loans, clientInsurance }: AppNotificationsPro
     .map((c) => ({ ...c, daysUntil: getDaysUntilCancellation(c) ?? 0 }))
     .sort((a, b) => a.daysUntil - b.daysUntil);
 
+  const newClientsNeedingReview = getNewClientsNeedingReview(clientInsurance);
+
   const showCancellation = cancellationWithDate.length > 0;
   const showNewLoans = newLoans.length > 0;
+  const showNewClientReview = newClientsNeedingReview.length > 0;
 
   return (
     <>
@@ -67,6 +72,33 @@ export function AppNotifications({ loans, clientInsurance }: AppNotificationsPro
                     })
                     .join(' / ') + (cancellationSoon.length > 2 ? ` +${cancellationSoon.length - 2} more` : '')
                 : `${cancellationWithDate.length} client${cancellationWithDate.length !== 1 ? 's' : ''} with cancellation date`}
+            </span>
+            <svg className="w-[12px] h-[12px] flex-shrink-0 opacity-60" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+            </svg>
+          </button>
+        )}
+
+        {showNewClientReview && (
+          <button
+            type="button"
+            onClick={() => setNewClientPopupOpen(true)}
+            className="alert-banner-warn transition-colors"
+            role="alert"
+          >
+            <svg className="h-[14px] w-[14px] flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+            </svg>
+            <span className="flex-1 min-w-0 truncate">
+              <strong className="font-medium">New client review</strong>
+              {' — '}
+              {newClientsNeedingReview
+                .slice(0, 3)
+                .map((c) => c.client)
+                .join(', ')}
+              {newClientsNeedingReview.length > 3
+                ? ` +${newClientsNeedingReview.length - 3} more`
+                : ''}
             </span>
             <svg className="w-[12px] h-[12px] flex-shrink-0 opacity-60" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
@@ -105,6 +137,38 @@ export function AppNotifications({ loans, clientInsurance }: AppNotificationsPro
           </div>
         )}
       </div>
+
+      {showNewClientReview && (
+        <Modal
+          open={newClientPopupOpen}
+          onClose={() => setNewClientPopupOpen(false)}
+          title="New clients — review required"
+        >
+          <p className="text-[13px] text-muted2 mb-3">
+            These clients passed the verification period. Open them on Client Insurance to mark reviewed or extend.
+          </p>
+          <ul className="space-y-2 max-h-[50vh] overflow-y-auto">
+            {newClientsNeedingReview.map((c) => (
+              <li
+                key={c.id}
+                className="flex justify-between items-center py-2 border-b border-divider text-[13px]"
+              >
+                <span className="font-medium">{c.client}</span>
+                <span className="font-mono text-muted2 text-[11px]">{c.mc}</span>
+              </li>
+            ))}
+          </ul>
+          <div className="flex justify-end pt-4">
+            <button
+              type="button"
+              onClick={() => setNewClientPopupOpen(false)}
+              className="py-1.5 px-3.5 rounded-lg border border-border text-muted2 text-xs font-medium hover:border-accent hover:text-accent"
+            >
+              Close
+            </button>
+          </div>
+        </Modal>
+      )}
 
       {showCancellation && (
         <Modal

@@ -1,15 +1,23 @@
 import { useState, useEffect } from 'react';
 import { Modal } from '@/components/Modal';
-import { AAA_PAYEES, type AaaPayment, type AaaPayee } from '@/types';
+import { ClientAutocomplete } from '@/components/ClientAutocomplete';
+import { AAA_PAYEES, type AaaPayment, type AaaPayee, type ClientInsurance } from '@/types';
 
 interface EditAaaPaymentModalProps {
   payment: AaaPayment | null;
   open: boolean;
   onClose: () => void;
   onSave: (id: number, record: AaaPayment) => Promise<AaaPayment>;
+  clientInsurance: ClientInsurance[];
 }
 
-export function EditAaaPaymentModal({ payment, open, onClose, onSave }: EditAaaPaymentModalProps) {
+export function EditAaaPaymentModal({
+  payment,
+  open,
+  onClose,
+  onSave,
+  clientInsurance,
+}: EditAaaPaymentModalProps) {
   const [client, setClient] = useState('');
   const [payee, setPayee] = useState<AaaPayee>('AAA Lease');
   const [amount, setAmount] = useState('');
@@ -63,12 +71,13 @@ export function EditAaaPaymentModal({ payment, open, onClose, onSave }: EditAaaP
           onChange={(e) => setPaymentDate(e.target.value)}
           className={inputClass}
         />
-        <input
-          type="text"
-          placeholder="Client"
+        <ClientAutocomplete
           value={client}
-          onChange={(e) => setClient(e.target.value)}
+          onChange={setClient}
+          clientInsurance={clientInsurance}
+          placeholder="Client"
           className={inputClass}
+          disabled={submitting}
         />
         <select
           value={payee}

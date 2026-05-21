@@ -3,16 +3,23 @@ import { Section } from '@/components/Section';
 import { Modal } from '@/components/Modal';
 import {
   getClientInsuranceStatusLabel,
+  getDaysUntilNewClientReview,
+  getNewClientsNeedingReview,
   isClientInsuranceCancellationSoon,
   isClientInsuranceWarning,
   isClientInsuranceOut,
+  isNewClientNeedsReview,
+  isNewClientInVerificationPeriod,
 } from '@/lib/clientInsuranceUtils';
 import { printCancellationReport } from '@/lib/printClientInsurance';
 import type { UseDataResult } from '@/hooks/useData';
 
 interface ClientInsurancePageProps extends Pick<
   UseDataResult,
-  'clientInsurance' | 'addClientInsurance' | 'insuranceVerification' | 'updateInsuranceVerification'
+  | 'clientInsurance'
+  | 'addClientInsurance'
+  | 'insuranceVerification'
+  | 'updateInsuranceVerification'
 > {
   onAddClient: () => void;
   onViewClient: (id: number) => void;
@@ -26,7 +33,7 @@ export function ClientInsurancePage({
   onViewClient,
 }: ClientInsurancePageProps) {
   const [hideInactive, setHideInactive] = useState(true);
-  const [statusFilter, setStatusFilter] = useState('all');
+  const [statusFilter, setStatusFilter] = useState<'all' | 'ok' | 'inactive' | 'out' | 'cancellation' | 'needs_review'>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [recordVerificationOpen, setRecordVerificationOpen] = useState(false);
   const [recordDate, setRecordDate] = useState(() => new Date().toISOString().split('T')[0]);
@@ -34,7 +41,9 @@ export function ClientInsurancePage({
   const [savingVerification, setSavingVerification] = useState(false);
 
   /** Maps record status to filter dropdown value. */
-  const getFilterValueFromRecord = (status: string): string => {
+  type StatusFilterValue = 'all' | 'ok' | 'inactive' | 'out' | 'cancellation';
+
+  const getFilterValueFromRecord = (status: string): StatusFilterValue => {
     const normalizedStatus = (status ?? '').trim().toLowerCase();
     if (normalizedStatus === 'ok') return 'ok';
     if (normalizedStatus === 'inactive') return 'inactive';
@@ -57,6 +66,8 @@ export function ClientInsurancePage({
     }
   };
 
+  const newClientsNeedingReview = getNewClientsNeedingReview(clientInsurance);
+
   const normalizedSearch = searchQuery.trim().toLowerCase();
   const list = clientInsurance
     .filter((c) => !hideInactive || !isClientInsuranceOut(c))
@@ -67,6 +78,7 @@ export function ClientInsurancePage({
       if (statusFilter === 'inactive') return normalizedStatus === 'inactive';
       if (statusFilter === 'out') return normalizedStatus === 'out';
       if (statusFilter === 'cancellation') return normalizedStatus.includes('cancellation');
+      if (statusFilter === 'needs_review') return isNewClientNeedsReview(c);
       return true;
     })
     .filter((c) => {
@@ -111,6 +123,34 @@ export function ClientInsurancePage({
           Record verification
         </button>
       </div>
+
+      {newClientsNeedingReview.length > 0 && (
+        <div
+          className="mb-4 rounded-xl border border-accent/40 bg-accent/5 px-4 py-3"
+          role="alert"
+        >
+          <p className="text-[13px] font-medium text-accent mb-1">
+            {newClientsNeedingReview.length} new client
+            {newClientsNeedingReview.length === 1 ? '' : 's'} need review
+          </p>
+          <p className="text-[12px] text-muted2 mb-2">
+            The 30-day verification period has ended. Open each client to mark reviewed or extend the period.
+          </p>
+          <ul className="flex flex-wrap gap-2">
+            {newClientsNeedingReview.map((c) => (
+              <li key={c.id}>
+                <button
+                  type="button"
+                  onClick={() => onViewClient(c.id)}
+                  className="text-[12px] py-1 px-2.5 rounded-md border border-accent/30 text-accent hover:bg-accent/10 transition-colors"
+                >
+                  {c.client}
+                </button>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
 
       <div className="flex flex-col gap-2 mb-4 sm:flex-row sm:items-center sm:justify-between">
         <h1 className="page-title">Client Insurance</h1>
@@ -165,7 +205,7 @@ export function ClientInsurancePage({
         </div>
         <select
           value={statusFilter}
-          onChange={(e) => setStatusFilter(e.target.value)}
+          onChange={(e) => setStatusFilter(e.target.value as typeof statusFilter)}
           className="select-field w-full text-[13px] py-2 px-3"
           aria-label="Filter by status"
         >
@@ -174,6 +214,7 @@ export function ClientInsurancePage({
           <option value="inactive">Inactive</option>
           <option value="out">OUT</option>
           <option value="cancellation">Cancellation</option>
+          <option value="needs_review">Needs new-client review</option>
         </select>
       </div>
 
@@ -190,13 +231,16 @@ export function ClientInsurancePage({
               <th className="text-[10px] text-label uppercase tracking-widest py-0 pb-1.5 pr-2 text-left border-b border-border">
                 Status
               </th>
+              <th className="text-[10px] text-label uppercase tracking-widest py-0 pb-1.5 pr-2 text-left border-b border-border">
+                New client
+              </th>
               <th className="text-[10px] text-label uppercase tracking-widest py-0 pb-1.5 pr-2 text-left border-b border-border w-16" />
             </tr>
           </thead>
           <tbody>
             {list.length === 0 ? (
               <tr>
-                <td colSpan={4} className="text-center py-6 text-muted text-[13px]">
+                <td colSpan={5} className="text-center py-6 text-muted text-[13px]">
                   {clientInsurance.length === 0
                     ? 'No clients yet. Add a client or run the seed SQL to load initial data.'
                     : 'No clients to show. Turn off "Hide OUT clients" to see OUT clients.'}
@@ -209,6 +253,9 @@ export function ClientInsurancePage({
                 const isCancellationSoon = isClientInsuranceCancellationSoon(c, 10);
                 const statusLabel = getClientInsuranceStatusLabel(c);
                 const statusFilterValue = getFilterValueFromRecord(c.status);
+                const newClientNeedsReview = isNewClientNeedsReview(c);
+                const newClientPending = isNewClientInVerificationPeriod(c);
+                const daysUntilReview = getDaysUntilNewClientReview(c);
                 const copyMc = () => {
                   navigator.clipboard.writeText(c.mc).then(() => {}, () => {});
                 };
@@ -217,7 +264,9 @@ export function ClientInsurancePage({
                 };
                 const applyStatusFilter = () => {
                   if (statusFilterValue === 'all') return;
-                  setStatusFilter((prev) => (prev === statusFilterValue ? 'all' : statusFilterValue));
+                  setStatusFilter((prev) =>
+                    prev === statusFilterValue ? 'all' : statusFilterValue
+                  );
                 };
                 return (
                   <tr key={c.id} className="row-hover transition-colors">
@@ -264,6 +313,21 @@ export function ClientInsurancePage({
                       >
                         {statusLabel}
                       </button>
+                    </td>
+                    <td className="py-1.5 pr-2 border-b border-divider align-middle text-[11px]">
+                      {!c.is_new_client ? (
+                        <span className="text-muted2">—</span>
+                      ) : c.new_client_reviewed ? (
+                        <span className="text-green">Reviewed</span>
+                      ) : newClientNeedsReview ? (
+                        <span className="text-accent font-medium">Review due</span>
+                      ) : newClientPending && daysUntilReview != null ? (
+                        <span className="text-muted2">
+                          {daysUntilReview}d left
+                        </span>
+                      ) : (
+                        <span className="text-muted2">New</span>
+                      )}
                     </td>
                     <td className="py-1.5 pr-2 border-b border-divider align-middle">
                       <button

@@ -1,9 +1,12 @@
 import { useState } from 'react';
-import { AAA_PAYEES, type AaaPayee } from '@/types';
+import { ClientAutocomplete } from '@/components/ClientAutocomplete';
+import { AAA_PAYEES, type AaaPayee, type ClientInsurance } from '@/types';
 
 const todayStr = () => new Date().toISOString().split('T')[0];
 
 interface AaaPaymentFormProps {
+  /** Insurance clients — used for autocomplete suggestions. */
+  clientInsurance: ClientInsurance[];
   onSubmit: (payload: {
     client: string;
     payee: AaaPayee;
@@ -15,7 +18,11 @@ interface AaaPaymentFormProps {
 }
 
 /** Client, payee, amount, and date — records an AAA payment. */
-export function AaaPaymentForm({ onSubmit, compact = false }: AaaPaymentFormProps) {
+export function AaaPaymentForm({
+  clientInsurance,
+  onSubmit,
+  compact = false,
+}: AaaPaymentFormProps) {
   const [client, setClient] = useState('');
   const [payee, setPayee] = useState<AaaPayee>('AAA Lease');
   const [amount, setAmount] = useState('');
@@ -56,12 +63,13 @@ export function AaaPaymentForm({ onSubmit, compact = false }: AaaPaymentFormProp
   if (compact) {
     return (
       <form onSubmit={handleSubmit} className="flex flex-col gap-2">
-        <input
-          type="text"
-          placeholder="Client name"
+        <ClientAutocomplete
           value={client}
-          onChange={(e) => setClient(e.target.value)}
+          onChange={setClient}
+          clientInsurance={clientInsurance}
+          placeholder="Client name"
           className={inputCompact}
+          disabled={submitting}
         />
         <select
           value={payee}
@@ -110,12 +118,13 @@ export function AaaPaymentForm({ onSubmit, compact = false }: AaaPaymentFormProp
         onChange={(e) => setPaymentDate(e.target.value)}
         className={`${inputClass} w-[140px] text-xs py-1.5 px-2.5`}
       />
-      <input
-        type="text"
-        placeholder="Client"
+      <ClientAutocomplete
         value={client}
-        onChange={(e) => setClient(e.target.value)}
+        onChange={setClient}
+        clientInsurance={clientInsurance}
+        placeholder="Client"
         className={`${inputClass} flex-1 min-w-[140px] text-xs py-1.5 px-2.5`}
+        disabled={submitting}
       />
       <select
         value={payee}

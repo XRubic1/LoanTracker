@@ -405,6 +405,7 @@ export default function App() {
             reserves={reserves}
             aaaPayments={aaaPayments}
             addAaaPayment={addAaaPayment}
+            clientInsurance={clientInsurance}
             onOpenLoan={setLoanDetailId}
             onOpenReserve={setReserveDetailId}
             onEditAaaPayment={setEditAaaPaymentId}
@@ -414,6 +415,7 @@ export default function App() {
           <AaaPaymentsPage
             aaaPayments={aaaPayments}
             addAaaPayment={addAaaPayment}
+            clientInsurance={clientInsurance}
             onEditPayment={setEditAaaPaymentId}
           />
         )}
@@ -491,6 +493,7 @@ export default function App() {
         clientInsurance={selectedClientInsurance}
         open={clientInsuranceDetailId != null}
         onClose={() => setClientInsuranceDetailId(null)}
+        onSave={updateClientInsuranceById}
         onEdit={(id) => {
           setClientInsuranceDetailId(null);
           setEditClientInsuranceId(id);
@@ -514,6 +517,7 @@ export default function App() {
         payment={editingAaaPayment}
         open={editAaaPaymentId != null}
         onClose={() => setEditAaaPaymentId(null)}
+        clientInsurance={clientInsurance}
         onSave={async (id, record) => {
           const updated = await updateAaaPaymentById(id, record);
           setEditAaaPaymentId(null);

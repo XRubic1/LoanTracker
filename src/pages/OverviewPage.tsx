@@ -351,6 +351,7 @@ export function OverviewPage({
             <div className="px-4 py-[14px]">
               <AaaPaymentForm
                 compact
+                clientInsurance={clientInsurance}
                 onSubmit={async (payload) => {
                   await addAaaPayment(payload);
                 }}

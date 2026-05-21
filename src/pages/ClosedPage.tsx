@@ -6,7 +6,8 @@ import { AaaPaymentsHistorySection } from '@/components/AaaPaymentsHistorySectio
 import { fmt, fmtDate } from '@/lib/utils';
 import type { UseDataResult } from '@/hooks/useData';
 
-interface ClosedPageProps extends Pick<UseDataResult, 'loans' | 'reserves' | 'aaaPayments' | 'addAaaPayment'> {
+interface ClosedPageProps
+  extends Pick<UseDataResult, 'loans' | 'reserves' | 'aaaPayments' | 'addAaaPayment' | 'clientInsurance'> {
   onOpenLoan: (id: number) => void;
   onOpenReserve: (id: number) => void;
   onEditAaaPayment: (id: number) => void;
@@ -19,6 +20,7 @@ export function ClosedPage({
   reserves,
   aaaPayments,
   addAaaPayment,
+  clientInsurance,
   onOpenLoan,
   onOpenReserve,
   onEditAaaPayment,
@@ -179,7 +181,12 @@ export function ClosedPage({
       {tab === 'aaa' && (
         <div className="space-y-5">
           <Section title="Record AAA payment">
-            <AaaPaymentForm onSubmit={async (payload) => { await addAaaPayment(payload); }} />
+            <AaaPaymentForm
+              clientInsurance={clientInsurance}
+              onSubmit={async (payload) => {
+                await addAaaPayment(payload);
+              }}
+            />
           </Section>
 
           <AaaPaymentsHistorySection

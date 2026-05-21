@@ -23,6 +23,8 @@ export function AddClientInsuranceModal({ open, onClose, onAdd }: AddClientInsur
   const [mc, setMc] = useState('');
   const [status, setStatus] = useState<StatusOption>('OK');
   const [cancellationDate, setCancellationDate] = useState('');
+  const [isNewClient, setIsNewClient] = useState(false);
+  const [startedDate, setStartedDate] = useState(() => new Date().toISOString().split('T')[0]);
   const [submitting, setSubmitting] = useState(false);
 
   const handleSubmit = async () => {
@@ -34,6 +36,10 @@ export function AddClientInsuranceModal({ open, onClose, onAdd }: AddClientInsur
       window.alert('Please set a date when Cancellation is selected.');
       return;
     }
+    if (isNewClient && !startedDate.trim()) {
+      window.alert('Please set the start date for a new client.');
+      return;
+    }
     setSubmitting(true);
     try {
       await onAdd({
@@ -42,11 +48,17 @@ export function AddClientInsuranceModal({ open, onClose, onAdd }: AddClientInsur
         status: statusToValue(status),
         expiration_date: cancellationDate.trim() || null,
         last_cancellation_date: null,
+        is_new_client: isNewClient,
+        started_date: isNewClient ? startedDate.trim() : null,
+        new_client_reviewed: false,
+        verification_days: 30,
       });
       setClient('');
       setMc('');
       setStatus('OK');
       setCancellationDate('');
+      setIsNewClient(false);
+      setStartedDate(new Date().toISOString().split('T')[0]);
       onClose();
     } catch (err) {
       window.alert(err instanceof Error ? err.message : String(err));
@@ -94,6 +106,33 @@ export function AddClientInsuranceModal({ open, onClose, onAdd }: AddClientInsur
             <option value="Cancellation">Cancellation</option>
             <option value="OUT">OUT</option>
           </select>
+        </div>
+        <div className="rounded-lg border border-border bg-surface/50 px-3 py-3 space-y-3">
+          <label className="flex items-center gap-2 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={isNewClient}
+              onChange={(e) => setIsNewClient(e.target.checked)}
+              className="rounded border-border"
+            />
+            <span className="text-[13px] font-medium text-ink">New client</span>
+          </label>
+          {isNewClient && (
+            <div>
+              <label className="block text-[11px] text-muted uppercase tracking-wider mb-1.5">
+                Started with us
+              </label>
+              <input
+                type="date"
+                value={startedDate}
+                onChange={(e) => setStartedDate(e.target.value)}
+                className="w-full bg-surface border border-border rounded-lg py-2 px-3 text-[13px] text-ink outline-none focus:border-accent"
+              />
+              <p className="text-[11px] text-muted2 mt-1.5">
+                After 30 days you will be prompted to review this client. You can extend the period or mark reviewed when done.
+              </p>
+            </div>
+          )}
         </div>
         <div>
           <label className="block text-[11px] text-muted uppercase tracking-wider mb-1.5">

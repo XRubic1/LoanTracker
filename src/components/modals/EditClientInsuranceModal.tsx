@@ -38,12 +38,16 @@ export function EditClientInsuranceModal({
 }: EditClientInsuranceModalProps) {
   const [option, setOption] = useState<StatusOption>('OK');
   const [cancellationDate, setCancellationDate] = useState('');
+  const [isNewClient, setIsNewClient] = useState(false);
+  const [startedDate, setStartedDate] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
     if (clientInsurance) {
       setOption(parseStatusOption(clientInsurance.status));
       setCancellationDate(clientInsurance.expiration_date ?? '');
+      setIsNewClient(Boolean(clientInsurance.is_new_client));
+      setStartedDate(clientInsurance.started_date ?? '');
     }
   }, [clientInsurance]);
 
@@ -53,6 +57,10 @@ export function EditClientInsuranceModal({
       window.alert('Please set a date when Cancellation is selected.');
       return;
     }
+    if (isNewClient && !startedDate.trim()) {
+      window.alert('Please set the start date for a new client.');
+      return;
+    }
     setSubmitting(true);
     try {
       const status = buildStatus(option);
@@ -60,6 +68,10 @@ export function EditClientInsuranceModal({
         ...clientInsurance,
         status,
         expiration_date: cancellationDate.trim() || null,
+        is_new_client: isNewClient,
+        started_date: isNewClient ? startedDate.trim() : null,
+        new_client_reviewed: isNewClient ? clientInsurance.new_client_reviewed : false,
+        verification_days: isNewClient ? clientInsurance.verification_days ?? 30 : 30,
       });
       onClose();
     } catch (err) {
@@ -99,6 +111,31 @@ export function EditClientInsuranceModal({
             <option value="Cancellation">Cancellation</option>
             <option value="OUT">OUT</option>
           </select>
+        </div>
+
+        <div className="rounded-lg border border-border bg-surface/50 px-3 py-3 space-y-3">
+          <label className="flex items-center gap-2 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={isNewClient}
+              onChange={(e) => setIsNewClient(e.target.checked)}
+              className="rounded border-border"
+            />
+            <span className="text-[13px] font-medium text-ink">New client</span>
+          </label>
+          {isNewClient && (
+            <div>
+              <label className="block text-[11px] text-muted uppercase tracking-wider mb-1.5">
+                Started with us
+              </label>
+              <input
+                type="date"
+                value={startedDate}
+                onChange={(e) => setStartedDate(e.target.value)}
+                className="w-full bg-surface border border-border rounded-lg py-2 px-3 text-[13px] text-ink outline-none focus:border-accent"
+              />
+            </div>
+          )}
         </div>
 
         <div>

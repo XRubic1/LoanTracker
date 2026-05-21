@@ -1,5 +1,64 @@
 import type { ClientInsurance, InsuranceVerification } from '@/types';
 
+const DEFAULT_VERIFICATION_DAYS = 30;
+
+/** Today as YYYY-MM-DD in local time. */
+function todayDateOnly(): string {
+  const t = new Date();
+  return `${t.getFullYear()}-${String(t.getMonth() + 1).padStart(2, '0')}-${String(t.getDate()).padStart(2, '0')}`;
+}
+
+/** Add calendar days to a YYYY-MM-DD string; returns YYYY-MM-DD. */
+function addDaysDateOnly(dateStr: string, days: number): string {
+  const [y, m, d] = dateStr.split('-').map(Number);
+  const date = new Date(y, m - 1, d);
+  date.setDate(date.getDate() + days);
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+}
+
+/** Review due date for a new client (started_date + verification_days). */
+export function getNewClientReviewDueDate(c: ClientInsurance): string | null {
+  if (!c.is_new_client || !c.started_date?.trim()) return null;
+  const period = c.verification_days ?? DEFAULT_VERIFICATION_DAYS;
+  return addDaysDateOnly(c.started_date.trim(), Math.max(0, period));
+}
+
+/** Whole days from today until review due (negative if overdue). */
+export function getDaysUntilNewClientReview(c: ClientInsurance): number | null {
+  const due = getNewClientReviewDueDate(c);
+  if (!due) return null;
+  const [y, m, d] = due.split('-').map(Number);
+  const [ty, tm, td] = todayDateOnly().split('-').map(Number);
+  const dueMs = new Date(y, m - 1, d).getTime();
+  const todayMs = new Date(ty, tm - 1, td).getTime();
+  return Math.round((dueMs - todayMs) / (1000 * 60 * 60 * 24));
+}
+
+/** True when new-client verification period has ended and review is not marked complete. */
+export function isNewClientNeedsReview(c: ClientInsurance): boolean {
+  if (!c.is_new_client || !c.started_date?.trim() || c.new_client_reviewed) return false;
+  const daysUntil = getDaysUntilNewClientReview(c);
+  return daysUntil != null && daysUntil <= 0;
+}
+
+/** Active new client still inside verification window (not yet due, not reviewed). */
+export function isNewClientInVerificationPeriod(c: ClientInsurance): boolean {
+  if (!c.is_new_client || !c.started_date?.trim() || c.new_client_reviewed) return false;
+  const daysUntil = getDaysUntilNewClientReview(c);
+  return daysUntil != null && daysUntil > 0;
+}
+
+/** Any new-client row that should surface in alerts (due for review). */
+export function getNewClientsNeedingReview(clients: ClientInsurance[]): ClientInsurance[] {
+  return clients
+    .filter(isNewClientNeedsReview)
+    .sort((a, b) => {
+      const dueA = getNewClientReviewDueDate(a) ?? '';
+      const dueB = getNewClientReviewDueDate(b) ?? '';
+      return dueA.localeCompare(dueB);
+    });
+}
+
 /**
  * Returns the Monday 00:00 of the week containing the given date (week = Monday–Sunday).
  * Sunday is considered the last day of the previous week.

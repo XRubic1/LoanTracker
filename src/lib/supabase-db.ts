@@ -35,6 +35,32 @@ function clientInsuranceFromRow(row: ClientInsuranceRow | null): ClientInsurance
     status: row.status ?? 'OK',
     expiration_date: row.expiration_date ?? null,
     last_cancellation_date: row.last_cancellation_date ?? null,
+    is_new_client: Boolean(row.is_new_client ?? false),
+    started_date: row.started_date ?? null,
+    new_client_reviewed: Boolean(row.new_client_reviewed ?? false),
+    verification_days: Number(row.verification_days ?? 30),
+  };
+}
+
+function clientInsuranceToRow(
+  record: ClientInsurance,
+  ownerId?: string | null
+): Omit<ClientInsuranceRow, 'id'> {
+  return {
+    owner_id: ownerId ?? record.owner_id ?? null,
+    client: record.client,
+    mc: record.mc,
+    status: record.status ?? 'OK',
+    expiration_date: record.expiration_date ?? null,
+    last_cancellation_date: isCancellationWithDate(record.status ?? '', record.expiration_date ?? null)
+      ? record.expiration_date
+      : record.last_cancellation_date ?? null,
+    is_new_client: record.is_new_client ?? false,
+    started_date: record.is_new_client && record.started_date ? record.started_date : null,
+    new_client_reviewed: record.is_new_client ? Boolean(record.new_client_reviewed) : false,
+    verification_days: record.is_new_client
+      ? Math.max(1, Math.round(record.verification_days ?? 30))
+      : 30,
   };
 }
 
@@ -219,16 +245,7 @@ export async function insertClientInsurance(
 ): Promise<ClientInsurance> {
   const supabase = getSupabase();
   if (!supabase) throw new Error('Supabase not configured');
-  const row = {
-    owner_id: ownerId ?? null,
-    client: payload.client,
-    mc: payload.mc,
-    status: payload.status ?? 'OK',
-    expiration_date: payload.expiration_date ?? null,
-    last_cancellation_date: isCancellationWithDate(payload.status ?? '', payload.expiration_date ?? null)
-      ? payload.expiration_date
-      : null,
-  };
+  const row = clientInsuranceToRow({ ...payload, id: 0 }, ownerId);
   const { data, error } = await supabase.from('client_insurance').insert(row).select('*').single();
   if (error) throw error;
   const inserted = clientInsuranceFromRow(data as ClientInsuranceRow)!;
@@ -241,16 +258,7 @@ export async function insertClientInsurance(
 export async function updateClientInsurance(id: number, record: ClientInsurance): Promise<ClientInsurance> {
   const supabase = getSupabase();
   if (!supabase) throw new Error('Supabase not configured');
-  const row = {
-    owner_id: record.owner_id ?? null,
-    client: record.client,
-    mc: record.mc,
-    status: record.status ?? 'OK',
-    expiration_date: record.expiration_date ?? null,
-    last_cancellation_date: isCancellationWithDate(record.status ?? '', record.expiration_date ?? null)
-      ? record.expiration_date
-      : record.last_cancellation_date ?? null,
-  };
+  const row = clientInsuranceToRow(record, record.owner_id ?? null);
   const { data, error } = await supabase.from('client_insurance').update(row).eq('id', id).select('*').single();
   if (error) throw error;
   const updated = clientInsuranceFromRow(data as ClientInsuranceRow)!;

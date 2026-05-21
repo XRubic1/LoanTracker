@@ -3,11 +3,17 @@ import { AaaPaymentForm } from '@/components/AaaPaymentForm';
 import { AaaPaymentsHistorySection } from '@/components/AaaPaymentsHistorySection';
 import type { UseDataResult } from '@/hooks/useData';
 
-interface AaaPaymentsPageProps extends Pick<UseDataResult, 'aaaPayments' | 'addAaaPayment'> {
+interface AaaPaymentsPageProps
+  extends Pick<UseDataResult, 'aaaPayments' | 'addAaaPayment' | 'clientInsurance'> {
   onEditPayment: (id: number) => void;
 }
 
-export function AaaPaymentsPage({ aaaPayments, addAaaPayment, onEditPayment }: AaaPaymentsPageProps) {
+export function AaaPaymentsPage({
+  aaaPayments,
+  addAaaPayment,
+  clientInsurance,
+  onEditPayment,
+}: AaaPaymentsPageProps) {
   return (
     <>
       <div className="page-header">
@@ -17,6 +23,7 @@ export function AaaPaymentsPage({ aaaPayments, addAaaPayment, onEditPayment }: A
       <div className="mb-3">
         <Section title="Record payment">
           <AaaPaymentForm
+            clientInsurance={clientInsurance}
             onSubmit={async (payload) => {
               await addAaaPayment(payload);
             }}

@@ -1,5 +1,52 @@
 import type { Loan } from '@/types';
-import { fmt } from '@/lib/utils';
+import {
+  fmt,
+  getLoanBasePerInstallment,
+  getLoanEffectiveTotal,
+  getLoanFeePerInstallment,
+  getLoanProviderDisplay,
+} from '@/lib/utils';
+
+/** Loans funded through an external provider (not TruFunding). */
+function isOtherProviderLoan(loan: Loan): boolean {
+  return loan.providerType === 'Other';
+}
+
+/** Summary-table rows for provider + factoring income on non–Tru Funding loans. */
+function buildOtherProviderSummaryRows(loan: Loan): string {
+  if (!isOtherProviderLoan(loan)) return '';
+
+  const fee = loan.factoringFee ?? 0;
+  const feePer = getLoanFeePerInstallment(loan);
+  const remainingCount = Math.max(0, loan.totalInstallments - loan.paidCount);
+  const remainingFactoring = feePer * remainingCount;
+
+  const rows = [
+    `<tr><td>Provider</td><td>${escapeHtml(getLoanProviderDisplay(loan))}</td></tr>`,
+    `<tr><td>Loan principal</td><td>${fmt(loan.total)}</td></tr>`,
+    `<tr><td>Factoring income (total)</td><td>${fmt(fee)}</td></tr>`,
+    `<tr><td>Total with factoring</td><td>${fmt(getLoanEffectiveTotal(loan))}</td></tr>`,
+    `<tr><td>Factoring income / installment</td><td>${fmt(feePer)}</td></tr>`,
+    `<tr><td>Remaining factoring income</td><td>${fmt(remainingFactoring)}</td></tr>`,
+  ];
+
+  return rows.join('\n');
+}
+
+function escapeHtml(text: string): string {
+  return text.replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+/** Installment amount cell — splits base vs factoring for Other providers. */
+function formatInstallmentAmountCell(loan: Loan): string {
+  const total = fmt(loan.installment);
+  if (!isOtherProviderLoan(loan) || (loan.factoringFee ?? 0) <= 0) {
+    return total;
+  }
+  const base = fmt(getLoanBasePerInstallment(loan));
+  const fee = fmt(getLoanFeePerInstallment(loan));
+  return `${base}<br><span class="factoring-line">+ ${fee} factoring = ${total}</span>`;
+}
 
 /**
  * Print all open (active + visible) loans with full schedules to PDF using the browser's print dialog.
@@ -64,7 +111,7 @@ export function printOpenLoans(loans: Loan[]): void {
           <td>${i + 1}</td>
           <td>${scheduledStr}</td>
           <td>${actualStr}</td>
-          <td>${fmt(loan.installment)}</td>
+          <td>${formatInstallmentAmountCell(loan)}</td>
           <td>${status}</td>
           <td style="max-width:220px;word-break:break-word">${noteStr}</td>
         </tr>`;
@@ -97,10 +144,14 @@ export function printOpenLoans(loans: Loan[]): void {
         </header>
 
         <table class="summary-table">
-          <tr><td>Client</td><td>${loan.client}</td></tr>
+          <tr><td>Client</td><td>${escapeHtml(loan.client)}</td></tr>
           <tr><td>Reference</td><td>${loan.ref || '—'}</td></tr>
-          <tr><td>Total loan</td><td>${fmt(loan.total)}</td></tr>
-          <tr><td>Installment</td><td>${fmt(loan.installment)}</td></tr>
+          ${
+            isOtherProviderLoan(loan)
+              ? buildOtherProviderSummaryRows(loan)
+              : `<tr><td>Total loan</td><td>${fmt(loan.total)}</td></tr>`
+          }
+          <tr><td>Installment</td><td>${formatInstallmentAmountCell(loan)}</td></tr>
           <tr><td>Total installments</td><td>${loan.totalInstallments}</td></tr>
           <tr><td>Paid installments</td><td>${loan.paidCount}</td></tr>
           <tr><td>Estimated remaining</td><td>${fmt(remaining)}</td></tr>
@@ -236,6 +287,10 @@ export function printOpenLoans(loans: Loan[]): void {
     .installments-table td {
       font-size: 12px;
     }
+    .factoring-line {
+      font-size: 10px;
+      color: #6b7280;
+    }
     .page-break {
       page-break-before: always;
       height: 12px;
@@ -271,162 +326,6 @@ export function printOpenLoans(loans: Loan[]): void {
   w.focus();
 
   // Delay to allow the new document to render before printing.
-  setTimeout(() => {
-    try {
-      w.print();
-    } finally {
-      w.close();
-    }
-  }, 300);
-}
-
-/**
- * Print a compact one-sheet-style report of all open loans.
- *
- * Layout is a single table so that, for a typical number of loans, everything fits on one PDF page.
- */
-export function printOpenLoansSummary(loans: Loan[]): void {
-  if (typeof window === 'undefined') return;
-
-  const openLoans = loans.filter(
-    (l) => !l.hidden && l.paidCount < l.totalInstallments,
-  );
-
-  if (openLoans.length === 0) {
-    window.alert('No open loans to print.');
-    return;
-  }
-
-  const printDate = new Date().toLocaleDateString('en-US', {
-    weekday: 'short',
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric',
-  });
-
-  const rows = openLoans
-    .map((loan) => {
-      const remaining =
-        (loan.totalInstallments - loan.paidCount) * loan.installment;
-
-      const startDateStr = new Date(loan.startDate).toLocaleDateString(
-        'en-US',
-        {
-          month: 'short',
-          day: 'numeric',
-          year: 'numeric',
-        },
-      );
-
-      const note =
-        (loan.note ?? '').trim().length > 40
-          ? `${loan.note.trim().slice(0, 37)}…`
-          : loan.note ?? '';
-      const safeNote = note ? note.replace(/</g, '&lt;') : '';
-
-      return `<tr>
-        <td>${loan.client}</td>
-        <td>${loan.ref || '—'}</td>
-        <td>${fmt(loan.total)}</td>
-        <td>${fmt(loan.installment)}</td>
-        <td>${loan.paidCount}/${loan.totalInstallments}</td>
-        <td>${fmt(remaining)}</td>
-        <td>${startDateStr}</td>
-        <td>${safeNote || '—'}</td>
-      </tr>`;
-    })
-    .join('');
-
-  const html = `<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="utf-8">
-  <title>Open Loans — Summary</title>
-  <style>
-    * { box-sizing: border-box; }
-    body {
-      font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-      padding: 16px 20px;
-      color: #111827;
-      font-size: 11px;
-      background: #ffffff;
-    }
-    h1 {
-      font-size: 18px;
-      margin: 0 0 2px;
-    }
-    .meta {
-      font-size: 10px;
-      color: #6b7280;
-      margin-bottom: 10px;
-    }
-    table {
-      width: 100%;
-      border-collapse: collapse;
-      table-layout: fixed;
-      font-size: 10px;
-    }
-    th, td {
-      border: 1px solid #e5e7eb;
-      padding: 4px 6px;
-      text-align: left;
-      vertical-align: top;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
-    }
-    th {
-      background: #f3f4f6;
-      font-weight: 600;
-      text-transform: uppercase;
-      letter-spacing: 0.05em;
-      color: #4b5563;
-    }
-    th:nth-child(1) { width: 16%; }
-    th:nth-child(2) { width: 10%; }
-    th:nth-child(3) { width: 11%; }
-    th:nth-child(4) { width: 11%; }
-    th:nth-child(5) { width: 10%; }
-    th:nth-child(6) { width: 13%; }
-    th:nth-child(7) { width: 11%; }
-    th:nth-child(8) { width: 18%; }
-    @page {
-      margin: 12mm 10mm;
-    }
-  </style>
-</head>
-<body>
-  <h1>Open Loans — Summary</h1>
-  <div class="meta">TRUFUNDING LLC · Printed ${printDate} · ${
-    openLoans.length
-  } open loan${openLoans.length === 1 ? '' : 's'}</div>
-  <table>
-    <thead>
-      <tr>
-        <th>Client</th>
-        <th>Ref</th>
-        <th>Total</th>
-        <th>Installment</th>
-        <th>Paid</th>
-        <th>Remaining</th>
-        <th>Start</th>
-        <th>Note</th>
-      </tr>
-    </thead>
-    <tbody>
-      ${rows}
-    </tbody>
-  </table>
-</body>
-</html>`;
-
-  const w = window.open('', '_blank');
-  if (!w) return;
-
-  w.document.write(html);
-  w.document.close();
-  w.focus();
-
   setTimeout(() => {
     try {
       w.print();
