@@ -1,12 +1,14 @@
 import { useState } from 'react';
 import type { ClientInsurance, Loan } from '@/types';
 import { Modal } from '@/components/Modal';
-import { getDateWeekLabel, isNewLoan } from '@/lib/utils';
+import { getDateWeekLabel } from '@/lib/utils';
 import {
   getDaysUntilCancellation,
   isClientInsuranceCancellationSoon,
   isClientInsuranceCancellationWithDate,
 } from '@/lib/clientInsuranceUtils';
+import { hasActiveNotifications } from '@/lib/notificationsBanner';
+import { isNewLoan } from '@/lib/utils';
 
 interface AppNotificationsProps {
   loans: Loan[];
@@ -15,6 +17,8 @@ interface AppNotificationsProps {
 
 export function AppNotifications({ loans, clientInsurance }: AppNotificationsProps) {
   const [cancellationPopupOpen, setCancellationPopupOpen] = useState(false);
+
+  if (!hasActiveNotifications(loans, clientInsurance)) return null;
 
   const visibleLoans = loans.filter((l) => !l.hidden);
   const activeLoans = visibleLoans.filter((l) => l.paidCount < l.totalInstallments);
@@ -34,11 +38,9 @@ export function AppNotifications({ loans, clientInsurance }: AppNotificationsPro
   const showCancellation = cancellationWithDate.length > 0;
   const showNewLoans = newLoans.length > 0;
 
-  if (!showCancellation && !showNewLoans) return null;
-
   return (
     <>
-      <div className="w-full flex-shrink-0 flex flex-col gap-[6px] px-6 py-[10px] bg-page border-b border-border/60">
+      <div className="w-full flex-shrink-0 flex flex-col gap-[6px] px-6 py-[10px] bg-page border-b border-subtle">
         {showCancellation && (
           <button
             type="button"
@@ -127,7 +129,7 @@ export function AppNotifications({ loans, clientInsurance }: AppNotificationsPro
               </thead>
               <tbody>
                 {cancellationWithDate.map((c) => (
-                  <tr key={c.id} className="border-b border-border/40">
+                  <tr key={c.id} className="border-b border-subtle">
                     <td className="py-1.5 pr-2 font-medium">{c.client}</td>
                     <td className="py-1.5 pr-2 font-mono">{c.mc}</td>
                     <td className="py-1.5 pr-2 font-mono text-muted2">

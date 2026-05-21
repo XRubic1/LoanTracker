@@ -18,6 +18,7 @@ export default {
         surface: 'var(--color-surface)',
         panel: 'var(--color-panel)',
         border: 'var(--color-border)',
+        'border-subtle': 'var(--color-border-subtle)',
         ink: 'var(--color-ink)',
         label: 'var(--color-label)',
         muted: 'var(--color-muted)',

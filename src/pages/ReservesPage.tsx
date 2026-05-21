@@ -113,32 +113,32 @@ export function ReservesPage({
                     className="cursor-pointer row-hover transition-colors"
                     onClick={() => onOpenDetail(r.id)}
                   >
-                    <td className="py-1.5 pr-2 border-b border-border/40 align-middle">
+                    <td className="py-1.5 pr-2 border-b border-subtle align-middle">
                       <span className="font-medium text-ink">{r.client}</span>
                     </td>
-                    <td className="py-1.5 pr-2 border-b border-border/40 align-middle">
+                    <td className="py-1.5 pr-2 border-b border-subtle align-middle">
                       <span className="font-mono font-medium text-reserve">{fmt(r.amount / r.installments)}</span>
                       <span className="text-[10px] text-muted block">per deduction</span>
                     </td>
-                    <td className="py-1.5 pr-2 border-b border-border/40 align-middle font-mono">
+                    <td className="py-1.5 pr-2 border-b border-subtle align-middle font-mono">
                       {r.paidCount}/{r.installments}
                     </td>
-                    <td className="py-1.5 pr-2 border-b border-border/40 align-middle">
+                    <td className="py-1.5 pr-2 border-b border-subtle align-middle">
                       <span className="font-mono text-[11px] text-muted2 block">{fmtDate(r.date)}</span>
                       <span className="text-[10px] text-muted block">every {freq}d</span>
                     </td>
-                    <td className="py-1.5 pr-2 border-b border-border/40 align-middle">
+                    <td className="py-1.5 pr-2 border-b border-subtle align-middle">
                       <span
                         className={`font-mono text-[11px] ${isDueNow ? 'text-reserve' : ''}`}
                       >
                         {nextDue && !isClosed ? fmtDate(nextDue) : '—'}
                       </span>
                     </td>
-                    <td className="py-1.5 pr-2 border-b border-border/40 align-middle font-mono text-[11px] text-muted2">
+                    <td className="py-1.5 pr-2 border-b border-subtle align-middle font-mono text-[11px] text-muted2">
                       {lastDeducted}
                     </td>
-                    <td className="py-1.5 pr-2 border-b border-border/40 align-middle">{status}</td>
-                    <td className="py-1.5 pr-2 border-b border-border/40 align-middle" />
+                    <td className="py-1.5 pr-2 border-b border-subtle align-middle">{status}</td>
+                    <td className="py-1.5 pr-2 border-b border-subtle align-middle" />
                   </tr>
                 );
               })

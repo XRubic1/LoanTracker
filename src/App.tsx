@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef } from 'react';
+import { useState, useCallback, useRef, useMemo } from 'react';
 import type { PageId } from '@/types';
 import { Sidebar } from '@/components/Sidebar';
 import { AppNotifications } from '@/components/AppNotifications';
@@ -25,6 +25,11 @@ import type { Loan } from '@/types';
 import { PasswordConfirmModal } from '@/components/PasswordConfirmModal';
 import { useAuth } from '@/contexts/AuthContext';
 import { useData } from '@/hooks/useData';
+import {
+  getNotificationsHidden,
+  hasActiveNotifications,
+  setNotificationsHidden,
+} from '@/lib/notificationsBanner';
 
 export default function App() {
   const { session, effectiveOwnerId, loading: authLoading, signOut } = useAuth();
@@ -40,12 +45,21 @@ export default function App() {
   const [editClientInsuranceId, setEditClientInsuranceId] = useState<number | null>(null);
   const [editAaaPaymentId, setEditAaaPaymentId] = useState<number | null>(null);
   const [passwordModalOpen, setPasswordModalOpen] = useState(false);
+  const [notificationsHidden, setNotificationsHiddenState] = useState(getNotificationsHidden);
   const pendingPasswordActionRef = useRef<(() => void) | null>(null);
 
   /** Run a destructive action (delete/reverse) only after the user enters the correct password. */
   const runWithPasswordProtection = useCallback((action: () => void) => {
     pendingPasswordActionRef.current = action;
     setPasswordModalOpen(true);
+  }, []);
+
+  const toggleNotificationsHidden = useCallback(() => {
+    setNotificationsHiddenState((prev) => {
+      const next = !prev;
+      setNotificationsHidden(next);
+      return next;
+    });
   }, []);
 
   const handlePasswordSuccess = useCallback(() => {
@@ -88,6 +102,11 @@ export default function App() {
     addAaaPayment,
     updateAaaPaymentById,
   } = useData(effectiveOwnerId ?? null);
+
+  const showNotificationsToggle = useMemo(
+    () => hasActiveNotifications(loans, clientInsurance),
+    [loans, clientInsurance]
+  );
 
   const selectedClientInsurance =
     clientInsuranceDetailId != null
@@ -310,8 +329,18 @@ export default function App() {
 
   return (
     <>
-      <Sidebar page={page} onPage={setPage} onSignOut={signOut} weekRange={getWeekRange()} />
-      <AppNotifications loans={loans} clientInsurance={clientInsurance} />
+      <Sidebar
+        page={page}
+        onPage={setPage}
+        onSignOut={signOut}
+        weekRange={getWeekRange()}
+        showNotificationsToggle={showNotificationsToggle}
+        notificationsHidden={notificationsHidden}
+        onToggleNotificationsHidden={toggleNotificationsHidden}
+      />
+      {!notificationsHidden && (
+        <AppNotifications loans={loans} clientInsurance={clientInsurance} />
+      )}
       <main className="main flex-1 min-h-0 overflow-y-auto py-4 px-6">
         {configMissing && (
           <div className="mb-3 py-2 px-3 rounded-lg text-xs flex items-center justify-between gap-2 bg-alert-warn border border-red/30 text-alert-warn-fg">

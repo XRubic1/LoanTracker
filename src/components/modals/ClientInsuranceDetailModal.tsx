@@ -148,7 +148,7 @@ export function ClientInsuranceDetailModal({
             {cancellationAudit.map((entry) => (
               <li
                 key={entry.id}
-                className="flex justify-between items-center py-2 border-b border-border/40 text-[13px]"
+                className="flex justify-between items-center py-2 border-b border-subtle text-[13px]"
               >
                 <span className="font-mono text-ink">
                   {new Date(entry.cancellation_date).toLocaleDateString('en-US', {

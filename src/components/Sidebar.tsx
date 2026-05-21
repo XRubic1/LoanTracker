@@ -1,5 +1,6 @@
 import type { PageId } from '@/types';
 import { BrandLogo, BrandWordmark } from '@/components/BrandLogo';
+import { NotificationsToggle } from '@/components/NotificationsToggle';
 import { ThemeToggle } from '@/components/ThemeToggle';
 
 interface SidebarProps {
@@ -7,6 +8,9 @@ interface SidebarProps {
   onPage: (page: PageId) => void;
   onSignOut?: () => void;
   weekRange?: string;
+  showNotificationsToggle?: boolean;
+  notificationsHidden?: boolean;
+  onToggleNotificationsHidden?: () => void;
 }
 
 const navItems: { id: PageId; label: string; icon: React.ReactNode }[] = [
@@ -82,7 +86,15 @@ const navItems: { id: PageId; label: string; icon: React.ReactNode }[] = [
   },
 ];
 
-export function Sidebar({ page, onPage, onSignOut, weekRange }: SidebarProps) {
+export function Sidebar({
+  page,
+  onPage,
+  onSignOut,
+  weekRange,
+  showNotificationsToggle,
+  notificationsHidden = false,
+  onToggleNotificationsHidden,
+}: SidebarProps) {
   return (
     <nav className="topbar flex-shrink-0 z-10 flex items-center h-12 px-6 overflow-x-auto gap-0">
       {/* Brand */}
@@ -114,6 +126,12 @@ export function Sidebar({ page, onPage, onSignOut, weekRange }: SidebarProps) {
 
       {/* Right side: theme, week range, sign out */}
       <div className="flex items-center gap-3 flex-shrink-0">
+        {showNotificationsToggle && onToggleNotificationsHidden && (
+          <NotificationsToggle
+            hidden={notificationsHidden}
+            onToggle={onToggleNotificationsHidden}
+          />
+        )}
         <ThemeToggle />
         {weekRange && (
           <span className="date-badge">{weekRange}</span>

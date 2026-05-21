@@ -221,7 +221,7 @@ export function ClientInsurancePage({
                 };
                 return (
                   <tr key={c.id} className="row-hover transition-colors">
-                    <td className="py-1.5 pr-2 border-b border-border/40 align-middle">
+                    <td className="py-1.5 pr-2 border-b border-subtle align-middle">
                       <button
                         type="button"
                         onClick={applyClientFilter}
@@ -231,7 +231,7 @@ export function ClientInsurancePage({
                         {c.client}
                       </button>
                     </td>
-                    <td className="py-1.5 pr-2 border-b border-border/40 align-middle">
+                    <td className="py-1.5 pr-2 border-b border-subtle align-middle">
                       <div className="flex items-center gap-1.5 font-mono text-[13px]">
                         <button
                           type="button"
@@ -247,7 +247,7 @@ export function ClientInsurancePage({
                         {c.mc}
                       </div>
                     </td>
-                    <td className="py-1.5 pr-2 border-b border-border/40 align-middle">
+                    <td className="py-1.5 pr-2 border-b border-subtle align-middle">
                       <button
                         type="button"
                         onClick={applyStatusFilter}
@@ -265,7 +265,7 @@ export function ClientInsurancePage({
                         {statusLabel}
                       </button>
                     </td>
-                    <td className="py-1.5 pr-2 border-b border-border/40 align-middle">
+                    <td className="py-1.5 pr-2 border-b border-subtle align-middle">
                       <button
                         type="button"
                         onClick={() => onViewClient(c.id)}

@@ -11,6 +11,7 @@
   --color-panel: #1c1c1f;
   --color-surface: #18181b;
   --color-border: #2e2e32;
+  --color-border-subtle: #27272a;
   --color-ink: #e4e4e7;
   --color-label: #71717a;
   --color-muted: #a1a1aa;
@@ -60,6 +61,7 @@
   --color-panel: #ffffff;
   --color-surface: #f4f4f5;
   --color-border: #e4e4e7;
+  --color-border-subtle: #ebebeb;
   --color-ink: #18181b;
   --color-label: #71717a;
   --color-muted: #71717a;

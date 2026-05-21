@@ -83,19 +83,19 @@ export function ClosedPage({
                     onClick={() => onOpenLoan(l.id)}
                     className="row-hover transition-colors cursor-pointer"
                   >
-                    <td className="py-1.5 pr-2 border-b border-border/40 align-middle">
+                    <td className="py-1.5 pr-2 border-b border-subtle align-middle">
                       <div className="font-medium text-ink">{l.client}</div>
                     </td>
-                    <td className="py-1.5 pr-2 border-b border-border/40 align-middle font-mono text-[11px] text-muted">
+                    <td className="py-1.5 pr-2 border-b border-subtle align-middle font-mono text-[11px] text-muted">
                       {l.ref}
                     </td>
-                    <td className="py-1.5 pr-2 border-b border-border/40 align-middle font-mono font-medium text-green">
+                    <td className="py-1.5 pr-2 border-b border-subtle align-middle font-mono font-medium text-green">
                       {fmt(l.total)}
                     </td>
-                    <td className="py-1.5 pr-2 border-b border-border/40 align-middle font-mono text-xs text-muted2">
+                    <td className="py-1.5 pr-2 border-b border-subtle align-middle font-mono text-xs text-muted2">
                       {l.totalInstallments} payments
                     </td>
-                    <td className="py-1.5 pr-2 border-b border-border/40 align-middle">
+                    <td className="py-1.5 pr-2 border-b border-subtle align-middle">
                       <Badge variant="ok">Paid in Full</Badge>
                     </td>
                   </tr>
@@ -146,25 +146,25 @@ export function ClosedPage({
                       onClick={() => onOpenReserve(r.id)}
                       className="row-hover transition-colors cursor-pointer"
                     >
-                      <td className="py-1.5 pr-2 border-b border-border/40 align-middle">
+                      <td className="py-1.5 pr-2 border-b border-subtle align-middle">
                         <div className="font-medium text-ink">{r.client}</div>
                         {r.note && (
                           <div className="text-[11px] text-muted font-mono">{r.note}</div>
                         )}
                       </td>
-                      <td className="py-1.5 pr-2 border-b border-border/40 align-middle font-mono font-medium text-reserve">
+                      <td className="py-1.5 pr-2 border-b border-subtle align-middle font-mono font-medium text-reserve">
                         {fmt(r.amount / r.installments)}
                       </td>
-                      <td className="py-1.5 pr-2 border-b border-border/40 align-middle font-mono font-medium text-green">
+                      <td className="py-1.5 pr-2 border-b border-subtle align-middle font-mono font-medium text-green">
                         {fmt(r.amount)}
                       </td>
-                      <td className="py-1.5 pr-2 border-b border-border/40 align-middle font-mono text-xs text-muted2">
+                      <td className="py-1.5 pr-2 border-b border-subtle align-middle font-mono text-xs text-muted2">
                         {r.installments} deductions
                       </td>
-                      <td className="py-1.5 pr-2 border-b border-border/40 align-middle font-mono text-xs text-muted2">
+                      <td className="py-1.5 pr-2 border-b border-subtle align-middle font-mono text-xs text-muted2">
                         {lastDeducted}
                       </td>
-                      <td className="py-1.5 pr-2 border-b border-border/40 align-middle">
+                      <td className="py-1.5 pr-2 border-b border-subtle align-middle">
                         <Badge variant="ok">Fully Deducted</Badge>
                       </td>
                     </tr>
