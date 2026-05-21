@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Modal } from '@/components/Modal';
 import type { Loan, LoanProviderType } from '@/types';
-import { fmt } from '@/lib/utils';
+import { fmt, isWeekdayOnlySchedule, toNextWeekdayOnOrAfter } from '@/lib/utils';
 
 interface AddLoanModalProps {
   open: boolean;
@@ -51,6 +51,9 @@ export function AddLoanModal({ open, onClose, onAdd }: AddLoanModalProps) {
     const fee = providerType === 'Other' ? (isNaN(feeNum) ? 0 : feeNum) : 0;
     const effective = totalNum + fee;
     const installment = totalInstNum > 0 ? effective / totalInstNum : 0;
+    const scheduleFreq = freqDays || 7;
+    const normalizedStart =
+      scheduleFreq === 1 ? toNextWeekdayOnOrAfter(startDate) : startDate;
 
     setSubmitting(true);
     try {
@@ -61,8 +64,8 @@ export function AddLoanModal({ open, onClose, onAdd }: AddLoanModalProps) {
         installment,
         paidCount: 0,
         totalInstallments: totalInstNum,
-        startDate,
-        freqDays: freqDays || 7,
+        startDate: normalizedStart,
+        freqDays: scheduleFreq,
         paymentDates: [],
         paymentNotes: [],
         note: '',
@@ -182,6 +185,7 @@ export function AddLoanModal({ open, onClose, onAdd }: AddLoanModalProps) {
             onChange={(e) => setFreqDays(parseInt(e.target.value, 10) || 7)}
             min={1}
             className={`${inputClass} w-[130px]`}
+            title={isWeekdayOnlySchedule(freqDays) ? '1 = every weekday (Mon–Fri), weekends skipped' : undefined}
           />
           <input
             type="date"
@@ -190,6 +194,11 @@ export function AddLoanModal({ open, onClose, onAdd }: AddLoanModalProps) {
             className={`${inputClass} flex-1 min-w-0`}
           />
         </div>
+        {isWeekdayOnlySchedule(freqDays) && (
+          <p className="text-[11px] text-muted2">
+            Every day = weekdays only (Mon–Fri). Saturday and Sunday are skipped on the schedule.
+          </p>
+        )}
 
         <div className="flex gap-2.5 justify-end mt-5">
           <button

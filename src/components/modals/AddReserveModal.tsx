@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Modal } from '@/components/Modal';
 import type { Reserve } from '@/types';
+import { isWeekdayOnlySchedule, toNextWeekdayOnOrAfter } from '@/lib/utils';
 
 interface AddReserveModalProps {
   open: boolean;
@@ -25,14 +26,17 @@ export function AddReserveModal({ open, onClose, onAdd }: AddReserveModalProps) 
       window.alert('Fill all required fields');
       return;
     }
+    const scheduleFreq = freqDays || 7;
+    const normalizedDate = scheduleFreq === 1 ? toNextWeekdayOnOrAfter(date) : date;
+
     setSubmitting(true);
     try {
       await onAdd({
         client: client.trim(),
         amount: amountNum,
         installments: installments || 1,
-        date,
-        freqDays: freqDays || 7,
+        date: normalizedDate,
+        freqDays: scheduleFreq,
         note: note.trim(),
         paidCount: 0,
         deductionDates: [],
@@ -95,6 +99,11 @@ export function AddReserveModal({ open, onClose, onAdd }: AddReserveModalProps) 
             className="w-[130px] bg-surface border border-border text-ink py-1.5 px-2.5 rounded-md font-sans text-xs outline-none focus:border-accent"
           />
         </div>
+        {isWeekdayOnlySchedule(freqDays) && (
+          <p className="text-[11px] text-muted2">
+            Every day = weekdays only (Mon–Fri). Saturday and Sunday are skipped.
+          </p>
+        )}
         <div className="flex gap-2.5 flex-wrap">
           <input
             type="text"

@@ -53,6 +53,87 @@ function addDaysDateOnly(dateStr: string, days: number): string {
   return `${y2}-${String(m2 + 1).padStart(2, '0')}-${String(d2).padStart(2, '0')}`;
 }
 
+/** Day of week from YYYY-MM-DD (0 = Sunday, 6 = Saturday). */
+function getDayOfWeekDateOnly(dateStr: string): number {
+  const [y, m, d] = dateStr.split('-').map(Number);
+  return new Date(y, m - 1, d).getDay();
+}
+
+/** Next weekday (Mon–Fri) on or after dateStr; Saturday/Sunday roll forward to Monday. */
+export function toNextWeekdayOnOrAfter(dateStr: string): string {
+  let current = dateStr;
+  while (getDayOfWeekDateOnly(current) === 0 || getDayOfWeekDateOnly(current) === 6) {
+    current = addDaysDateOnly(current, 1);
+  }
+  return current;
+}
+
+/**
+ * Add N weekdays (Mon–Fri) after startDate.
+ * Index 0 = first weekday on or after start; each step skips weekends.
+ */
+export function addWeekdaysDateOnly(startDate: string, weekdayCount: number): string {
+  let current = toNextWeekdayOnOrAfter(startDate);
+  if (weekdayCount <= 0) return current;
+  let added = 0;
+  while (added < weekdayCount) {
+    current = addDaysDateOnly(current, 1);
+    const dow = getDayOfWeekDateOnly(current);
+    if (dow !== 0 && dow !== 6) added++;
+  }
+  return current;
+}
+
+/** True when freqDays means every weekday (daily deductions skipping Sat/Sun). */
+export function isWeekdayOnlySchedule(freqDays: number): boolean {
+  return (freqDays ?? 7) === 1;
+}
+
+/**
+ * Scheduled due date for installment/deduction index (0-based).
+ * When freqDays is 1, only Mon–Fri count (weekends skipped).
+ */
+export function getScheduleDueDateOnly(
+  startDate: string,
+  installmentIndex: number,
+  freqDays: number
+): string {
+  if (installmentIndex < 0) return startDate;
+  const freq = freqDays || 7;
+  if (freq === 1) {
+    return addWeekdaysDateOnly(startDate, installmentIndex);
+  }
+  return addDaysDateOnly(startDate, installmentIndex * freq);
+}
+
+/** Next due after a payment/deduction date (one period later). */
+export function getNextDueAfterDateOnly(fromDate: string, freqDays: number): string {
+  const freq = freqDays || 7;
+  if (freq === 1) {
+    return toNextWeekdayOnOrAfter(addDaysDateOnly(fromDate, 1));
+  }
+  return addDaysDateOnly(fromDate, freq);
+}
+
+export function getLoanInstallmentDueDateOnly(loan: Loan, installmentIndex: number): string {
+  return getScheduleDueDateOnly(loan.startDate, installmentIndex, loan.freqDays ?? 7);
+}
+
+export function getReserveDeductionDueDateOnly(reserve: Reserve, installmentIndex: number): string {
+  return getScheduleDueDateOnly(reserve.date, installmentIndex, reserve.freqDays ?? 7);
+}
+
+/** Parse schedule due date string to local Date for display. */
+export function scheduleDueDateToLocalDate(
+  startDate: string,
+  installmentIndex: number,
+  freqDays: number
+): Date {
+  const str = getScheduleDueDateOnly(startDate, installmentIndex, freqDays);
+  const [y, m, d] = str.split('-').map(Number);
+  return new Date(y, m - 1, d);
+}
+
 /** Current week (Mon–Sun containing today) as date-only strings. Exported for debug. */
 export function getWeekBoundsDateOnly(): { start: string; end: string } {
   const t = new Date();
@@ -99,7 +180,8 @@ export function getDateWeekLabel(dateStr: string): 'this_week' | 'next_week' | n
 /** New loan = no installments paid yet and first installment is due this or next week. */
 export function isNewLoan(loan: Loan): boolean {
   if (loan.paidCount > 0) return false;
-  return isDateThisOrNextWeek(loan.startDate);
+  const firstDue = getLoanInstallmentDueDateOnly(loan, 0);
+  return isDateThisOrNextWeek(firstDue);
 }
 
 // --- Current week (computed from today so it's never stale) ---
@@ -185,8 +267,8 @@ function getReserveNextDueDateOnly(r: Reserve): string | null {
   if (r.paidCount >= r.installments) return null;
   const freq = r.freqDays ?? 7;
   const dates = r.deductionDates ?? [];
-  if (dates.length > 0) return addDaysDateOnly(dates[dates.length - 1], freq);
-  return addDaysDateOnly(r.date, r.paidCount * freq);
+  if (dates.length > 0) return getNextDueAfterDateOnly(dates[dates.length - 1], freq);
+  return getReserveDeductionDueDateOnly(r, r.paidCount);
 }
 
 // --- Loan: next due date, due-this-week, and first overdue date ---
@@ -199,11 +281,10 @@ export function getNextDueDate(loan: Loan): Date | null {
   return new Date(y, m - 1, d);
 }
 
-/** Next scheduled installment due as YYYY-MM-DD: startDate + paidCount × freqDays. */
+/** Next scheduled installment due as YYYY-MM-DD. */
 function getNextDueDateOnly(loan: Loan): string | null {
   if (loan.paidCount >= loan.totalInstallments) return null;
-  const freq = loan.freqDays ?? 7;
-  return addDaysDateOnly(loan.startDate, loan.paidCount * freq);
+  return getLoanInstallmentDueDateOnly(loan, loan.paidCount);
 }
 
 /** Past due = scheduled next installment due date is before today and not yet paid. */
@@ -229,28 +310,12 @@ export function isDueThisWeek(loan: Loan): boolean {
   return dueStr >= start && dueStr <= end;
 }
 
-/** First unpaid scheduled due date as YYYY-MM-DD (start_date + paidCount * freq). Null if none. */
+/** First unpaid scheduled due date as YYYY-MM-DD. Null if none or not yet overdue. */
 export function getFirstOverdueDateOnly(loan: Loan): string | null {
   if (loan.paidCount >= loan.totalInstallments) return null;
-  const freq = loan.freqDays ?? 7;
-  const todayStr = todayDateOnly();
-
-  const [sy, sm, sd] = loan.startDate.split('-').map(Number);
-  const start = new Date(sy, sm - 1, sd);
-  const [ty, tm, td] = todayStr.split('-').map(Number);
-  const today = new Date(ty, tm - 1, td);
-
-  const diffMs = today.getTime() - start.getTime();
-  if (diffMs <= 0) return null; // no installments due yet
-
-  const days = Math.floor(diffMs / (1000 * 60 * 60 * 24));
-  let installmentsDueByToday = Math.floor(days / freq) + 1; // first installment at start date
-  installmentsDueByToday = Math.min(installmentsDueByToday, loan.totalInstallments);
-
-  if (installmentsDueByToday <= loan.paidCount) return null; // nothing past due by schedule
-
-  const firstOverdueIndex = loan.paidCount;
-  return addDaysDateOnly(loan.startDate, firstOverdueIndex * freq);
+  const dueStr = getLoanInstallmentDueDateOnly(loan, loan.paidCount);
+  if (dueStr >= todayDateOnly()) return null;
+  return dueStr;
 }
 
 /** Next Monday after the given date (YYYY-MM-DD). If date is Monday, returns date + 7. */
@@ -271,11 +336,10 @@ export function isLoanOverdue(loan: Loan): boolean {
 /** Number of installments that are past grace: due date D, grace until next Monday after D; count if today >= that Monday. */
 export function getLoanOverdueCount(loan: Loan): number {
   if (loan.paidCount >= loan.totalInstallments) return 0;
-  const freq = loan.freqDays ?? 7;
   const todayStr = todayDateOnly();
   let count = 0;
   for (let i = loan.paidCount; i < loan.totalInstallments; i++) {
-    const dueStr = addDaysDateOnly(loan.startDate, i * freq);
+    const dueStr = getLoanInstallmentDueDateOnly(loan, i);
     if (dueStr >= todayStr) break; // not due yet
     const graceEndStr = getNextMondayAfterDateOnly(dueStr);
     if (todayStr >= graceEndStr) count++;

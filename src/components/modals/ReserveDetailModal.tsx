@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import type { Reserve } from '@/types';
 import { Modal } from '@/components/Modal';
-import { fmt, fmtDate } from '@/lib/utils';
+import { fmt, fmtDate, getScheduleDueDateOnly } from '@/lib/utils';
 
 interface ReserveDetailModalProps {
   reserve: Reserve | null;
@@ -161,8 +161,9 @@ export function ReserveDetailModal({
             {Array.from({ length: reserve.installments }, (_, i) => {
               const paid = i < reserve.paidCount;
               const isNext = i === reserve.paidCount;
-              const scheduledDate = new Date(reserve.date);
-              scheduledDate.setDate(scheduledDate.getDate() + i * freq);
+              const dueStr = getScheduleDueDateOnly(reserve.date, i, freq);
+              const [sy, sm, sd] = dueStr.split('-').map(Number);
+              const scheduledDate = new Date(sy, sm - 1, sd);
               const actualDate =
                 reserve.deductionDates?.[i] ? fmtDate(reserve.deductionDates[i]) : null;
               const hasNote = !!(notes[i] ?? '').trim();
@@ -269,12 +270,16 @@ export function ReserveDetailModal({
             </h3>
             <p className="text-[12px] text-muted2 mb-4">
               {(() => {
-                const d = new Date(reserve.date);
-                d.setDate(d.getDate() + selectedDeductionIndex * freq);
+                const dueStr = getScheduleDueDateOnly(
+                  reserve.date,
+                  selectedDeductionIndex,
+                  freq
+                );
+                const [sy, sm, sd] = dueStr.split('-').map(Number);
                 const deductedDate = reserve.deductionDates?.[selectedDeductionIndex];
                 return (
                   <>
-                    Scheduled: {fmtDate(d)}
+                    Scheduled: {fmtDate(new Date(sy, sm - 1, sd))}
                     {deductedDate && (
                       <span className="text-green ml-1"> · Deducted {fmtDate(deductedDate)}</span>
                     )}

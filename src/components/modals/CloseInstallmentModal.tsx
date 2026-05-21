@@ -1,7 +1,13 @@
 import { useState, useEffect } from 'react';
 import type { Loan } from '@/types';
 import { Modal } from '@/components/Modal';
-import { fmt, fmtDate, getLoanBasePerInstallment, getLoanFeePerInstallment } from '@/lib/utils';
+import {
+  fmt,
+  fmtDate,
+  getLoanBasePerInstallment,
+  getLoanFeePerInstallment,
+  scheduleDueDateToLocalDate,
+} from '@/lib/utils';
 
 /** Modal used on Overview: close only the next installment for a loan, with an optional note. */
 interface CloseInstallmentModalProps {
@@ -34,8 +40,7 @@ export function CloseInstallmentModal({
   if (!loan) return null;
 
   const isFullyPaid = loan.paidCount >= loan.totalInstallments;
-  const scheduledDate = new Date(loan.startDate);
-  scheduledDate.setDate(scheduledDate.getDate() + index * loan.freqDays);
+  const scheduledDate = scheduleDueDateToLocalDate(loan.startDate, index, loan.freqDays ?? 7);
   const paidDate = loan.paymentDates?.[index];
 
   const handleCloseInstallment = async () => {

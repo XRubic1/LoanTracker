@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import type { Reserve } from '@/types';
 import { Modal } from '@/components/Modal';
-import { fmt, fmtDate } from '@/lib/utils';
+import { fmt, fmtDate, scheduleDueDateToLocalDate } from '@/lib/utils';
 
 /** Modal used on Overview: close only the next deduction for a reserve, with an optional note. */
 interface CloseDeductionModalProps {
@@ -33,8 +33,7 @@ export function CloseDeductionModal({
 
   const perInst = reserve.amount / reserve.installments;
   const isFullyDeducted = reserve.paidCount >= reserve.installments;
-  const scheduledDate = new Date(reserve.date);
-  scheduledDate.setDate(scheduledDate.getDate() + index * freq);
+  const scheduledDate = scheduleDueDateToLocalDate(reserve.date, index, freq);
   const deductedDate = reserve.deductionDates?.[index];
 
   const handleCloseDeduction = async () => {

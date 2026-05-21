@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import type { Loan } from '@/types';
 import { Modal } from '@/components/Modal';
-import { fmt, fmtDate, getLoanRemaining } from '@/lib/utils';
+import { fmt, fmtDate, getLoanRemaining, getScheduleDueDateOnly } from '@/lib/utils';
 
 interface LoanDetailModalProps {
   loan: Loan | null;
@@ -148,9 +148,9 @@ export function LoanDetailModal({
       day: 'numeric',
     });
     const rows = Array.from({ length: loan.totalInstallments }, (_, i) => {
-      const scheduledDate = new Date(loan.startDate);
-      scheduledDate.setDate(scheduledDate.getDate() + i * loan.freqDays);
-      const scheduledStr = scheduledDate.toLocaleDateString('en-US', {
+      const dueStr = getScheduleDueDateOnly(loan.startDate, i, loan.freqDays ?? 7);
+      const [sy, sm, sd] = dueStr.split('-').map(Number);
+      const scheduledStr = new Date(sy, sm - 1, sd).toLocaleDateString('en-US', {
         month: 'short',
         day: 'numeric',
         year: 'numeric',
@@ -274,8 +274,9 @@ export function LoanDetailModal({
             {Array.from({ length: loan.totalInstallments }, (_, i) => {
               const paid = i < loan.paidCount;
               const isNext = i === loan.paidCount;
-              const scheduledDate = new Date(loan.startDate);
-              scheduledDate.setDate(scheduledDate.getDate() + i * loan.freqDays);
+              const dueStr = getScheduleDueDateOnly(loan.startDate, i, loan.freqDays ?? 7);
+              const [sy, sm, sd] = dueStr.split('-').map(Number);
+              const scheduledDate = new Date(sy, sm - 1, sd);
               const actualDate =
                 loan.paymentDates?.[i] ? fmtDate(loan.paymentDates[i]) : null;
               const hasNote = !!(notes[i] ?? '').trim();
@@ -411,12 +412,16 @@ export function LoanDetailModal({
             </h3>
             <p className="text-[12px] text-muted2 mb-3">
               {(() => {
-                const d = new Date(loan.startDate);
-                d.setDate(d.getDate() + selectedInstallmentIndex * loan.freqDays);
+                const dueStr = getScheduleDueDateOnly(
+                  loan.startDate,
+                  selectedInstallmentIndex,
+                  loan.freqDays ?? 7
+                );
+                const [sy, sm, sd] = dueStr.split('-').map(Number);
                 const paidDate = loan.paymentDates?.[selectedInstallmentIndex];
                 return (
                   <>
-                    Scheduled: {fmtDate(d)}
+                    Scheduled: {fmtDate(new Date(sy, sm - 1, sd))}
                     {paidDate && (
                       <span className="text-green ml-1"> · Paid {fmtDate(paidDate)}</span>
                     )}

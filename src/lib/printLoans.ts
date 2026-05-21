@@ -5,6 +5,7 @@ import {
   getLoanEffectiveTotal,
   getLoanFeePerInstallment,
   getLoanProviderDisplay,
+  getScheduleDueDateOnly,
 } from '@/lib/utils';
 
 /** Loans funded through an external provider (not TruFunding). */
@@ -84,9 +85,9 @@ export function printOpenLoans(loans: Loan[]): void {
         (loan.totalInstallments - loan.paidCount) * loan.installment;
 
       const rows = Array.from({ length: loan.totalInstallments }, (_, i) => {
-        const scheduledDate = new Date(loan.startDate);
-        scheduledDate.setDate(scheduledDate.getDate() + i * loan.freqDays);
-        const scheduledStr = scheduledDate.toLocaleDateString('en-US', {
+        const dueStr = getScheduleDueDateOnly(loan.startDate, i, loan.freqDays ?? 7);
+        const [sy, sm, sd] = dueStr.split('-').map(Number);
+        const scheduledStr = new Date(sy, sm - 1, sd).toLocaleDateString('en-US', {
           month: 'short',
           day: 'numeric',
           year: 'numeric',
