@@ -40,7 +40,7 @@ export function AppNotifications({ loans, clientInsurance }: AppNotificationsPro
 
   return (
     <>
-      <div className="w-full flex-shrink-0 flex flex-col gap-[6px] px-6 py-[10px] bg-page border-b border-subtle">
+      <div className="w-full flex-shrink-0 flex flex-col gap-[6px] px-6 py-[10px] bg-page border-b border-divider">
         {showCancellation && (
           <button
             type="button"
@@ -129,7 +129,7 @@ export function AppNotifications({ loans, clientInsurance }: AppNotificationsPro
               </thead>
               <tbody>
                 {cancellationWithDate.map((c) => (
-                  <tr key={c.id} className="border-b border-subtle">
+                  <tr key={c.id} className="border-b border-divider">
                     <td className="py-1.5 pr-2 font-medium">{c.client}</td>
                     <td className="py-1.5 pr-2 font-mono">{c.mc}</td>
                     <td className="py-1.5 pr-2 font-mono text-muted2">

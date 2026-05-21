@@ -130,8 +130,8 @@ export function UsersPage() {
             <tbody>
               {members.map((m) => (
                 <tr key={`${m.owner_id}-${m.email}`} className="row-hover">
-                  <td className="py-3 px-4 border-b border-subtle text-sm">{m.email}</td>
-                  <td className="py-3 px-4 border-b border-subtle">
+                  <td className="py-3 px-4 border-b border-divider text-sm">{m.email}</td>
+                  <td className="py-3 px-4 border-b border-divider">
                     <span
                       className={`inline-flex items-center py-0.5 px-2 rounded-full text-xs font-medium ${
                         m.member_id
@@ -142,7 +142,7 @@ export function UsersPage() {
                       {m.member_id ? 'Active' : 'Pending invite'}
                     </span>
                   </td>
-                  <td className="py-3 px-4 border-b border-subtle">
+                  <td className="py-3 px-4 border-b border-divider">
                     <button
                       type="button"
                       onClick={() => handleRemove(m.email)}

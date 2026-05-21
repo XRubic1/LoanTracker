@@ -197,19 +197,19 @@ export function AaaPaymentsHistorySection({
           <tbody>
             {paged.map((p) => (
               <tr key={p.id} className="row-hover transition-colors group">
-                <td className="py-1.5 pr-2 border-b border-subtle align-middle font-mono text-xs text-muted2">
+                <td className="py-1.5 pr-2 border-b border-divider align-middle font-mono text-xs text-muted2">
                   {fmtDate(p.paymentDate)}
                 </td>
-                <td className="py-1.5 pr-2 border-b border-subtle align-middle font-medium text-ink">
+                <td className="py-1.5 pr-2 border-b border-divider align-middle font-medium text-ink">
                   {p.client}
                 </td>
-                <td className="py-1.5 pr-2 border-b border-subtle align-middle">
+                <td className="py-1.5 pr-2 border-b border-divider align-middle">
                   <Badge variant="closed">{p.payee}</Badge>
                 </td>
-                <td className="py-1.5 pr-2 border-b border-subtle align-middle font-mono font-medium text-green">
+                <td className="py-1.5 pr-2 border-b border-divider align-middle font-mono font-medium text-green">
                   {fmt(p.amount)}
                 </td>
-                <td className="py-1.5 pr-2 border-b border-subtle align-middle text-right">
+                <td className="py-1.5 pr-2 border-b border-divider align-middle text-right">
                   <button
                     type="button"
                     onClick={() => onEdit(p.id)}
@@ -225,7 +225,7 @@ export function AaaPaymentsHistorySection({
       )}
 
       {filtered.length > 0 && (
-        <div className="flex flex-wrap items-center justify-between gap-3 mt-4 pt-3 border-t border-subtle">
+        <div className="flex flex-wrap items-center justify-between gap-3 mt-4 pt-3 border-t border-divider">
           <label className="flex items-center gap-2 text-[12px] text-muted2">
             <span>Per page</span>
             <select

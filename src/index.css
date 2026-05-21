@@ -660,6 +660,11 @@ body {
     opacity: 0.5;
     cursor: not-allowed;
   }
+
+  /* Table row / subtle dividers — Tailwind cannot emit border-subtle from a nested color name */
+  .border-divider {
+    border-color: var(--color-border-subtle);
+  }
 }
 
 .main::-webkit-scrollbar {

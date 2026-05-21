@@ -121,7 +121,7 @@ export function AddLoanModal({ open, onClose, onAdd }: AddLoanModalProps) {
         </div>
 
         {providerType === 'Other' && (
-          <div className="space-y-2 pl-0 border-l-2 border-subtle pl-3">
+          <div className="space-y-2 pl-0 border-l-2 border-divider pl-3">
             <input
               type="text"
               placeholder="Provider (name)"

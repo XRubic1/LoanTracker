@@ -216,7 +216,7 @@ export function LoansPage({
                 };
                 return (
                   <tr key={l.id} className="row-hover transition-colors">
-                    <td className="py-1.5 pr-2 border-b border-subtle align-middle">
+                    <td className="py-1.5 pr-2 border-b border-divider align-middle">
                       <div className="font-medium text-ink">{l.client}</div>
                       <div className="text-[11px] text-muted font-mono mt-0.5 flex items-center gap-1.5">
                         {l.ref}
@@ -233,19 +233,19 @@ export function LoansPage({
                         </button>
                       </div>
                     </td>
-                    <td className="py-1.5 pr-2 border-b border-subtle align-middle">
+                    <td className="py-1.5 pr-2 border-b border-divider align-middle">
                       <div className="text-[13px]">{getLoanProviderDisplay(l)}</div>
                       {l.factoringFee != null && l.factoringFee > 0 && (
                         <div className="text-[10px] text-muted2">Fee {fmt(l.factoringFee)}</div>
                       )}
                     </td>
-                    <td className="py-1.5 pr-2 border-b border-subtle align-middle font-mono font-medium">
+                    <td className="py-1.5 pr-2 border-b border-divider align-middle font-mono font-medium">
                       {fmt(l.total)}
                     </td>
-                    <td className="py-1.5 pr-2 border-b border-subtle align-middle font-mono font-medium text-yellow">
+                    <td className="py-1.5 pr-2 border-b border-divider align-middle font-mono font-medium text-yellow">
                       {fmt(l.installment)}
                     </td>
-                    <td className="py-1.5 pr-2 border-b border-subtle align-middle min-w-[110px]">
+                    <td className="py-1.5 pr-2 border-b border-divider align-middle min-w-[110px]">
                       <div className="flex items-center gap-2">
                         <div className="progress-track">
                           <div
@@ -266,16 +266,16 @@ export function LoansPage({
                         </span>
                       </div>
                     </td>
-                    <td className="py-1.5 pr-2 border-b border-subtle align-middle">
+                    <td className="py-1.5 pr-2 border-b border-divider align-middle">
                       <span className={`font-mono font-medium ${isClosed ? 'text-green' : ''}`}>
                         {fmt(rem)}
                       </span>
                     </td>
-                    <td className="py-1.5 pr-2 border-b border-subtle align-middle font-mono text-xs text-muted2">
+                    <td className="py-1.5 pr-2 border-b border-divider align-middle font-mono text-xs text-muted2">
                       {nd ? fmtDate(nd) : '—'}
                     </td>
-                    <td className="py-1.5 pr-2 border-b border-subtle align-middle">{status}</td>
-                    <td className="py-1.5 pr-2 border-b border-subtle align-middle">
+                    <td className="py-1.5 pr-2 border-b border-divider align-middle">{status}</td>
+                    <td className="py-1.5 pr-2 border-b border-divider align-middle">
                       <button
                         type="button"
                         onClick={() => onOpenDetail(l.id)}
