@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
+import { BrandLogo, BrandWordmark } from '@/components/BrandLogo';
 
 type Mode = 'login' | 'register';
 
@@ -36,13 +37,16 @@ export function AuthPage() {
   };
 
   return (
-    <div className="min-h-screen w-full flex items-center justify-center bg-bg px-4">
+    <div className="min-h-screen w-full flex items-center justify-center bg-page px-4">
       <div
         key={mode}
-        className="w-full max-w-sm bg-card border border-border rounded-2xl p-8 shadow-xl animate-auth-switch"
+        className="w-full max-w-sm bg-panel border border-border rounded-xl p-8 shadow-xl animate-auth-switch"
       >
-        <h1 className="text-xl font-semibold text-text mb-1">Loan Dashboard</h1>
-        <p className="text-muted2 text-sm mb-6">
+        <div className="flex flex-col items-center text-center mb-6">
+          <BrandLogo size="md" className="mb-3" />
+          <BrandWordmark className="text-[1.35rem]" />
+        </div>
+        <p className="text-muted2 text-sm mb-3">
           {mode === 'login' ? 'Sign in to your account' : 'Create an account'}
         </p>
         <form onSubmit={handleSubmit} className="space-y-4">
@@ -56,7 +60,7 @@ export function AuthPage() {
               autoComplete="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              className="w-full bg-surface border border-border text-text py-2.5 px-3 rounded-lg text-sm outline-none focus:border-accent"
+              className="w-full bg-surface border border-border text-ink py-2.5 px-3 rounded-lg text-sm outline-none focus:border-accent"
               placeholder="you@example.com"
             />
           </div>
@@ -70,12 +74,12 @@ export function AuthPage() {
               autoComplete={mode === 'login' ? 'current-password' : 'new-password'}
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              className="w-full bg-surface border border-border text-text py-2.5 px-3 rounded-lg text-sm outline-none focus:border-accent"
+              className="w-full bg-surface border border-border text-ink py-2.5 px-3 rounded-lg text-sm outline-none focus:border-accent"
               placeholder="••••••••"
             />
           </div>
           {error && (
-            <div className="text-sm text-red bg-red/10 border border-red/20 rounded-lg py-2 px-3">
+            <div className="text-sm text-tag-overdue-fg bg-tag-overdue border border-red/20 rounded-lg py-2 px-3">
               {error}
             </div>
           )}
@@ -87,7 +91,7 @@ export function AuthPage() {
           <button
             type="submit"
             disabled={loading}
-            className="w-full py-2.5 rounded-lg bg-accent text-white font-medium text-sm hover:bg-[#3a7de8] disabled:opacity-50 transition-colors"
+            className="w-full py-2.5 rounded-lg bg-accent text-white font-medium text-sm hover:opacity-90 disabled:opacity-50 transition-colors"
           >
             {loading ? 'Please wait…' : mode === 'login' ? 'Sign in' : 'Sign up'}
           </button>

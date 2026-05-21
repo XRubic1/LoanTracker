@@ -61,7 +61,7 @@ export function AddReserveModal({ open, onClose, onAdd }: AddReserveModalProps) 
             placeholder="Client Name"
             value={client}
             onChange={(e) => setClient(e.target.value)}
-            className="flex-1 min-w-0 bg-surface border border-border text-text py-2 px-3 rounded-lg font-sans text-[13px] outline-none focus:border-accent"
+            className="flex-1 min-w-0 bg-surface border border-border text-ink py-1.5 px-2.5 rounded-md font-sans text-xs outline-none focus:border-accent"
           />
         </div>
         <div className="flex gap-2.5 flex-wrap">
@@ -70,14 +70,14 @@ export function AddReserveModal({ open, onClose, onAdd }: AddReserveModalProps) 
             placeholder="Amount per deduction"
             value={amount}
             onChange={(e) => setAmount(e.target.value)}
-            className="flex-1 min-w-0 bg-surface border border-border text-text py-2 px-3 rounded-lg font-sans text-[13px] outline-none focus:border-accent"
+            className="flex-1 min-w-0 bg-surface border border-border text-ink py-1.5 px-2.5 rounded-md font-sans text-xs outline-none focus:border-accent"
           />
           <input
             type="number"
             placeholder="# Installments"
             value={installments}
             onChange={(e) => setInstallments(parseInt(e.target.value, 10) || 1)}
-            className="w-[150px] bg-surface border border-border text-text py-2 px-3 rounded-lg font-sans text-[13px] outline-none focus:border-accent"
+            className="w-[150px] bg-surface border border-border text-ink py-1.5 px-2.5 rounded-md font-sans text-xs outline-none focus:border-accent"
           />
         </div>
         <div className="flex gap-2.5 flex-wrap">
@@ -85,14 +85,14 @@ export function AddReserveModal({ open, onClose, onAdd }: AddReserveModalProps) 
             type="date"
             value={date}
             onChange={(e) => setDate(e.target.value)}
-            className="flex-1 min-w-0 bg-surface border border-border text-text py-2 px-3 rounded-lg font-sans text-[13px] outline-none focus:border-accent"
+            className="flex-1 min-w-0 bg-surface border border-border text-ink py-1.5 px-2.5 rounded-md font-sans text-xs outline-none focus:border-accent"
           />
           <input
             type="number"
             placeholder="Every N days"
             value={freqDays}
             onChange={(e) => setFreqDays(parseInt(e.target.value, 10) || 7)}
-            className="w-[130px] bg-surface border border-border text-text py-2 px-3 rounded-lg font-sans text-[13px] outline-none focus:border-accent"
+            className="w-[130px] bg-surface border border-border text-ink py-1.5 px-2.5 rounded-md font-sans text-xs outline-none focus:border-accent"
           />
         </div>
         <div className="flex gap-2.5 flex-wrap">
@@ -101,7 +101,7 @@ export function AddReserveModal({ open, onClose, onAdd }: AddReserveModalProps) 
             placeholder="Note (optional)"
             value={note}
             onChange={(e) => setNote(e.target.value)}
-            className="flex-1 min-w-0 bg-surface border border-border text-text py-2 px-3 rounded-lg font-sans text-[13px] outline-none focus:border-accent"
+            className="flex-1 min-w-0 bg-surface border border-border text-ink py-1.5 px-2.5 rounded-md font-sans text-xs outline-none focus:border-accent"
           />
         </div>
         <div className="flex gap-2.5 justify-end mt-5">
@@ -116,7 +116,7 @@ export function AddReserveModal({ open, onClose, onAdd }: AddReserveModalProps) 
             type="button"
             onClick={handleSubmit}
             disabled={submitting}
-            className="py-1.5 px-3.5 rounded-lg border-0 bg-accent text-white text-xs font-medium hover:bg-[#3a7de8] disabled:opacity-50"
+            className="py-1.5 px-3.5 rounded-lg border-0 bg-accent text-white text-xs font-medium hover:opacity-90 disabled:opacity-50"
           >
             Add
           </button>

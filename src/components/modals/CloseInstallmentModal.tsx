@@ -79,7 +79,7 @@ export function CloseInstallmentModal({
           type="date"
           value={closeDate}
           onChange={(e) => setCloseDate(e.target.value)}
-          className="w-full bg-surface border border-border rounded-lg py-2 px-3 text-[13px] text-text outline-none focus:border-accent mb-2"
+          className="w-full bg-surface border border-border rounded-lg py-2 px-3 text-[13px] text-ink outline-none focus:border-accent mb-2"
         />
         <label className="block text-[11px] text-muted uppercase tracking-wider mb-1.5">
           Note
@@ -89,7 +89,7 @@ export function CloseInstallmentModal({
           onChange={(e) => setNote(e.target.value)}
           placeholder="Add a note (optional)…"
           rows={3}
-          className="w-full bg-surface border border-border rounded-lg py-2 px-3 text-[13px] text-text placeholder:text-muted outline-none focus:border-accent resize-none"
+          className="w-full bg-surface border border-border rounded-lg py-2 px-3 text-[13px] text-ink placeholder:text-muted outline-none focus:border-accent resize-none"
         />
         <div className="flex flex-wrap gap-2 justify-end pt-2">
           <button
@@ -103,7 +103,7 @@ export function CloseInstallmentModal({
             type="button"
             onClick={handleCloseInstallment}
             disabled={isFullyPaid}
-            className="py-1.5 px-3.5 rounded-lg border-0 bg-accent text-white text-xs font-medium hover:bg-[#3a7de8] disabled:opacity-50 disabled:cursor-not-allowed"
+            className="py-1.5 px-3.5 rounded-lg border-0 bg-accent text-white text-xs font-medium hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             Close installment
           </button>

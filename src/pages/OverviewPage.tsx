@@ -7,14 +7,11 @@ import { Badge } from '@/components/Badge';
 import {
   fmt,
   fmtDate,
-  getWeekRange,
   getLoanRemaining,
   getNextDueDate,
   getReserveNextDueDate,
-  getDateWeekLabel,
   isDueThisWeek,
   isLoanPastDue,
-  isNewLoan,
   isReserveDueThisWeek,
   isReserveOverdue,
   isToday,
@@ -22,18 +19,12 @@ import {
   getLoanBasePerInstallment,
   getLoanFeePerInstallment,
 } from '@/lib/utils';
-import { useState } from 'react';
 import type { UseDataResult } from '@/hooks/useData';
-import {
-  getDaysUntilCancellation,
-  isClientInsuranceCancellationSoon,
-  isClientInsuranceCancellationWithDate,
-  insuranceNeedsVerification,
-} from '@/lib/clientInsuranceUtils';
-import { Modal } from '@/components/Modal';
+import { insuranceNeedsVerification } from '@/lib/clientInsuranceUtils';
 import { AaaPaymentForm } from '@/components/AaaPaymentForm';
 
-const CHART_COLORS = ['#4f8ef7', '#7c5cfc', '#2ecc8f', '#f75f5f', '#f7c34f', '#f77f4f', '#4fc3f7'];
+/* Saturated palette that reads well on a white/light background */
+const CHART_COLORS = ['#7F77DD', '#D85A30', '#D4537E', '#BA7517', '#1D9E75', '#378ADD', '#534AB7', '#888780', '#E24B4A'];
 
 export function OverviewPage({
   loans,
@@ -56,7 +47,6 @@ export function OverviewPage({
   const visibleLoans = loans.filter((l) => !l.hidden);
   const activeLoans = visibleLoans.filter((l) => l.paidCount < l.totalInstallments);
   const closedLoans = visibleLoans.filter((l) => l.paidCount >= l.totalInstallments);
-  const newLoans = activeLoans.filter(isNewLoan);
   const dueLoans = activeLoans.filter(isDueThisWeek);
   const totalOutstanding = activeLoans.reduce((s, l) => s + getLoanRemaining(l), 0);
   const weekDueAmount = dueLoans.reduce((s, l) => s + l.installment, 0);
@@ -68,19 +58,6 @@ export function OverviewPage({
     .filter((l) => l.nextDate)
     .sort((a, b) => a.nextDate!.getTime() - b.nextDate!.getTime())
     .slice(0, 6);
-
-  const cancellationWithDate = clientInsurance
-    .filter(isClientInsuranceCancellationWithDate)
-    .map((c) => ({ ...c, _sortDate: c.expiration_date ? new Date(c.expiration_date).getTime() : 0 }))
-    .sort((a, b) => a._sortDate - b._sortDate)
-    .map(({ _sortDate: _, ...c }) => c);
-
-  const cancellationSoon = cancellationWithDate
-    .filter((c) => isClientInsuranceCancellationSoon(c, 7))
-    .map((c) => ({ ...c, daysUntil: getDaysUntilCancellation(c) ?? 0 }))
-    .sort((a, b) => a.daysUntil - b.daysUntil);
-
-  const [cancellationPopupOpen, setCancellationPopupOpen] = useState(false);
 
   /** Show warning when client insurance exists but hasn't been verified this week (Mon–Sun). */
   const showInsuranceNeedsVerification =
@@ -124,444 +101,290 @@ export function OverviewPage({
 
   return (
     <>
-      <div className="flex items-center justify-between mb-7">
-        <h1 className="text-[22px] font-semibold">Overview</h1>
-        <span className="bg-card border border-border py-1.5 px-3.5 rounded-full text-xs text-muted2 font-mono">
-          {getWeekRange()}
-        </span>
-      </div>
-
+      {/* Insurance verification alert — shown above the main grid */}
       {showInsuranceNeedsVerification && (
-        <div
-          className="mb-6 w-full rounded-xl border-2 border-amber-500/50 bg-gradient-to-r from-amber-500/20 to-amber-500/5 px-4 py-3.5 flex items-center gap-4 shadow-lg shadow-amber-500/10 ring-1 ring-amber-500/20"
-          role="alert"
-        >
-          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-amber-500/25 text-amber-500" aria-hidden>
-            <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-            </svg>
-          </div>
-          <div className="flex-1 min-w-0">
-            <p className="font-semibold text-text text-[14px]">INSURANCE NEEDS VERIFICATION</p>
-            <p className="mt-1 text-[12px] text-muted2">
-              Client insurance has not been verified this week. Go to Client Insurance and record a verification after review.
-              {insuranceVerification?.last_checked_date && insuranceVerification?.checked_by && (
-                <> Last verified: {new Date(insuranceVerification.last_checked_date).toLocaleDateString('en-US')} by {insuranceVerification.checked_by}.</>
-              )}
-            </p>
-          </div>
+        <div className="alert-banner-warn mb-3 text-[11px] rounded-r-[3px]" role="alert">
+          <svg className="h-[13px] w-[13px] flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+          </svg>
+          <span>
+            <strong className="font-medium">Insurance needs verification</strong>
+            {' — not verified this week. '}
+            {insuranceVerification?.last_checked_date && insuranceVerification?.checked_by && (
+              <>Last: {new Date(insuranceVerification.last_checked_date).toLocaleDateString('en-US')} by {insuranceVerification.checked_by}.</>
+            )}
+          </span>
         </div>
       )}
 
-      {cancellationWithDate.length > 0 && (
-        <>
-          <button
-            type="button"
-            onClick={() => setCancellationPopupOpen(true)}
-            className={`mb-6 w-full text-left rounded-xl border-2 px-4 py-3.5 flex items-start gap-4 shadow-lg ring-1 transition-colors ${
-              cancellationSoon.length > 0
-                ? 'border-red/70 bg-gradient-to-r from-red/25 to-red/5 shadow-red/20 ring-red/30 hover:ring-red/50 animate-pulse'
-                : 'border-yellow/50 bg-gradient-to-r from-yellow/20 to-yellow/5 shadow-yellow/10 ring-yellow/20 hover:ring-yellow/40'
-            }`}
-            role="alert"
-          >
-            <div
-              className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full ${
-                cancellationSoon.length > 0 ? 'bg-red/25 text-red' : 'bg-yellow/25 text-yellow'
-              }`}
-              aria-hidden
-            >
-              <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-              </svg>
-            </div>
-            <div className="flex-1 min-w-0">
-              <p className="font-semibold text-text text-[14px]">
-                {cancellationSoon.length > 0
-                  ? `${cancellationSoon.length === 1 ? 'Client' : 'Clients'} about to get insurance cancelled`
-                  : `Client insurance: ${cancellationWithDate.length} client${cancellationWithDate.length !== 1 ? 's' : ''} with cancellation and date`}
-              </p>
-              <p className="mt-1 text-[12px] text-muted2">
-                {cancellationSoon.length > 0
-                  ? `${cancellationSoon
-                      .slice(0, 3)
-                      .map((c) => {
-                        const cancellationDate = c.expiration_date
-                          ? new Date(c.expiration_date).toLocaleDateString('en-US', {
-                              month: 'short',
-                              day: 'numeric',
-                            })
-                          : 'No date';
-                        return `${c.client} (${cancellationDate}, in ${c.daysUntil} day${c.daysUntil === 1 ? '' : 's'})`;
-                      })
-                      .join(', ')}${cancellationSoon.length > 3 ? ` +${cancellationSoon.length - 3} more` : ''}`
-                  : 'Click to show client, MC and cancellation date.'}
-              </p>
-            </div>
-            <svg
-              className={`w-5 h-5 shrink-0 mt-0.5 ${cancellationSoon.length > 0 ? 'text-red/80' : 'text-yellow/70'}`}
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-            </svg>
-          </button>
+      {/* Main 2-column layout: left (stats + tables) / right 240px (form + reserves) */}
+      <div className="grid grid-cols-[minmax(0,1fr)_240px] gap-3">
 
-          <Modal
-            open={cancellationPopupOpen}
-            onClose={() => setCancellationPopupOpen(false)}
-            title="Clients with cancellation (by date, oldest first)"
-          >
-            <div className="max-h-[70vh] overflow-y-auto">
-              <table className="w-full border-collapse text-[13px]">
+        {/* ── Left column ── */}
+        <div className="flex flex-col gap-3">
+
+          {/* Stats — 4 cards */}
+          <div className="grid grid-cols-4 gap-2.5 pt-3">
+            <StatCard
+              accent
+              label="Outstanding"
+              value={fmt(totalOutstanding)}
+              sub={`${activeLoans.length} active loans`}
+            />
+            <StatCard
+              label="Due this week"
+              value={fmt(weekDueAmount)}
+              valueClassName="text-yellow"
+              sub={`${dueLoans.length} payments`}
+            />
+            <StatCard
+              label="Reserve due"
+              value={fmt(resWeekTotal)}
+              valueClassName="text-accent2"
+              sub={`${resWeek.length} deductions`}
+            />
+            <StatCard
+              label="Closed"
+              value={String(closedLoans.length)}
+              sub="Fully repaid"
+            />
+          </div>
+
+          {/* Due this week — loans */}
+          <Section title="Due This Week — Loans" count={dueLoans.length} noPadding>
+            <table className="w-full border-collapse table-fixed">
+              <colgroup>
+                <col style={{ width: '22%' }} />
+                <col style={{ width: '22%' }} />
+                <col style={{ width: '26%' }} />
+                <col style={{ width: '22%' }} />
+                <col style={{ width: '8%' }} />
+              </colgroup>
+              <thead>
+                <tr>
+                  {['Client', 'Provider', 'Installment', 'Remaining', 'Status'].map((h) => (
+                    <th
+                      key={h}
+                      className="text-[10px] text-muted font-normal uppercase tracking-[0.05em] px-4 py-2 text-left border-b border-border"
+                    >
+                      {h}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {dueLoans.length === 0 ? (
+                  <tr>
+                    <td colSpan={5} className="text-center py-6 text-muted text-[11px]">
+                      No loans due this week
+                    </td>
+                  </tr>
+                ) : (
+                  dueLoans.map((l) => {
+                    const rem = getLoanRemaining(l);
+                    const left = l.totalInstallments - l.paidCount;
+                    const pastDue = isLoanPastDue(l);
+                    return (
+                      <tr
+                        key={l.id}
+                        role="button"
+                        tabIndex={0}
+                        onClick={() => onOpenCloseInstallment(l.id)}
+                        onKeyDown={(e) => e.key === 'Enter' && onOpenCloseInstallment(l.id)}
+                        className="row-hover transition-colors cursor-pointer"
+                      >
+                        <td className="px-4 py-[9px] border-b border-border align-middle overflow-hidden">
+                          <div className="font-medium text-[11px] text-ink truncate">{l.client}</div>
+                          <div className="text-[10px] text-muted">{l.ref}</div>
+                        </td>
+                        <td className="px-4 py-[9px] border-b border-border align-middle overflow-hidden">
+                          <div className="text-[11px] truncate">{getLoanProviderDisplay(l)}</div>
+                          {l.factoringFee != null && l.factoringFee > 0 && (
+                            <div className="text-[10px] text-muted">Fee {fmt(l.factoringFee)}</div>
+                          )}
+                        </td>
+                        <td className="px-4 py-[9px] border-b border-border align-middle">
+                          <div className="text-[11px] font-medium text-yellow">
+                            {fmt(getLoanBasePerInstallment(l))}
+                          </div>
+                          {l.factoringFee != null && l.factoringFee > 0 && (
+                            <div className="text-[10px] text-muted">
+                              +{fmt(getLoanFeePerInstallment(l))} → {fmt(l.installment)}
+                            </div>
+                          )}
+                        </td>
+                        <td className="px-4 py-[9px] border-b border-border align-middle">
+                          <div className="text-[11px] font-medium">{fmt(rem)}</div>
+                          <div className="text-[10px] text-muted">{left} left</div>
+                        </td>
+                        <td className="px-4 py-[9px] border-b border-border align-middle">
+                          {pastDue ? (
+                            <Badge variant="overdue">Past due</Badge>
+                          ) : (
+                            <Badge variant="due">Due</Badge>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })
+                )}
+              </tbody>
+            </table>
+          </Section>
+
+          {/* Upcoming loans + Reserves due this week — side by side */}
+          <div className="grid grid-cols-2 gap-3 min-w-0">
+            <Section title="Upcoming Loans" noPadding>
+              <table className="w-full border-collapse table-fixed">
+                <colgroup>
+                  <col style={{ width: '28%' }} />
+                  <col style={{ width: '22%' }} />
+                  <col style={{ width: '20%' }} />
+                  <col style={{ width: '18%' }} />
+                  <col style={{ width: '12%' }} />
+                </colgroup>
                 <thead>
                   <tr>
-                    <th className="text-[10px] text-muted uppercase tracking-widest py-2 pr-3 text-left border-b border-border">
-                      Client
-                    </th>
-                    <th className="text-[10px] text-muted uppercase tracking-widest py-2 pr-3 text-left border-b border-border">
-                      MC
-                    </th>
-                    <th className="text-[10px] text-muted uppercase tracking-widest py-2 pr-3 text-left border-b border-border">
-                      Cancellation
-                    </th>
+                    {['Client', 'Loan', 'Provider', 'Next date', 'Amount'].map((h) => (
+                      <th
+                        key={h}
+                        className="text-[10px] text-muted font-normal uppercase tracking-[0.05em] px-4 py-2 text-left border-b border-border"
+                      >
+                        {h}
+                      </th>
+                    ))}
                   </tr>
                 </thead>
                 <tbody>
-                  {cancellationWithDate.map((c) => (
-                    <tr key={c.id} className="border-b border-border/40">
-                      <td className="py-2.5 pr-3 font-medium">{c.client}</td>
-                      <td className="py-2.5 pr-3 font-mono">{c.mc}</td>
-                      <td className="py-2.5 pr-3 font-mono text-muted2">
-                        {c.expiration_date
-                          ? new Date(c.expiration_date).toLocaleDateString('en-US', {
-                              month: 'short',
-                              day: 'numeric',
-                              year: 'numeric',
-                            })
-                          : '—'}
-                      </td>
+                  {upcoming.length === 0 ? (
+                    <tr>
+                      <td colSpan={5} className="text-center py-6 text-muted text-[11px]">—</td>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-            <div className="flex justify-end pt-4">
-              <button
-                type="button"
-                onClick={() => setCancellationPopupOpen(false)}
-                className="py-1.5 px-3.5 rounded-lg border border-border text-muted2 text-xs font-medium hover:border-accent hover:text-accent"
-              >
-                Close
-              </button>
-            </div>
-          </Modal>
-        </>
-      )}
-
-      {newLoans.length > 0 && (
-        <div
-          className="mb-6 rounded-xl border-2 border-accent/50 bg-gradient-to-r from-accent/20 to-accent/5 px-4 py-3.5 flex items-start gap-4 shadow-lg shadow-accent/10 ring-1 ring-accent/20"
-          role="alert"
-        >
-          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-accent/25 text-accent" aria-hidden>
-            <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-            </svg>
-          </div>
-          <div className="flex-1 min-w-0">
-            <p className="font-semibold text-text text-[14px]">
-              {newLoans.length} new loan{newLoans.length !== 1 ? 's' : ''} — first installment due soon
-            </p>
-            <ul className="mt-2 flex flex-wrap gap-2">
-              {newLoans.map((l) => {
-                const weekLabel = getDateWeekLabel(l.startDate);
-                const isThisWeek = weekLabel === 'this_week';
-                return (
-                  <li key={l.id} className="inline-flex items-center gap-1.5">
-                    <span className="text-[13px] text-text font-medium">{l.client}</span>
-                    <span
-                      className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wider ${
-                        isThisWeek
-                          ? 'bg-yellow/20 text-yellow ring-1 ring-yellow/40'
-                          : 'bg-accent/20 text-accent ring-1 ring-accent/40'
-                      }`}
-                    >
-                      {isThisWeek ? 'This week' : 'Next week'}
-                    </span>
-                  </li>
-                );
-              })}
-            </ul>
-          </div>
-        </div>
-      )}
-
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4 mb-7">
-        <StatCard
-          accent
-          label="Total Outstanding"
-          value={fmt(totalOutstanding)}
-          sub={`${activeLoans.length} active loans`}
-        />
-        <StatCard
-          label="Due This Week"
-          value={fmt(weekDueAmount)}
-          valueClassName="text-yellow"
-          sub={`${dueLoans.length} payments`}
-        />
-        <StatCard
-          label="Reserve Due"
-          value={fmt(resWeekTotal)}
-          valueClassName="text-accent2"
-          sub={`${resWeek.length} deductions`}
-        />
-        <StatCard
-          label="Closed Loans"
-          value={String(closedLoans.length)}
-          valueClassName="text-green"
-          sub="fully repaid"
-        />
-        <div className="bg-card border border-border rounded-2xl p-3.5 flex flex-col justify-center">
-          <AaaPaymentForm
-            compact
-            onSubmit={async (payload) => {
-              await addAaaPayment(payload);
-            }}
-          />
-        </div>
-      </div>
-
-      <div className="grid grid-cols-2 gap-5 mb-7">
-        <Section title="Due This Week — Loans" count={dueLoans.length}>
-          <table className="w-full border-collapse">
-            <thead>
-              <tr>
-                <th className="text-[10px] text-muted uppercase tracking-widest py-0 pb-2.5 pr-3 text-left border-b border-border whitespace-nowrap">
-                  Client
-                </th>
-                <th className="text-[10px] text-muted uppercase tracking-widest py-0 pb-2.5 pr-3 text-left border-b border-border">
-                  Provider
-                </th>
-                <th className="text-[10px] text-muted uppercase tracking-widest py-0 pb-2.5 pr-3 text-left border-b border-border">
-                  Installment
-                </th>
-                <th className="text-[10px] text-muted uppercase tracking-widest py-0 pb-2.5 pr-3 text-left border-b border-border">
-                  Remaining
-                </th>
-                <th className="text-[10px] text-muted uppercase tracking-widest py-0 pb-2.5 pr-3 text-left border-b border-border">
-                  Status
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {dueLoans.length === 0 ? (
-                <tr>
-                  <td colSpan={5} className="text-center py-10 text-muted text-[13px]">
-                    No loans due this week
-                  </td>
-                </tr>
-              ) : (
-                dueLoans.map((l) => {
-                  const rem = getLoanRemaining(l);
-                  const left = l.totalInstallments - l.paidCount;
-                  const pastDue = isLoanPastDue(l);
-                  return (
-                    <tr
-                      key={l.id}
-                      role="button"
-                      tabIndex={0}
-                      onClick={() => onOpenCloseInstallment(l.id)}
-                      onKeyDown={(e) => e.key === 'Enter' && onOpenCloseInstallment(l.id)}
-                      className="hover:bg-white/[0.015] transition-colors cursor-pointer"
-                    >
-                      <td className="py-2.5 pr-3 border-b border-border/40 align-middle text-[13px]">
-                        <div className="font-medium text-text">{l.client}</div>
-                        <div className="text-[11px] text-muted font-mono mt-0.5">{l.ref}</div>
-                      </td>
-                      <td className="py-2.5 pr-3 border-b border-border/40 align-middle text-[12px]">
-                        <span>{getLoanProviderDisplay(l)}</span>
-                        {l.factoringFee != null && l.factoringFee > 0 && (
-                          <div className="text-[10px] text-muted2">Fee {fmt(l.factoringFee)}</div>
-                        )}
-                      </td>
-                      <td className="py-2.5 pr-3 border-b border-border/40 align-middle">
-                        <div className="font-mono font-medium text-yellow">
+                  ) : (
+                    upcoming.map((l) => (
+                      <tr key={l.id} className="row-hover transition-colors">
+                        <td className="px-4 py-[9px] border-b border-border align-middle overflow-hidden">
+                          <div className="font-medium text-[11px] text-ink truncate">{l.client}</div>
+                        </td>
+                        <td className="px-4 py-[9px] border-b border-border align-middle">
+                          <div className="text-[10px] text-muted">
+                            {l.ref} · {l.totalInstallments - l.paidCount} left
+                          </div>
+                        </td>
+                        <td className="px-4 py-[9px] border-b border-border align-middle overflow-hidden">
+                          <div className="text-[11px] truncate">{getLoanProviderDisplay(l)}</div>
+                          {l.factoringFee != null && l.factoringFee > 0 && (
+                            <div className="text-[10px] text-muted">Fee {fmt(l.factoringFee)}</div>
+                          )}
+                        </td>
+                        <td className="px-4 py-[9px] border-b border-border align-middle text-[11px] text-muted">
+                          {l.nextDate ? fmtDate(l.nextDate) : '—'}
+                        </td>
+                        <td className="px-4 py-[9px] border-b border-border align-middle text-[11px] font-medium">
                           {l.factoringFee != null && l.factoringFee > 0 ? (
                             <>
                               <div>{fmt(getLoanBasePerInstallment(l))}</div>
-                              <div className="text-[11px] text-muted2 font-normal">
+                              <div className="text-[10px] text-muted font-normal">
                                 +{fmt(getLoanFeePerInstallment(l))} = {fmt(l.installment)}
                               </div>
                             </>
                           ) : (
                             fmt(l.installment)
                           )}
-                        </div>
-                      </td>
-                      <td className="py-2.5 pr-3 border-b border-border/40 align-middle">
-                        <span className="font-mono font-medium">{fmt(rem)}</span>
-                        <div className="text-[10px] text-muted mt-0.5">{left} left</div>
-                      </td>
-                      <td className="py-2.5 pr-3 border-b border-border/40 align-middle">
-                        {pastDue ? (
-                          <Badge variant="overdue">Past Due</Badge>
-                        ) : (
-                          <Badge variant="due">Due</Badge>
-                        )}
-                      </td>
-                    </tr>
-                  );
-                })
-              )}
-            </tbody>
-          </table>
-        </Section>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </Section>
 
-        <Section title="Reserves Due This Week" count={resWeek.length}>
-          <div className="max-h-[420px] overflow-y-auto scrollable">
-            {resWeek.length === 0 ? (
-              <div className="text-center py-10 text-muted text-[13px]">
-                No reserve deductions this week
-              </div>
-            ) : (
-              resWeek.map((r) => {
-                const perInst = r.amount / r.installments;
-                const nextDue = getReserveNextDueDate(r);
-                const isDueToday = nextDue && isToday(nextDue);
-                const isOverdue = isReserveOverdue(r);
-                return (
-                  <div
-                    key={r.id}
-                    role="button"
-                    tabIndex={0}
-                    onClick={() => onOpenCloseDeduction(r.id)}
-                    onKeyDown={(e) => e.key === 'Enter' && onOpenCloseDeduction(r.id)}
-                    className="flex items-center justify-between py-2.5 px-3.5 bg-surface rounded-[10px] text-[13px] hover:bg-white/[0.02] mb-2 last:mb-0 cursor-pointer"
-                  >
-                    <div className="flex items-center gap-2.5">
-                      <div>
-                        <div className="font-medium text-[13px]">
-                          {r.client}{' '}
-                          <span className="text-[10px] text-muted font-mono">
-                            {r.paidCount + 1}/{r.installments}
-                          </span>
-                        </div>
-                        {r.note && <div className="text-[11px] text-muted font-mono">{r.note}</div>}
+            <Section title="Reserves Due This Week" count={resWeek.length} noPadding>
+              {resWeek.length === 0 ? (
+                <div className="text-center py-6 text-muted text-[11px]">No reserve deductions this week</div>
+              ) : (
+                resWeek.map((r) => {
+                  const perInst = r.amount / r.installments;
+                  const nextDue = getReserveNextDueDate(r);
+                  const isDueToday = nextDue && isToday(nextDue);
+                  const isOverdue = isReserveOverdue(r);
+                  return (
+                    <div
+                      key={r.id}
+                      role="button"
+                      tabIndex={0}
+                      onClick={() => onOpenCloseDeduction(r.id)}
+                      onKeyDown={(e) => e.key === 'Enter' && onOpenCloseDeduction(r.id)}
+                      className="flex items-center gap-2 px-4 py-[9px] border-b border-border last:border-b-0 row-hover transition-colors cursor-pointer"
+                    >
+                      <div className="flex-1 min-w-0 overflow-hidden">
+                        <span className="text-[11px] font-medium text-ink">{r.client}</span>
+                        <span className="ml-1 text-[10px] text-muted">
+                          {r.paidCount + 1}/{r.installments}
+                        </span>
+                        {r.note && (
+                          <div className="text-[10px] text-muted truncate">{r.note}</div>
+                        )}
                       </div>
-                    </div>
-                    <div className="flex items-center gap-2.5">
-                      <span className="font-mono font-medium text-accent2">{fmt(perInst)}</span>
-                      <span
-                        className={`font-mono text-[11px] ${isDueToday ? 'text-yellow' : isOverdue ? 'text-red' : 'text-muted2'}`}
-                      >
+                      <span className="text-[11px] font-medium text-yellow flex-shrink-0">{fmt(perInst)}</span>
+                      <span className="text-[10px] text-muted flex-shrink-0">
                         {nextDue ? fmtDate(nextDue) : '—'}
                       </span>
                       {isDueToday ? (
-                        <Badge variant="due">Today</Badge>
+                        <Badge variant="ok">Today</Badge>
                       ) : isOverdue ? (
                         <Badge variant="overdue">Overdue</Badge>
                       ) : null}
                     </div>
-                  </div>
-                );
-              })
-            )}
-          </div>
-        </Section>
-      </div>
-
-      <div className="grid grid-cols-[1.3fr_1fr] gap-5 mb-7">
-        <Section title="Upcoming Loans">
-          <table className="w-full border-collapse">
-            <thead>
-              <tr>
-                <th className="text-[10px] text-muted uppercase tracking-widest py-0 pb-2.5 pr-3 text-left border-b border-border">
-                  Client
-                </th>
-                <th className="text-[10px] text-muted uppercase tracking-widest py-0 pb-2.5 pr-3 text-left border-b border-border">
-                  Provider
-                </th>
-                <th className="text-[10px] text-muted uppercase tracking-widest py-0 pb-2.5 pr-3 text-left border-b border-border">
-                  Next Date
-                </th>
-                <th className="text-[10px] text-muted uppercase tracking-widest py-0 pb-2.5 pr-3 text-left border-b border-border">
-                  Amount
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {upcoming.length === 0 ? (
-                <tr>
-                  <td colSpan={4} className="text-center py-10 text-muted text-[13px]">
-                    —
-                  </td>
-                </tr>
-              ) : (
-                upcoming.map((l) => (
-                  <tr
-                    key={l.id}
-                    className="hover:bg-white/[0.015] transition-colors"
-                  >
-                    <td className="py-2.5 pr-3 border-b border-border/40 align-middle">
-                      <div className="font-medium text-text">{l.client}</div>
-                      <div className="text-[11px] text-muted font-mono mt-0.5">
-                        {l.ref}
-                        <span className="ml-1.5 text-muted2">· {l.totalInstallments - l.paidCount} left</span>
-                      </div>
-                    </td>
-                    <td className="py-2.5 pr-3 border-b border-border/40 align-middle text-[12px]">
-                      <span>{getLoanProviderDisplay(l)}</span>
-                      {l.factoringFee != null && l.factoringFee > 0 && (
-                        <div className="text-[10px] text-muted2">Fee {fmt(l.factoringFee)}</div>
-                      )}
-                    </td>
-                    <td className="py-2.5 pr-3 border-b border-border/40 align-middle font-mono text-[11px] text-muted2">
-                      {l.nextDate ? fmtDate(l.nextDate) : '—'}
-                    </td>
-                    <td className="py-2.5 pr-3 border-b border-border/40 align-middle font-mono font-medium">
-                      {l.factoringFee != null && l.factoringFee > 0 ? (
-                        <>
-                          <div>{fmt(getLoanBasePerInstallment(l))}</div>
-                          <div className="text-[10px] text-muted2 font-normal">
-                            +{fmt(getLoanFeePerInstallment(l))} = {fmt(l.installment)}
-                          </div>
-                        </>
-                      ) : (
-                        fmt(l.installment)
-                      )}
-                    </td>
-                  </tr>
-                ))
+                  );
+                })
               )}
-            </tbody>
-          </table>
-        </Section>
+            </Section>
+          </div>
+        </div>
 
-        <Section title="Portfolio">
-          <div className="relative w-40 h-40 mx-auto">
-            <canvas ref={chartRef} />
-            <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-              <span className="text-[22px] font-semibold font-mono">{activeLoans.length}</span>
-              <span className="text-[10px] text-muted uppercase tracking-wider">clients</span>
+        {/* ── Right column (240px) ── */}
+        <div className="flex flex-col gap-3 pt-3">
+
+          {/* AAA Payment form */}
+          <Section title="Record AAA Payment" noPadding>
+            <div className="px-4 py-[14px]">
+              <AaaPaymentForm
+                compact
+                onSubmit={async (payload) => {
+                  await addAaaPayment(payload);
+                }}
+              />
             </div>
-          </div>
-          <div className="mt-4 flex flex-col gap-2">
-            {activeLoans.map((l, i) => (
-              <div key={l.id} className="flex items-center justify-between text-xs">
-                <div className="flex items-center gap-2">
-                  <div
-                    className="w-2.5 h-2.5 rounded-sm"
-                    style={{ background: CHART_COLORS[i % CHART_COLORS.length] }}
-                  />
-                  <span>{l.client}</span>
+          </Section>
+
+          {/* Portfolio — donut + legend */}
+          <Section title="Portfolio" count={`${activeLoans.length} clients`} noPadding>
+            <div className="flex flex-col items-center gap-3 px-4 py-[14px]">
+              <div className="relative w-[72px] h-[72px] flex-shrink-0">
+                <canvas ref={chartRef} width={72} height={72} />
+                <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+                  <span className="text-[16px] font-medium text-ink leading-none">{activeLoans.length}</span>
+                  <span className="text-[9px] text-muted uppercase tracking-[0.05em]">clients</span>
                 </div>
-                <span className="font-mono text-[11px] text-muted2">{fmt(getLoanRemaining(l))}</span>
               </div>
-            ))}
-          </div>
-        </Section>
+              <div className="w-full flex flex-col gap-y-[3px] min-w-0">
+                {activeLoans.map((l, i) => (
+                  <div key={l.id} className="flex items-center gap-[5px] min-w-0">
+                    <div
+                      className="w-[6px] h-[6px] rounded-full flex-shrink-0"
+                      style={{ background: CHART_COLORS[i % CHART_COLORS.length] }}
+                    />
+                    <span className="flex-1 text-[10px] text-muted truncate">{l.client}</span>
+                    <span className="text-[10px] font-medium text-ink flex-shrink-0">
+                      ${Math.round(getLoanRemaining(l) / 1000)}k
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </Section>
+        </div>
       </div>
     </>
   );

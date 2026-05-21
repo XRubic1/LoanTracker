@@ -16,10 +16,10 @@ export function Modal({ open, onClose, title, children }: ModalProps) {
       aria-labelledby="modal-title"
     >
       <div
-        className="bg-card border border-border rounded-[20px] p-7 w-[480px] max-w-[95vw]"
+        className="panel-surface rounded-xl p-5 w-[440px] max-w-[95vw]"
         onClick={(e) => e.stopPropagation()}
       >
-        <h3 id="modal-title" className="text-base font-semibold mb-5">
+        <h3 id="modal-title" className="text-sm font-semibold mb-3 tracking-tight">
           {title}
         </h3>
         {children}

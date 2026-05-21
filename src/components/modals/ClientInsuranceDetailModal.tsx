@@ -51,15 +51,15 @@ export function ClientInsuranceDetailModal({
   return (
     <Modal open={open} onClose={onClose} title={`${clientInsurance.client} — MC ${clientInsurance.mc}`}>
       <div className="space-y-4">
-        <div className="flex justify-between items-center py-2.5 border-b border-border text-[13px]">
+        <div className="flex justify-between items-center py-1.5 border-b border-border text-[13px]">
           <span className="text-muted2">Client</span>
           <span className="font-medium">{clientInsurance.client}</span>
         </div>
-        <div className="flex justify-between items-center py-2.5 border-b border-border text-[13px]">
+        <div className="flex justify-between items-center py-1.5 border-b border-border text-[13px]">
           <span className="text-muted2">MC</span>
           <span className="font-mono">{clientInsurance.mc}</span>
         </div>
-        <div className="flex justify-between items-center py-2.5 border-b border-border text-[13px]">
+        <div className="flex justify-between items-center py-1.5 border-b border-border text-[13px]">
           <span className="text-muted2">Status</span>
           <span
             className={`font-medium ${
@@ -70,7 +70,7 @@ export function ClientInsuranceDetailModal({
           </span>
         </div>
         {clientInsurance.expiration_date && (
-          <div className="flex justify-between items-center py-2.5 border-b border-border text-[13px]">
+          <div className="flex justify-between items-center py-1.5 border-b border-border text-[13px]">
             <span className="text-muted2">Cancellation</span>
             <span className="font-mono">
               {new Date(clientInsurance.expiration_date).toLocaleDateString('en-US', {
@@ -82,7 +82,7 @@ export function ClientInsuranceDetailModal({
           </div>
         )}
         {clientInsurance.last_cancellation_date && (
-          <div className="flex justify-between items-center py-2.5 border-b border-border text-[13px]">
+          <div className="flex justify-between items-center py-1.5 border-b border-border text-[13px]">
             <span className="text-muted2">Last cancellation (audit)</span>
             <span className="font-mono text-muted2">
               {new Date(clientInsurance.last_cancellation_date).toLocaleDateString('en-US', {
@@ -150,7 +150,7 @@ export function ClientInsuranceDetailModal({
                 key={entry.id}
                 className="flex justify-between items-center py-2 border-b border-border/40 text-[13px]"
               >
-                <span className="font-mono text-text">
+                <span className="font-mono text-ink">
                   {new Date(entry.cancellation_date).toLocaleDateString('en-US', {
                     month: 'short',
                     day: 'numeric',

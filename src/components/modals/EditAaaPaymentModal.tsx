@@ -49,8 +49,8 @@ export function EditAaaPaymentModal({ payment, open, onClose, onSave }: EditAaaP
     }
   };
 
-  const inputClass =
-    'w-full bg-surface border border-border text-text py-2 px-3 rounded-lg font-sans text-[13px] outline-none focus:border-accent';
+  const inputClass = 'form-input w-full font-sans text-xs py-1.5 px-2.5';
+  const selectClass = 'select-field w-full font-sans text-xs py-1.5 px-2.5';
 
   if (!payment) return null;
 
@@ -73,7 +73,7 @@ export function EditAaaPaymentModal({ payment, open, onClose, onSave }: EditAaaP
         <select
           value={payee}
           onChange={(e) => setPayee(e.target.value as AaaPayee)}
-          className={inputClass}
+          className={selectClass}
         >
           {AAA_PAYEES.map((p) => (
             <option key={p} value={p}>

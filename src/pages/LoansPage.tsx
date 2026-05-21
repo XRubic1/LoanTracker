@@ -43,14 +43,14 @@ export function LoansPage({
 
   return (
     <>
-      <div className="flex flex-col gap-3 mb-7 sm:flex-row sm:items-center sm:justify-between">
-        <h1 className="text-[22px] font-semibold">Loans</h1>
+      <div className="flex flex-col gap-2 mb-4 sm:flex-row sm:items-center sm:justify-between">
+        <h1 className="page-title">Loans</h1>
         <div className="relative flex flex-wrap gap-2 justify-start sm:justify-end">
           <div className="relative">
             <button
               type="button"
               onClick={() => setPrintMenuOpen((v) => !v)}
-              className="inline-flex items-center gap-1.5 py-1.5 px-3.5 rounded-lg border border-border text-xs font-medium text-muted2 bg-transparent transition-all hover:border-accent hover:text-accent hover:bg-accent/5"
+              className="dropdown-trigger"
             >
               <svg
                 className="w-3.5 h-3.5"
@@ -87,19 +87,17 @@ export function LoansPage({
               </svg>
             </button>
             {printMenuOpen && (
-              <div className="absolute right-0 z-20 mt-1 w-56 rounded-lg border border-border bg-card shadow-lg shadow-black/20 animate-in fade-in slide-in-from-top-1">
+              <div className="dropdown-menu w-56">
                 <button
                   type="button"
                   onClick={() => {
                     setPrintMenuOpen(false);
                     printOpenLoansSummary(loans);
                   }}
-                  className="block w-full px-3 py-2 text-left text-[12px] hover:bg-white/5"
+                  className="dropdown-item"
                 >
-                  <div className="font-medium text-text">Short report (one sheet)</div>
-                  <div className="text-[11px] text-muted">
-                    Compact table of all open loans
-                  </div>
+                  <div className="dropdown-item-title">Short report (one sheet)</div>
+                  <div className="dropdown-item-desc">Compact table of all open loans</div>
                 </button>
                 <button
                   type="button"
@@ -107,12 +105,10 @@ export function LoansPage({
                     setPrintMenuOpen(false);
                     printOpenLoans(loans);
                   }}
-                  className="block w-full px-3 py-2 text-left text-[12px] hover:bg-white/5 border-t border-border/60"
+                  className="dropdown-item"
                 >
-                  <div className="font-medium text-text">Full detailed report</div>
-                  <div className="text-[11px] text-muted">
-                    Per-loan summary and full schedules
-                  </div>
+                  <div className="dropdown-item-title">Full detailed report</div>
+                  <div className="dropdown-item-desc">Per-loan summary and full schedules</div>
                 </button>
               </div>
             )}
@@ -120,23 +116,21 @@ export function LoansPage({
           <button
             type="button"
             onClick={onAddLoan}
-            className="inline-flex items-center gap-1.5 py-1.5 px-3.5 rounded-lg border-0 bg-accent text-white text-xs font-medium transition-colors hover:bg-[#3a7de8]"
+            className="inline-flex items-center gap-1.5 py-1.5 px-3.5 rounded-lg border-0 bg-accent text-white text-xs font-medium transition-colors hover:opacity-90"
           >
             + Add Loan
           </button>
         </div>
       </div>
 
-      <div className="flex items-center justify-between mb-5 gap-4">
-        <div className="flex gap-1 bg-surface p-1 rounded-[10px] w-fit">
+      <div className="flex items-center justify-between mb-3 gap-3">
+        <div className="filter-group">
           {(['all', 'due', 'active', 'hidden'] as const).map((f) => (
             <button
               key={f}
               type="button"
               onClick={() => setFilter(f)}
-              className={`py-1.5 px-4 rounded-md text-[13px] font-medium transition-colors ${
-                filter === f ? 'bg-card text-text' : 'text-muted2'
-              }`}
+              className={`filter-btn ${filter === f ? 'filter-btn-active' : ''}`}
             >
               {f === 'all'
                 ? 'All'
@@ -151,19 +145,9 @@ export function LoansPage({
         <button
           type="button"
           onClick={() => setHideClosed((v) => !v)}
-          className={`inline-flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-md border transition-colors ${
-            hideClosed
-              ? 'border-accent bg-accent/10 text-accent'
-              : 'border-border bg-surface text-muted2 hover:text-text'
-          }`}
+          className={`toggle-chip ${hideClosed ? 'toggle-chip-active' : ''}`}
         >
-          <span
-            className={`w-[14px] h-[14px] rounded-[4px] border flex items-center justify-center text-[10px] ${
-              hideClosed ? 'bg-accent border-accent text-white' : 'border-border'
-            }`}
-          >
-            {hideClosed ? '✓' : ''}
-          </span>
+          <span className="toggle-chip-box">{hideClosed ? '✓' : ''}</span>
           <span>Hide closed loans</span>
         </button>
       </div>
@@ -172,31 +156,31 @@ export function LoansPage({
         <table className="w-full border-collapse">
           <thead>
             <tr>
-              <th className="text-[10px] text-muted uppercase tracking-widest py-0 pb-2.5 pr-3 text-left border-b border-border whitespace-nowrap">
+              <th className="text-[10px] text-muted uppercase tracking-widest py-0 pb-1.5 pr-2 text-left border-b border-border whitespace-nowrap">
                 Client
               </th>
-              <th className="text-[10px] text-muted uppercase tracking-widest py-0 pb-2.5 pr-3 text-left border-b border-border">
+              <th className="text-[10px] text-muted uppercase tracking-widest py-0 pb-1.5 pr-2 text-left border-b border-border">
                 Provider
               </th>
-              <th className="text-[10px] text-muted uppercase tracking-widest py-0 pb-2.5 pr-3 text-left border-b border-border">
+              <th className="text-[10px] text-muted uppercase tracking-widest py-0 pb-1.5 pr-2 text-left border-b border-border">
                 Total
               </th>
-              <th className="text-[10px] text-muted uppercase tracking-widest py-0 pb-2.5 pr-3 text-left border-b border-border">
+              <th className="text-[10px] text-muted uppercase tracking-widest py-0 pb-1.5 pr-2 text-left border-b border-border">
                 Installment
               </th>
-              <th className="text-[10px] text-muted uppercase tracking-widest py-0 pb-2.5 pr-3 text-left border-b border-border min-w-[110px]">
+              <th className="text-[10px] text-muted uppercase tracking-widest py-0 pb-1.5 pr-2 text-left border-b border-border min-w-[110px]">
                 Progress
               </th>
-              <th className="text-[10px] text-muted uppercase tracking-widest py-0 pb-2.5 pr-3 text-left border-b border-border">
+              <th className="text-[10px] text-muted uppercase tracking-widest py-0 pb-1.5 pr-2 text-left border-b border-border">
                 Remaining
               </th>
-              <th className="text-[10px] text-muted uppercase tracking-widest py-0 pb-2.5 pr-3 text-left border-b border-border">
+              <th className="text-[10px] text-muted uppercase tracking-widest py-0 pb-1.5 pr-2 text-left border-b border-border">
                 Next Due
               </th>
-              <th className="text-[10px] text-muted uppercase tracking-widest py-0 pb-2.5 pr-3 text-left border-b border-border">
+              <th className="text-[10px] text-muted uppercase tracking-widest py-0 pb-1.5 pr-2 text-left border-b border-border">
                 Status
               </th>
-              <th className="text-[10px] text-muted uppercase tracking-widest py-0 pb-2.5 pr-3 text-left border-b border-border">
+              <th className="text-[10px] text-muted uppercase tracking-widest py-0 pb-1.5 pr-2 text-left border-b border-border">
                 Actions
               </th>
             </tr>
@@ -204,7 +188,7 @@ export function LoansPage({
           <tbody>
             {list.length === 0 ? (
               <tr>
-                <td colSpan={9} className="text-center py-10 text-muted text-[13px]">
+                <td colSpan={9} className="text-center py-6 text-muted text-[13px]">
                   No loans found
                 </td>
               </tr>
@@ -231,9 +215,9 @@ export function LoansPage({
                   navigator.clipboard.writeText(text).then(() => {}, () => {});
                 };
                 return (
-                  <tr key={l.id} className="hover:bg-white/[0.015] transition-colors">
-                    <td className="py-2.5 pr-3 border-b border-border/40 align-middle">
-                      <div className="font-medium text-text">{l.client}</div>
+                  <tr key={l.id} className="row-hover transition-colors">
+                    <td className="py-1.5 pr-2 border-b border-border/40 align-middle">
+                      <div className="font-medium text-ink">{l.client}</div>
                       <div className="text-[11px] text-muted font-mono mt-0.5 flex items-center gap-1.5">
                         {l.ref}
                         <button
@@ -249,24 +233,30 @@ export function LoansPage({
                         </button>
                       </div>
                     </td>
-                    <td className="py-2.5 pr-3 border-b border-border/40 align-middle">
+                    <td className="py-1.5 pr-2 border-b border-border/40 align-middle">
                       <div className="text-[13px]">{getLoanProviderDisplay(l)}</div>
                       {l.factoringFee != null && l.factoringFee > 0 && (
                         <div className="text-[10px] text-muted2">Fee {fmt(l.factoringFee)}</div>
                       )}
                     </td>
-                    <td className="py-2.5 pr-3 border-b border-border/40 align-middle font-mono font-medium">
+                    <td className="py-1.5 pr-2 border-b border-border/40 align-middle font-mono font-medium">
                       {fmt(l.total)}
                     </td>
-                    <td className="py-2.5 pr-3 border-b border-border/40 align-middle font-mono font-medium">
+                    <td className="py-1.5 pr-2 border-b border-border/40 align-middle font-mono font-medium">
                       {fmt(l.installment)}
                     </td>
-                    <td className="py-2.5 pr-3 border-b border-border/40 align-middle min-w-[110px]">
+                    <td className="py-1.5 pr-2 border-b border-border/40 align-middle min-w-[110px]">
                       <div className="flex items-center gap-2">
-                        <div className="flex-1 h-1 bg-border rounded overflow-hidden">
+                        <div className="progress-track">
                           <div
-                            className={`h-full rounded transition-[width] ${
-                              isClosed ? 'bg-green' : pastDue ? 'bg-red' : isDue ? 'bg-yellow' : 'bg-accent'
+                            className={`progress-fill ${
+                              isClosed
+                                ? 'progress-fill--closed'
+                                : pastDue
+                                  ? 'progress-fill--overdue'
+                                  : isDue
+                                    ? 'progress-fill--due'
+                                    : 'progress-fill--default'
                             }`}
                             style={{ width: `${pct}%` }}
                           />
@@ -276,16 +266,16 @@ export function LoansPage({
                         </span>
                       </div>
                     </td>
-                    <td className="py-2.5 pr-3 border-b border-border/40 align-middle">
+                    <td className="py-1.5 pr-2 border-b border-border/40 align-middle">
                       <span className={`font-mono font-medium ${isClosed ? 'text-green' : ''}`}>
                         {fmt(rem)}
                       </span>
                     </td>
-                    <td className="py-2.5 pr-3 border-b border-border/40 align-middle font-mono text-xs text-muted2">
+                    <td className="py-1.5 pr-2 border-b border-border/40 align-middle font-mono text-xs text-muted2">
                       {nd ? fmtDate(nd) : '—'}
                     </td>
-                    <td className="py-2.5 pr-3 border-b border-border/40 align-middle">{status}</td>
-                    <td className="py-2.5 pr-3 border-b border-border/40 align-middle">
+                    <td className="py-1.5 pr-2 border-b border-border/40 align-middle">{status}</td>
+                    <td className="py-1.5 pr-2 border-b border-border/40 align-middle">
                       <button
                         type="button"
                         onClick={() => onOpenDetail(l.id)}

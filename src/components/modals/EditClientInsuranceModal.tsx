@@ -78,11 +78,11 @@ export function EditClientInsuranceModal({
   return (
     <Modal open={open} onClose={handleClose} title={`Edit — ${clientInsurance.client}`}>
       <div className="space-y-4">
-        <div className="flex justify-between items-center py-2.5 border-b border-border text-[13px]">
+        <div className="flex justify-between items-center py-1.5 border-b border-border text-[13px]">
           <span className="text-muted2">Client</span>
           <span className="font-medium">{clientInsurance.client}</span>
         </div>
-        <div className="flex justify-between items-center py-2.5 border-b border-border text-[13px]">
+        <div className="flex justify-between items-center py-1.5 border-b border-border text-[13px]">
           <span className="text-muted2">MC</span>
           <span className="font-mono">{clientInsurance.mc}</span>
         </div>
@@ -92,7 +92,7 @@ export function EditClientInsuranceModal({
           <select
             value={option}
             onChange={(e) => setOption(e.target.value as StatusOption)}
-            className="w-full bg-surface border border-border rounded-lg py-2 px-3 text-[13px] text-text outline-none focus:border-accent"
+            className="w-full bg-surface border border-border rounded-lg py-2 px-3 text-[13px] text-ink outline-none focus:border-accent"
           >
             <option value="OK">OK</option>
             <option value="Inactive">Inactive</option>
@@ -109,7 +109,7 @@ export function EditClientInsuranceModal({
             type="date"
             value={cancellationDate}
             onChange={(e) => setCancellationDate(e.target.value)}
-            className="w-full bg-surface border border-border rounded-lg py-2 px-3 text-[13px] text-text outline-none focus:border-accent"
+            className="w-full bg-surface border border-border rounded-lg py-2 px-3 text-[13px] text-ink outline-none focus:border-accent"
           />
         </div>
 
@@ -125,7 +125,7 @@ export function EditClientInsuranceModal({
             type="button"
             onClick={handleSubmit}
             disabled={submitting}
-            className="py-1.5 px-3.5 rounded-lg border-0 bg-accent text-white text-xs font-medium hover:bg-[#3a7de8] disabled:opacity-50"
+            className="py-1.5 px-3.5 rounded-lg border-0 bg-accent text-white text-xs font-medium hover:opacity-90 disabled:opacity-50"
           >
             {submitting ? 'Saving…' : 'Save'}
           </button>

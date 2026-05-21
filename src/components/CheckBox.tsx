@@ -6,12 +6,12 @@ interface CheckBoxProps {
 
 export function CheckBox({ checked, onToggle, disabled }: CheckBoxProps) {
   return (
-    <div className="flex items-center justify-center w-8">
+    <div className="flex items-center justify-center w-7">
       <button
         type="button"
         onClick={onToggle}
         disabled={disabled}
-        className={`w-[22px] h-[22px] rounded-md border flex items-center justify-center flex-shrink-0 transition-all cursor-pointer
+        className={`w-[18px] h-[18px] rounded border flex items-center justify-center flex-shrink-0 transition-all cursor-pointer
           ${checked ? 'bg-green border-green' : 'bg-surface border-border hover:border-green hover:bg-green/5'}
           ${disabled ? 'opacity-50 cursor-not-allowed' : ''}`}
       >

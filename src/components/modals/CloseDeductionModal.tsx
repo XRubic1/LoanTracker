@@ -65,7 +65,7 @@ export function CloseDeductionModal({
           onChange={(e) => setNote(e.target.value)}
           placeholder="Add a note (optional)…"
           rows={3}
-          className="w-full bg-surface border border-border rounded-lg py-2 px-3 text-[13px] text-text placeholder:text-muted outline-none focus:border-accent resize-none"
+          className="w-full bg-surface border border-border rounded-lg py-2 px-3 text-[13px] text-ink placeholder:text-muted outline-none focus:border-accent resize-none"
         />
         <div className="flex flex-wrap gap-2 justify-end pt-2">
           <button
@@ -79,7 +79,7 @@ export function CloseDeductionModal({
             type="button"
             onClick={handleCloseDeduction}
             disabled={isFullyDeducted}
-            className="py-1.5 px-3.5 rounded-lg border-0 bg-accent text-white text-xs font-medium hover:bg-[#3a7de8] disabled:opacity-50 disabled:cursor-not-allowed"
+            className="py-1.5 px-3.5 rounded-lg border-0 bg-accent text-white text-xs font-medium hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             Close deduction
           </button>

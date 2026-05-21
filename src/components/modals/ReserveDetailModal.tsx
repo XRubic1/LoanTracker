@@ -127,28 +127,28 @@ export function ReserveDetailModal({
     <>
       <Modal open={open} onClose={onClose} title={`${reserve.client} — Reserve`}>
         <div className="space-y-4">
-          <div className="flex justify-between items-center py-2.5 border-b border-border text-[13px]">
+          <div className="flex justify-between items-center py-1.5 border-b border-border text-[13px]">
             <span className="text-muted2">Total Amount</span>
             <span className="font-mono font-medium">{fmt(reserve.amount)}</span>
           </div>
-          <div className="flex justify-between items-center py-2.5 border-b border-border text-[13px]">
+          <div className="flex justify-between items-center py-1.5 border-b border-border text-[13px]">
             <span className="text-muted2">Per Deduction</span>
             <span className="font-mono font-medium">{fmt(perInst)}</span>
           </div>
-          <div className="flex justify-between items-center py-2.5 border-b border-border text-[13px]">
+          <div className="flex justify-between items-center py-1.5 border-b border-border text-[13px]">
             <span className="text-muted2">Installments</span>
             <span className="font-mono font-medium">{reserve.installments}</span>
           </div>
-          <div className="flex justify-between items-center py-2.5 border-b border-border text-[13px]">
+          <div className="flex justify-between items-center py-1.5 border-b border-border text-[13px]">
             <span className="text-muted2">Deducted</span>
             <span className="font-mono font-medium text-green">{reserve.paidCount}</span>
           </div>
-          <div className="flex justify-between items-center py-2.5 border-b border-border text-[13px]">
+          <div className="flex justify-between items-center py-1.5 border-b border-border text-[13px]">
             <span className="text-muted2">Start Date</span>
             <span className="font-mono font-medium">{fmtDate(reserve.date)}</span>
           </div>
           {reserve.note && (
-            <div className="flex justify-between items-center py-2.5 border-b border-border text-[13px]">
+            <div className="flex justify-between items-center py-1.5 border-b border-border text-[13px]">
               <span className="text-muted2">Note</span>
               <span className="text-xs text-yellow">{reserve.note}</span>
             </div>
@@ -173,7 +173,7 @@ export function ReserveDetailModal({
                   tabIndex={0}
                   onClick={() => openDeductionPopup(i)}
                   onKeyDown={(e) => e.key === 'Enter' && openDeductionPopup(i)}
-                  className={`flex items-center justify-between gap-2 py-2.5 px-3.5 rounded-[10px] bg-surface text-[13px] cursor-pointer hover:bg-white/[0.04] transition-colors ${paid ? 'opacity-90' : ''}`}
+                  className={`flex items-center justify-between gap-2 py-1.5 px-2.5 rounded-[10px] bg-surface text-[13px] cursor-pointer hover:bg-border/60 transition-colors ${paid ? 'opacity-90' : ''}`}
                 >
                   <div className="flex items-center gap-2 min-w-0">
                     <span className="text-muted2 text-[11px] shrink-0">
@@ -243,7 +243,7 @@ export function ReserveDetailModal({
               type="button"
               onClick={onMarkDeducted}
               disabled={isClosed}
-              className="py-1.5 px-3.5 rounded-lg border-0 bg-accent text-white text-xs font-medium hover:bg-[#3a7de8] disabled:opacity-50 disabled:cursor-not-allowed"
+              className="py-1.5 px-3.5 rounded-lg border-0 bg-accent text-white text-xs font-medium hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {isClosed ? 'Fully Deducted' : '✓ Mark Deducted'}
             </button>
@@ -261,7 +261,7 @@ export function ReserveDetailModal({
           aria-labelledby="deduction-modal-title"
         >
           <div
-            className="bg-card border border-border rounded-[20px] p-6 w-[400px] max-w-[95vw]"
+            className="bg-panel border border-border rounded-[20px] p-6 w-[400px] max-w-[95vw]"
             onClick={(e) => e.stopPropagation()}
           >
             <h3 id="deduction-modal-title" className="text-base font-semibold mb-1">
@@ -290,7 +290,7 @@ export function ReserveDetailModal({
               onChange={(e) => setPopupNote(e.target.value)}
               placeholder="Add a note (optional)…"
               rows={3}
-              className="w-full bg-surface border border-border rounded-lg py-2 px-3 text-[13px] text-text placeholder:text-muted outline-none focus:border-accent resize-none"
+              className="w-full bg-surface border border-border rounded-lg py-2 px-3 text-[13px] text-ink placeholder:text-muted outline-none focus:border-accent resize-none"
             />
             <div className="flex flex-wrap gap-2 justify-end mt-4">
               <button
@@ -304,7 +304,7 @@ export function ReserveDetailModal({
                 <button
                   type="button"
                   onClick={handleCloseDeduction}
-                  className="py-1.5 px-3.5 rounded-lg border-0 bg-accent text-white text-xs font-medium hover:bg-[#3a7de8]"
+                  className="py-1.5 px-3.5 rounded-lg border-0 bg-accent text-white text-xs font-medium hover:opacity-90"
                 >
                   Close deduction
                 </button>

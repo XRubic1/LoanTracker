@@ -65,7 +65,7 @@ export function PasswordConfirmModal({
               setPassword(e.target.value);
               setError('');
             }}
-            className="w-full px-3 py-2 rounded-lg bg-surface border border-border text-[13px] text-text focus:outline-none focus:ring-2 focus:ring-accent"
+            className="w-full px-3 py-2 rounded-lg bg-surface border border-border text-[13px] text-ink focus:outline-none focus:ring-2 focus:ring-accent"
             placeholder="Enter password"
             autoComplete="current-password"
           />
@@ -75,13 +75,13 @@ export function PasswordConfirmModal({
           <button
             type="button"
             onClick={onClose}
-            className="py-2 px-4 rounded-lg border border-border text-[13px] font-medium text-muted2 hover:bg-white/5 transition-colors"
+            className="py-2 px-4 rounded-lg border border-border text-[13px] font-medium text-muted2 row-hover transition-colors"
           >
             Cancel
           </button>
           <button
             type="submit"
-            className="py-2 px-4 rounded-lg bg-accent text-white text-[13px] font-medium hover:bg-[#3a7de8] transition-colors"
+            className="py-2 px-4 rounded-lg bg-accent text-white text-[13px] font-medium hover:opacity-90 transition-colors"
           >
             Confirm
           </button>

@@ -1,6 +1,8 @@
 import { useState, useCallback, useRef } from 'react';
 import type { PageId } from '@/types';
 import { Sidebar } from '@/components/Sidebar';
+import { AppNotifications } from '@/components/AppNotifications';
+import { getWeekRange } from '@/lib/utils';
 import { OverviewPage } from '@/pages/OverviewPage';
 import { LoansPage } from '@/pages/LoansPage';
 import { ReservesPage } from '@/pages/ReservesPage';
@@ -281,7 +283,7 @@ export default function App() {
   // Wait for auth to be resolved before showing login or dashboard (avoids 401s and stuck state)
   if (authLoading) {
     return (
-      <div className="min-h-screen w-full flex items-center justify-center bg-bg text-muted2">
+      <div className="min-h-screen w-full flex items-center justify-center bg-page text-muted2">
         <div className="text-center">
           <div className="w-8 h-8 border-2 border-accent/30 border-t-accent rounded-full animate-spin mx-auto mb-3" />
           <p className="text-sm">Loading…</p>
@@ -297,7 +299,7 @@ export default function App() {
   // Don't render dashboard until we have effectiveOwnerId (set after claimInvite / resolveEffectiveOwner)
   if (effectiveOwnerId == null) {
     return (
-      <div className="min-h-screen w-full flex items-center justify-center bg-bg text-muted2">
+      <div className="min-h-screen w-full flex items-center justify-center bg-page text-muted2">
         <div className="text-center">
           <div className="w-8 h-8 border-2 border-accent/30 border-t-accent rounded-full animate-spin mx-auto mb-3" />
           <p className="text-sm">Loading…</p>
@@ -308,10 +310,11 @@ export default function App() {
 
   return (
     <>
-      <Sidebar page={page} onPage={setPage} onSignOut={signOut} />
-      <main className="flex-1 overflow-y-auto py-7 px-8">
+      <Sidebar page={page} onPage={setPage} onSignOut={signOut} weekRange={getWeekRange()} />
+      <AppNotifications loans={loans} clientInsurance={clientInsurance} />
+      <main className="main flex-1 min-h-0 overflow-y-auto py-4 px-6">
         {configMissing && (
-          <div className="mb-5 py-3 px-5 rounded-xl text-[13px] flex items-center justify-between gap-3 bg-yellow/10 border border-yellow/30 text-yellow">
+          <div className="mb-3 py-2 px-3 rounded-lg text-xs flex items-center justify-between gap-2 bg-alert-warn border border-yellow/40 text-alert-warn-fg">
             <span>
               Configure Supabase: set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY in .env (see
               .env.example).
@@ -319,7 +322,7 @@ export default function App() {
           </div>
         )}
         {error && (
-          <div className="mb-5 py-3 px-5 rounded-xl text-[13px] flex items-center justify-between gap-3 bg-red/15 border border-red/30 text-red">
+          <div className="mb-3 py-2 px-3 rounded-lg text-xs flex items-center justify-between gap-2 bg-tag-overdue border border-red/30 text-tag-overdue-fg">
             <span>Failed to load data: {error}</span>
             <button
               type="button"
@@ -331,7 +334,7 @@ export default function App() {
           </div>
         )}
         {loading && !configMissing && (
-          <div className="mb-5 py-3 px-5 rounded-xl text-[13px] bg-accent/10 border border-accent/25 text-accent">
+          <div className="mb-3 py-2 px-3 rounded-lg text-xs bg-alert-info border border-accent/25 text-alert-info-fg">
             Loading…
           </div>
         )}

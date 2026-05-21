@@ -81,12 +81,12 @@ export function ClientInsurancePage({
   return (
     <>
       {/* Last verified: date + name; button to record verification */}
-      <div className="mb-4 rounded-xl border border-border bg-card/50 px-4 py-3 flex flex-wrap items-center justify-between gap-3">
+      <div className="mb-4 rounded-xl border border-border bg-panel px-4 py-3 flex flex-wrap items-center justify-between gap-3">
         <div className="text-[13px] text-muted2">
           {insuranceVerification?.last_checked_date && insuranceVerification?.checked_by ? (
             <>
               Last verified:{' '}
-              <span className="text-text font-medium">
+              <span className="text-ink font-medium">
                 {new Date(insuranceVerification.last_checked_date).toLocaleDateString('en-US', {
                   month: 'short',
                   day: 'numeric',
@@ -94,7 +94,7 @@ export function ClientInsurancePage({
                 })}
               </span>
               {' by '}
-              <span className="text-text font-medium">{insuranceVerification.checked_by}</span>
+              <span className="text-ink font-medium">{insuranceVerification.checked_by}</span>
             </>
           ) : (
             <span className="text-muted">Not verified yet. Record a verification after reviewing client insurance.</span>
@@ -112,8 +112,8 @@ export function ClientInsurancePage({
         </button>
       </div>
 
-      <div className="flex flex-col gap-3 mb-7 sm:flex-row sm:items-center sm:justify-between">
-        <h1 className="text-[22px] font-semibold">Client Insurance</h1>
+      <div className="flex flex-col gap-2 mb-4 sm:flex-row sm:items-center sm:justify-between">
+        <h1 className="page-title">Client Insurance</h1>
         <div className="flex flex-wrap gap-2 justify-start sm:justify-end items-center">
           <button
             type="button"
@@ -121,7 +121,7 @@ export function ClientInsurancePage({
             className={`inline-flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-md border transition-colors ${
               hideInactive
                 ? 'border-accent bg-accent/10 text-accent'
-                : 'border-border bg-surface text-muted2 hover:text-text'
+                : 'border-border bg-surface text-muted2 hover:text-ink'
             }`}
           >
             <span
@@ -146,27 +146,27 @@ export function ClientInsurancePage({
           <button
             type="button"
             onClick={onAddClient}
-            className="inline-flex items-center gap-1.5 py-1.5 px-3.5 rounded-lg border-0 bg-accent text-white text-xs font-medium transition-colors hover:bg-[#3a7de8]"
+            className="inline-flex items-center gap-1.5 py-1.5 px-3.5 rounded-lg border-0 bg-accent text-white text-xs font-medium transition-colors hover:opacity-90"
           >
             + Add client
           </button>
         </div>
       </div>
 
-      <div className="mb-5 grid grid-cols-1 gap-2 sm:grid-cols-[minmax(0,1fr)_220px]">
+      <div className="mb-3 grid grid-cols-1 gap-2 sm:grid-cols-[minmax(0,1fr)_220px]">
         <div className="relative">
           <input
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             placeholder="Search by client, MC, or status"
-            className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-[13px] text-text placeholder:text-muted2"
+            className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-[13px] text-ink placeholder:text-muted2"
           />
         </div>
         <select
           value={statusFilter}
           onChange={(e) => setStatusFilter(e.target.value)}
-          className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-[13px] text-text"
+          className="select-field w-full text-[13px] py-2 px-3"
           aria-label="Filter by status"
         >
           <option value="all">All statuses</option>
@@ -181,22 +181,22 @@ export function ClientInsurancePage({
         <table className="w-full border-collapse">
           <thead>
             <tr>
-              <th className="text-[10px] text-muted uppercase tracking-widest py-0 pb-2.5 pr-3 text-left border-b border-border">
+              <th className="text-[10px] text-muted uppercase tracking-widest py-0 pb-1.5 pr-2 text-left border-b border-border">
                 Client
               </th>
-              <th className="text-[10px] text-muted uppercase tracking-widest py-0 pb-2.5 pr-3 text-left border-b border-border">
+              <th className="text-[10px] text-muted uppercase tracking-widest py-0 pb-1.5 pr-2 text-left border-b border-border">
                 MC
               </th>
-              <th className="text-[10px] text-muted uppercase tracking-widest py-0 pb-2.5 pr-3 text-left border-b border-border">
+              <th className="text-[10px] text-muted uppercase tracking-widest py-0 pb-1.5 pr-2 text-left border-b border-border">
                 Status
               </th>
-              <th className="text-[10px] text-muted uppercase tracking-widest py-0 pb-2.5 pr-3 text-left border-b border-border w-16" />
+              <th className="text-[10px] text-muted uppercase tracking-widest py-0 pb-1.5 pr-2 text-left border-b border-border w-16" />
             </tr>
           </thead>
           <tbody>
             {list.length === 0 ? (
               <tr>
-                <td colSpan={4} className="text-center py-10 text-muted text-[13px]">
+                <td colSpan={4} className="text-center py-6 text-muted text-[13px]">
                   {clientInsurance.length === 0
                     ? 'No clients yet. Add a client or run the seed SQL to load initial data.'
                     : 'No clients to show. Turn off "Hide OUT clients" to see OUT clients.'}
@@ -220,18 +220,18 @@ export function ClientInsurancePage({
                   setStatusFilter((prev) => (prev === statusFilterValue ? 'all' : statusFilterValue));
                 };
                 return (
-                  <tr key={c.id} className="hover:bg-white/[0.015] transition-colors">
-                    <td className="py-2.5 pr-3 border-b border-border/40 align-middle">
+                  <tr key={c.id} className="row-hover transition-colors">
+                    <td className="py-1.5 pr-2 border-b border-border/40 align-middle">
                       <button
                         type="button"
                         onClick={applyClientFilter}
-                        className="font-medium text-text hover:text-accent transition-colors"
+                        className="font-medium text-ink hover:text-accent transition-colors"
                         title="Filter by this client"
                       >
                         {c.client}
                       </button>
                     </td>
-                    <td className="py-2.5 pr-3 border-b border-border/40 align-middle">
+                    <td className="py-1.5 pr-2 border-b border-border/40 align-middle">
                       <div className="flex items-center gap-1.5 font-mono text-[13px]">
                         <button
                           type="button"
@@ -247,7 +247,7 @@ export function ClientInsurancePage({
                         {c.mc}
                       </div>
                     </td>
-                    <td className="py-2.5 pr-3 border-b border-border/40 align-middle">
+                    <td className="py-1.5 pr-2 border-b border-border/40 align-middle">
                       <button
                         type="button"
                         onClick={applyStatusFilter}
@@ -265,7 +265,7 @@ export function ClientInsurancePage({
                         {statusLabel}
                       </button>
                     </td>
-                    <td className="py-2.5 pr-3 border-b border-border/40 align-middle">
+                    <td className="py-1.5 pr-2 border-b border-border/40 align-middle">
                       <button
                         type="button"
                         onClick={() => onViewClient(c.id)}
@@ -297,7 +297,7 @@ export function ClientInsurancePage({
               type="date"
               value={recordDate}
               onChange={(e) => setRecordDate(e.target.value)}
-              className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-[13px] text-text"
+              className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-[13px] text-ink"
             />
           </div>
           <div>
@@ -307,7 +307,7 @@ export function ClientInsurancePage({
               value={recordCheckedBy}
               onChange={(e) => setRecordCheckedBy(e.target.value)}
               placeholder="Name of reviewer"
-              className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-[13px] text-text placeholder:text-muted2"
+              className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-[13px] text-ink placeholder:text-muted2"
             />
           </div>
         </div>
@@ -323,7 +323,7 @@ export function ClientInsurancePage({
             type="button"
             onClick={handleRecordVerification}
             disabled={!recordCheckedBy.trim() || savingVerification}
-            className="py-1.5 px-3.5 rounded-lg border-0 bg-accent text-white text-xs font-medium disabled:opacity-50 disabled:cursor-not-allowed hover:bg-[#3a7de8]"
+            className="py-1.5 px-3.5 rounded-lg border-0 bg-accent text-white text-xs font-medium disabled:opacity-50 disabled:cursor-not-allowed hover:opacity-90"
           >
             {savingVerification ? 'Saving…' : 'Save'}
           </button>

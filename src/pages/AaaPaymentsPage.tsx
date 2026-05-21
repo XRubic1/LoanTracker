@@ -10,11 +10,11 @@ interface AaaPaymentsPageProps extends Pick<UseDataResult, 'aaaPayments' | 'addA
 export function AaaPaymentsPage({ aaaPayments, addAaaPayment, onEditPayment }: AaaPaymentsPageProps) {
   return (
     <>
-      <div className="flex items-center justify-between mb-7">
-        <h1 className="text-[22px] font-semibold">AAA Payments</h1>
+      <div className="page-header">
+        <h1 className="page-title">AAA Payments</h1>
       </div>
 
-      <div className="mb-5">
+      <div className="mb-3">
         <Section title="Record payment">
           <AaaPaymentForm
             onSubmit={async (payload) => {

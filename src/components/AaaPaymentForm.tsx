@@ -48,53 +48,52 @@ export function AaaPaymentForm({ onSubmit, compact = false }: AaaPaymentFormProp
     }
   };
 
-  const compactInputClass =
-    'min-w-0 flex-1 bg-surface border border-border text-text py-1 px-2 rounded-md font-sans text-[11px] outline-none focus:border-accent transition-colors';
+  const inputClass = 'form-input font-sans';
+  const selectClass = 'select-field font-sans';
+  const inputCompact = `${inputClass} form-input--compact w-full`;
+  const selectCompact = `${selectClass} select-field--compact w-full`;
 
   if (compact) {
     return (
-      <form onSubmit={handleSubmit} className="flex flex-col gap-1.5">
-        <div className="text-[10px] text-muted uppercase tracking-widest">AAA Payment</div>
-        <div className="flex flex-wrap items-center gap-1.5">
-          <input
-            type="text"
-            placeholder="Client"
-            value={client}
-            onChange={(e) => setClient(e.target.value)}
-            className={`${compactInputClass} min-w-[72px]`}
-          />
-          <select
-            value={payee}
-            onChange={(e) => setPayee(e.target.value as AaaPayee)}
-            className={`${compactInputClass} max-w-[110px]`}
-          >
-            {AAA_PAYEES.map((p) => (
-              <option key={p} value={p}>
-                {p}
-              </option>
-            ))}
-          </select>
-          <input
-            type="number"
-            step="0.01"
-            min="0"
-            placeholder="Amount"
-            value={amount}
-            onChange={(e) => setAmount(e.target.value)}
-            className={`${compactInputClass} w-[72px] flex-none`}
-          />
-        </div>
+      <form onSubmit={handleSubmit} className="flex flex-col gap-2">
+        <input
+          type="text"
+          placeholder="Client name"
+          value={client}
+          onChange={(e) => setClient(e.target.value)}
+          className={inputCompact}
+        />
+        <select
+          value={payee}
+          onChange={(e) => setPayee(e.target.value as AaaPayee)}
+          className={selectCompact}
+        >
+          {AAA_PAYEES.map((p) => (
+            <option key={p} value={p}>
+              {p}
+            </option>
+          ))}
+        </select>
+        <input
+          type="number"
+          step="0.01"
+          min="0"
+          placeholder="Amount ($)"
+          value={amount}
+          onChange={(e) => setAmount(e.target.value)}
+          className={inputCompact}
+        />
         <div className="flex items-center gap-1.5">
           <input
             type="date"
             value={paymentDate}
             onChange={(e) => setPaymentDate(e.target.value)}
-            className={`${compactInputClass} w-[108px] flex-none`}
+            className={`${inputCompact} flex-1`}
           />
           <button
             type="submit"
             disabled={submitting}
-            className="py-1 px-2.5 rounded-md bg-accent text-white text-[11px] font-medium hover:bg-accent/90 disabled:opacity-50 transition-colors shrink-0"
+            className="h-7 px-3 rounded-[3px] bg-ink text-white text-[11px] font-medium hover:opacity-85 disabled:opacity-50 transition-opacity shrink-0 whitespace-nowrap"
           >
             {submitting ? '…' : 'Record'}
           </button>
@@ -109,19 +108,19 @@ export function AaaPaymentForm({ onSubmit, compact = false }: AaaPaymentFormProp
         type="date"
         value={paymentDate}
         onChange={(e) => setPaymentDate(e.target.value)}
-        className="w-[140px] bg-surface border border-border text-text py-2 px-3 rounded-lg font-sans text-[13px] outline-none focus:border-accent transition-colors"
+        className={`${inputClass} w-[140px] text-xs py-1.5 px-2.5`}
       />
       <input
         type="text"
         placeholder="Client"
         value={client}
         onChange={(e) => setClient(e.target.value)}
-        className="flex-1 min-w-[140px] bg-surface border border-border text-text py-2 px-3 rounded-lg font-sans text-[13px] outline-none focus:border-accent transition-colors"
+        className={`${inputClass} flex-1 min-w-[140px] text-xs py-1.5 px-2.5`}
       />
       <select
         value={payee}
         onChange={(e) => setPayee(e.target.value as AaaPayee)}
-        className="min-w-[160px] bg-surface border border-border text-text py-2 px-3 rounded-lg font-sans text-[13px] outline-none focus:border-accent transition-colors"
+        className={`${selectClass} min-w-[160px] text-xs py-1.5 px-2.5`}
       >
         {AAA_PAYEES.map((p) => (
           <option key={p} value={p}>
@@ -136,7 +135,7 @@ export function AaaPaymentForm({ onSubmit, compact = false }: AaaPaymentFormProp
         placeholder="Amount"
         value={amount}
         onChange={(e) => setAmount(e.target.value)}
-        className="w-[120px] bg-surface border border-border text-text py-2 px-3 rounded-lg font-sans text-[13px] outline-none focus:border-accent transition-colors"
+        className={`${inputClass} w-[120px] text-xs py-1.5 px-2.5`}
       />
       <button
         type="submit"

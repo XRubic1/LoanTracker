@@ -2,6 +2,17 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Design tokens — loan_tracker_redesign.html */
+:root {
+  color-scheme: light;
+  --color-background-primary: #ffffff;
+  --color-background-secondary: #eae8e3;
+  --color-background-tertiary: #f2f0eb;
+  --color-border-tertiary: #d8d3cc;
+  --color-text-primary: #1a1c22;
+  --color-text-secondary: #6e6b63;
+}
+
 *,
 *::before,
 *::after {
@@ -10,23 +21,503 @@
   padding: 0;
 }
 
+html {
+  color-scheme: light;
+}
+
 body {
   font-family: theme('fontFamily.sans');
-  background: theme('colors.bg');
-  color: theme('colors.text');
-  font-size: 14px;
+  background: var(--color-background-tertiary);
+  color: var(--color-text-primary);
+  font-size: 13px;
+  line-height: 1.45;
+  letter-spacing: -0.011em;
   height: 100vh;
   overflow: hidden;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
 }
 
 #root {
   display: flex;
+  flex-direction: column;
   height: 100%;
+  background: var(--color-background-tertiary);
+}
+
+.main {
+  background: var(--color-background-tertiary);
+}
+
+/* Force light form controls (prevents OS dark-mode styling on inputs) */
+@layer base {
+  input:not([type='checkbox']):not([type='radio']):not([type='range']),
+  select,
+  textarea {
+    background-color: var(--color-background-secondary);
+    color: var(--color-text-primary);
+    border-color: var(--color-border-tertiary);
+    color-scheme: light;
+  }
+
+  input::placeholder,
+  textarea::placeholder {
+    color: var(--color-text-secondary);
+    opacity: 0.85;
+  }
+
+  option {
+    background-color: #ffffff;
+    color: var(--color-text-primary);
+  }
+}
+
+/* Text selection — light theme (fixes dark highlight when dragging over table rows) */
+::selection {
+  background-color: rgba(24, 95, 165, 0.22);
+  color: var(--color-text-primary);
+}
+
+::-moz-selection {
+  background-color: rgba(24, 95, 165, 0.22);
+  color: var(--color-text-primary);
+}
+
+@layer components {
+  .page-title {
+    font-size: 15px;
+    font-weight: 600;
+    letter-spacing: -0.025em;
+    color: var(--color-text-primary);
+  }
+
+  .page-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 1rem;
+  }
+
+  /* White card on warm-gray page — visible depth */
+  .panel-surface {
+    background-color: var(--color-background-primary);
+    border: 0.5px solid var(--color-border-tertiary);
+    border-radius: 4px;
+    box-shadow: 0 1px 2px rgba(26, 28, 34, 0.05);
+  }
+
+  /* Table/list row hover — light gray, not dark */
+  .row-hover:hover {
+    background-color: var(--color-background-secondary);
+  }
+
+  /* Section count + header date (redesign .count-badge / .date-badge) */
+  .count-badge {
+    display: inline-flex;
+    align-items: center;
+    font-size: 11px;
+    font-weight: 400;
+    line-height: 1.2;
+    color: #6e6b63;
+    background-color: #eae8e3;
+    border: 0.5px solid #d8d3cc;
+    padding: 2px 8px;
+    border-radius: 2px;
+  }
+
+  .date-badge {
+    display: inline-flex;
+    align-items: center;
+    font-size: 11px;
+    font-weight: 400;
+    line-height: 1.2;
+    color: #6e6b63;
+    background-color: #eae8e3;
+    border: 0.5px solid #d8d3cc;
+    padding: 4px 10px;
+    border-radius: 4px;
+    white-space: nowrap;
+  }
+
+  .topbar {
+    background-color: #ffffff;
+    border-bottom: 0.5px solid #d8d3cc;
+  }
+
+  .bg-input {
+    background-color: #eae8e3;
+  }
+
+  /* Status tags — loan_tracker_redesign.html .tag-* / .res-tag */
+  .tag-due {
+    display: inline-flex;
+    align-items: center;
+    padding: 2px 8px;
+    border-radius: 2px;
+    font-size: 10px;
+    font-weight: 500;
+    letter-spacing: 0.04em;
+    background-color: #e6f1fb;
+    color: #185fa5;
+  }
+
+  .tag-overdue {
+    display: inline-flex;
+    align-items: center;
+    padding: 2px 8px;
+    border-radius: 2px;
+    font-size: 10px;
+    font-weight: 500;
+    letter-spacing: 0.04em;
+    background-color: #fcebeb;
+    color: #a32d2d;
+  }
+
+  .tag-ok {
+    display: inline-flex;
+    align-items: center;
+    padding: 2px 7px;
+    border-radius: 2px;
+    font-size: 10px;
+    font-weight: 500;
+    letter-spacing: 0.04em;
+    background-color: #eaf3de;
+    color: #3b6d11;
+  }
+
+  .tag-closed {
+    display: inline-flex;
+    align-items: center;
+    padding: 2px 8px;
+    border-radius: 2px;
+    font-size: 10px;
+    font-weight: 500;
+    background-color: #eae8e3;
+    color: #6e6b63;
+  }
+
+  /* Alert banners — .alert-warn / .alert-info */
+  .alert-banner-warn {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+    text-align: left;
+    font-size: 12px;
+    padding: 9px 14px;
+    border-radius: 4px;
+    border-left: 3px solid #ba7517;
+    background-color: #faeeda;
+    color: #633806;
+  }
+
+  button.alert-banner-warn {
+    background-color: #faeeda;
+    color: #633806;
+    border: none;
+    cursor: pointer;
+  }
+
+  .alert-banner-warn:hover,
+  button.alert-banner-warn:hover {
+    filter: brightness(0.97);
+  }
+
+  .alert-banner-info {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+    font-size: 12px;
+    padding: 9px 14px;
+    border-radius: 4px;
+    border-left: 3px solid #378add;
+    background-color: #e6f1fb;
+    color: #042c53;
+  }
+
+  .alert-week-badge {
+    display: inline-flex;
+    align-items: center;
+    margin-left: 4px;
+    padding: 2px 8px;
+    border-radius: 2px;
+    font-size: 10px;
+    font-weight: 500;
+    background-color: #378add;
+    color: #ffffff;
+  }
+
+  .alert-week-badge--next {
+    background-color: rgba(83, 74, 183, 0.15);
+    color: #534ab7;
+  }
+
+  /* Segmented filter tabs (Loans, Closed, etc.) */
+  .filter-group {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    padding: 4px;
+    border-radius: 8px;
+    background-color: #eae8e3;
+    border: 0.5px solid #d8d3cc;
+    width: fit-content;
+  }
+
+  .filter-btn {
+    padding: 6px 16px;
+    border-radius: 6px;
+    font-size: 13px;
+    font-weight: 500;
+    color: #6e6b63;
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    transition: color 0.15s ease, background-color 0.15s ease;
+  }
+
+  button.filter-btn {
+    background-color: transparent;
+    color: #6e6b63;
+  }
+
+  .filter-btn:hover,
+  button.filter-btn:hover {
+    color: #1a1c22;
+  }
+
+  .filter-btn-active,
+  button.filter-btn-active {
+    background-color: #ffffff;
+    color: #1a1c22;
+    box-shadow: 0 1px 2px rgba(26, 28, 34, 0.06);
+  }
+
+  /* Progress bar — light track, colored fill */
+  .progress-track {
+    flex: 1;
+    height: 4px;
+    min-width: 48px;
+    background-color: #eae8e3;
+    border-radius: 2px;
+    overflow: hidden;
+  }
+
+  .progress-fill {
+    height: 100%;
+    border-radius: 2px;
+    transition: width 0.2s ease;
+  }
+
+  .progress-fill--default {
+    background-color: #185fa5;
+  }
+
+  .progress-fill--due {
+    background-color: #ba7517;
+  }
+
+  .progress-fill--overdue {
+    background-color: #a32d2d;
+  }
+
+  .progress-fill--closed {
+    background-color: #3b6d11;
+  }
+
+  /* Optional toggle chip (hide closed loans, etc.) */
+  .toggle-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    padding: 6px 12px;
+    border-radius: 6px;
+    border: 0.5px solid #d8d3cc;
+    background-color: #eae8e3;
+    color: #6e6b63;
+    cursor: pointer;
+    transition: border-color 0.15s ease, background-color 0.15s ease, color 0.15s ease;
+  }
+
+  button.toggle-chip {
+    background-color: #eae8e3;
+    color: #6e6b63;
+  }
+
+  .toggle-chip:hover,
+  button.toggle-chip:hover {
+    color: #1a1c22;
+  }
+
+  .toggle-chip-active,
+  button.toggle-chip-active {
+    border-color: #185fa5;
+    background-color: #e6f1fb;
+    color: #185fa5;
+  }
+
+  .toggle-chip-box {
+    width: 14px;
+    height: 14px;
+    border-radius: 4px;
+    border: 0.5px solid #d8d3cc;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 10px;
+    flex-shrink: 0;
+  }
+
+  .toggle-chip-active .toggle-chip-box {
+    background-color: #185fa5;
+    border-color: #185fa5;
+    color: #ffffff;
+  }
+
+  /* Dropdown menus (print menus, action menus) */
+  .dropdown-menu {
+    position: absolute;
+    right: 0;
+    z-index: 20;
+    margin-top: 4px;
+    min-width: 14rem;
+    border-radius: 6px;
+    border: 0.5px solid #d8d3cc;
+    background-color: #ffffff;
+    box-shadow: 0 4px 14px rgba(26, 28, 34, 0.1);
+    overflow: hidden;
+    padding: 4px 0;
+  }
+
+  .dropdown-item {
+    display: block;
+    width: 100%;
+    padding: 8px 12px;
+    text-align: left;
+    font-size: 12px;
+    line-height: 1.35;
+    color: #1a1c22;
+    background-color: #ffffff;
+    border: none;
+    cursor: pointer;
+    transition: background-color 0.12s ease;
+  }
+
+  button.dropdown-item {
+    background-color: #ffffff;
+    color: #1a1c22;
+  }
+
+  .dropdown-item:hover,
+  button.dropdown-item:hover {
+    background-color: #eae8e3;
+  }
+
+  .dropdown-item + .dropdown-item {
+    border-top: 0.5px solid #d8d3cc;
+  }
+
+  .dropdown-item-title {
+    font-weight: 500;
+    color: #1a1c22;
+    font-size: 12px;
+  }
+
+  .dropdown-item-desc {
+    font-size: 11px;
+    color: #6e6b63;
+    margin-top: 2px;
+  }
+
+  .dropdown-trigger {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 14px;
+    border-radius: 6px;
+    border: 0.5px solid #d8d3cc;
+    background-color: #ffffff;
+    color: #6e6b63;
+    font-size: 12px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: border-color 0.15s ease, color 0.15s ease, background-color 0.15s ease;
+  }
+
+  button.dropdown-trigger {
+    background-color: #ffffff;
+    color: #6e6b63;
+  }
+
+  .dropdown-trigger:hover,
+  button.dropdown-trigger:hover {
+    border-color: #185fa5;
+    color: #185fa5;
+    background-color: #e6f1fb;
+  }
+
+  /* Form inputs & selects — light surface (fixes dark native select styling) */
+  .form-input,
+  .select-field {
+    background-color: #eae8e3;
+    color: #1a1c22;
+    border: 0.5px solid #d8d3cc;
+    border-radius: 6px;
+    font-family: inherit;
+    font-size: 12px;
+    padding: 6px 10px;
+    outline: none;
+    color-scheme: light;
+    transition: border-color 0.15s ease;
+  }
+
+  .select-field {
+    cursor: pointer;
+    padding-right: 28px;
+    appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 20 20' fill='none'%3E%3Cpath d='M5 8l5 5 5-5' stroke='%236e6b63' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 8px center;
+  }
+
+  select.select-field,
+  select.form-input {
+    background-color: #eae8e3;
+    color: #1a1c22;
+  }
+
+  .form-input:focus,
+  .select-field:focus {
+    border-color: #185fa5;
+  }
+
+  .form-input::placeholder {
+    color: #6e6b63;
+    opacity: 0.85;
+  }
+
+  .form-input--compact {
+    height: 28px;
+    padding: 0 8px;
+    font-size: 11px;
+    border-radius: 3px;
+  }
+
+  .select-field--compact {
+    height: 28px;
+    padding: 0 24px 0 8px;
+    font-size: 11px;
+    border-radius: 3px;
+    background-position: right 6px center;
+  }
 }
 
 /* Scrollbar */
 .main::-webkit-scrollbar {
-  width: 6px;
+  width: 5px;
 }
 .main::-webkit-scrollbar-track {
   background: transparent;
@@ -35,6 +526,9 @@ body {
   background: theme('colors.border');
   border-radius: 3px;
 }
+.main::-webkit-scrollbar-thumb:hover {
+  background: theme('colors.muted2');
+}
 
 .scrollable::-webkit-scrollbar {
   width: 4px;
@@ -42,4 +536,7 @@ body {
 .scrollable::-webkit-scrollbar-thumb {
   background: theme('colors.border');
   border-radius: 2px;
+}
+.scrollable::-webkit-scrollbar-thumb:hover {
+  background: theme('colors.muted2');
 }

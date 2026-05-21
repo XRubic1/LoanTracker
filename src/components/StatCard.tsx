@@ -9,11 +9,11 @@ interface StatCardProps {
 export function StatCard({ label, value, sub, accent, valueClassName }: StatCardProps) {
   return (
     <div
-      className={`bg-card border rounded-2xl p-5 border-border ${accent ? 'border-accent/30' : ''}`}
+      className={`panel-surface px-4 py-[14px] ${accent ? 'border-accent/40' : ''}`}
     >
-      <div className="text-[11px] text-muted uppercase tracking-widest mb-2.5">{label}</div>
-      <div className={`text-[26px] font-semibold font-mono ${valueClassName ?? ''}`}>{value}</div>
-      <div className="text-[11px] text-muted2 mt-1.5">{sub}</div>
+      <div className="text-[10px] text-muted uppercase tracking-[0.05em] mb-[5px]">{label}</div>
+      <div className={`text-[20px] font-medium leading-none ${valueClassName ?? 'text-ink'}`}>{value}</div>
+      <div className="text-[10px] text-muted mt-1">{sub}</div>
     </div>
   );
 }

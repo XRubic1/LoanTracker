@@ -33,9 +33,7 @@ export function ClosedPage({
       key={id}
       type="button"
       onClick={() => setTab(id)}
-      className={`py-1.5 px-4 rounded-md text-[13px] font-medium transition-colors ${
-        tab === id ? 'bg-card text-text' : 'text-muted2 hover:text-text'
-      }`}
+      className={`filter-btn ${tab === id ? 'filter-btn-active' : ''}`}
     >
       {label}
     </button>
@@ -43,11 +41,11 @@ export function ClosedPage({
 
   return (
     <>
-      <div className="flex items-center justify-between mb-7">
-        <h1 className="text-[22px] font-semibold">Closed</h1>
+      <div className="page-header">
+        <h1 className="page-title">Closed</h1>
       </div>
 
-      <div className="flex flex-wrap gap-1 mb-5 bg-surface p-1 rounded-[10px] w-fit">
+      <div className="filter-group mb-3">
         {tabBtn('loans', 'Loans')}
         {tabBtn('reserves', 'Reserves')}
         {tabBtn('aaa', 'AAA Payment')}
@@ -56,24 +54,24 @@ export function ClosedPage({
       {tab === 'loans' && (
         <Section title="Closed loans" count={closedLoans.length}>
           {closedLoans.length === 0 ? (
-            <div className="text-center py-10 text-muted text-[13px]">No closed loans yet</div>
+            <div className="text-center py-6 text-muted text-[13px]">No closed loans yet</div>
           ) : (
             <table className="w-full border-collapse">
               <thead>
                 <tr>
-                  <th className="text-[10px] text-muted uppercase tracking-widest py-0 pb-2.5 pr-3 text-left border-b border-border">
+                  <th className="text-[10px] text-muted uppercase tracking-widest py-0 pb-1.5 pr-2 text-left border-b border-border">
                     Client
                   </th>
-                  <th className="text-[10px] text-muted uppercase tracking-widest py-0 pb-2.5 pr-3 text-left border-b border-border">
+                  <th className="text-[10px] text-muted uppercase tracking-widest py-0 pb-1.5 pr-2 text-left border-b border-border">
                     Ref
                   </th>
-                  <th className="text-[10px] text-muted uppercase tracking-widest py-0 pb-2.5 pr-3 text-left border-b border-border">
+                  <th className="text-[10px] text-muted uppercase tracking-widest py-0 pb-1.5 pr-2 text-left border-b border-border">
                     Total Paid
                   </th>
-                  <th className="text-[10px] text-muted uppercase tracking-widest py-0 pb-2.5 pr-3 text-left border-b border-border">
+                  <th className="text-[10px] text-muted uppercase tracking-widest py-0 pb-1.5 pr-2 text-left border-b border-border">
                     Installments
                   </th>
-                  <th className="text-[10px] text-muted uppercase tracking-widest py-0 pb-2.5 pr-3 text-left border-b border-border">
+                  <th className="text-[10px] text-muted uppercase tracking-widest py-0 pb-1.5 pr-2 text-left border-b border-border">
                     Status
                   </th>
                 </tr>
@@ -83,21 +81,21 @@ export function ClosedPage({
                   <tr
                     key={l.id}
                     onClick={() => onOpenLoan(l.id)}
-                    className="hover:bg-white/[0.015] transition-colors cursor-pointer"
+                    className="row-hover transition-colors cursor-pointer"
                   >
-                    <td className="py-2.5 pr-3 border-b border-border/40 align-middle">
-                      <div className="font-medium text-text">{l.client}</div>
+                    <td className="py-1.5 pr-2 border-b border-border/40 align-middle">
+                      <div className="font-medium text-ink">{l.client}</div>
                     </td>
-                    <td className="py-2.5 pr-3 border-b border-border/40 align-middle font-mono text-[11px] text-muted">
+                    <td className="py-1.5 pr-2 border-b border-border/40 align-middle font-mono text-[11px] text-muted">
                       {l.ref}
                     </td>
-                    <td className="py-2.5 pr-3 border-b border-border/40 align-middle font-mono font-medium text-green">
+                    <td className="py-1.5 pr-2 border-b border-border/40 align-middle font-mono font-medium text-green">
                       {fmt(l.total)}
                     </td>
-                    <td className="py-2.5 pr-3 border-b border-border/40 align-middle font-mono text-xs text-muted2">
+                    <td className="py-1.5 pr-2 border-b border-border/40 align-middle font-mono text-xs text-muted2">
                       {l.totalInstallments} payments
                     </td>
-                    <td className="py-2.5 pr-3 border-b border-border/40 align-middle">
+                    <td className="py-1.5 pr-2 border-b border-border/40 align-middle">
                       <Badge variant="ok">Paid in Full</Badge>
                     </td>
                   </tr>
@@ -111,27 +109,27 @@ export function ClosedPage({
       {tab === 'reserves' && (
         <Section title="Closed reserves" count={closedReserves.length}>
           {closedReserves.length === 0 ? (
-            <div className="text-center py-10 text-muted text-[13px]">No closed reserves yet</div>
+            <div className="text-center py-6 text-muted text-[13px]">No closed reserves yet</div>
           ) : (
             <table className="w-full border-collapse">
               <thead>
                 <tr>
-                  <th className="text-[10px] text-muted uppercase tracking-widest py-0 pb-2.5 pr-3 text-left border-b border-border">
+                  <th className="text-[10px] text-muted uppercase tracking-widest py-0 pb-1.5 pr-2 text-left border-b border-border">
                     Client
                   </th>
-                  <th className="text-[10px] text-muted uppercase tracking-widest py-0 pb-2.5 pr-3 text-left border-b border-border">
+                  <th className="text-[10px] text-muted uppercase tracking-widest py-0 pb-1.5 pr-2 text-left border-b border-border">
                     Per Deduction
                   </th>
-                  <th className="text-[10px] text-muted uppercase tracking-widest py-0 pb-2.5 pr-3 text-left border-b border-border">
+                  <th className="text-[10px] text-muted uppercase tracking-widest py-0 pb-1.5 pr-2 text-left border-b border-border">
                     Total
                   </th>
-                  <th className="text-[10px] text-muted uppercase tracking-widest py-0 pb-2.5 pr-3 text-left border-b border-border">
+                  <th className="text-[10px] text-muted uppercase tracking-widest py-0 pb-1.5 pr-2 text-left border-b border-border">
                     Installments
                   </th>
-                  <th className="text-[10px] text-muted uppercase tracking-widest py-0 pb-2.5 pr-3 text-left border-b border-border">
+                  <th className="text-[10px] text-muted uppercase tracking-widest py-0 pb-1.5 pr-2 text-left border-b border-border">
                     Last Deducted
                   </th>
-                  <th className="text-[10px] text-muted uppercase tracking-widest py-0 pb-2.5 pr-3 text-left border-b border-border">
+                  <th className="text-[10px] text-muted uppercase tracking-widest py-0 pb-1.5 pr-2 text-left border-b border-border">
                     Status
                   </th>
                 </tr>
@@ -146,27 +144,27 @@ export function ClosedPage({
                     <tr
                       key={r.id}
                       onClick={() => onOpenReserve(r.id)}
-                      className="hover:bg-white/[0.015] transition-colors cursor-pointer"
+                      className="row-hover transition-colors cursor-pointer"
                     >
-                      <td className="py-2.5 pr-3 border-b border-border/40 align-middle">
-                        <div className="font-medium text-text">{r.client}</div>
+                      <td className="py-1.5 pr-2 border-b border-border/40 align-middle">
+                        <div className="font-medium text-ink">{r.client}</div>
                         {r.note && (
                           <div className="text-[11px] text-muted font-mono">{r.note}</div>
                         )}
                       </td>
-                      <td className="py-2.5 pr-3 border-b border-border/40 align-middle font-mono font-medium text-accent2">
+                      <td className="py-1.5 pr-2 border-b border-border/40 align-middle font-mono font-medium text-accent2">
                         {fmt(r.amount / r.installments)}
                       </td>
-                      <td className="py-2.5 pr-3 border-b border-border/40 align-middle font-mono font-medium text-green">
+                      <td className="py-1.5 pr-2 border-b border-border/40 align-middle font-mono font-medium text-green">
                         {fmt(r.amount)}
                       </td>
-                      <td className="py-2.5 pr-3 border-b border-border/40 align-middle font-mono text-xs text-muted2">
+                      <td className="py-1.5 pr-2 border-b border-border/40 align-middle font-mono text-xs text-muted2">
                         {r.installments} deductions
                       </td>
-                      <td className="py-2.5 pr-3 border-b border-border/40 align-middle font-mono text-xs text-muted2">
+                      <td className="py-1.5 pr-2 border-b border-border/40 align-middle font-mono text-xs text-muted2">
                         {lastDeducted}
                       </td>
-                      <td className="py-2.5 pr-3 border-b border-border/40 align-middle">
+                      <td className="py-1.5 pr-2 border-b border-border/40 align-middle">
                         <Badge variant="ok">Fully Deducted</Badge>
                       </td>
                     </tr>

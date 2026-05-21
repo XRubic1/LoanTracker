@@ -29,6 +29,9 @@ export function AddLoanModal({ open, onClose, onAdd }: AddLoanModalProps) {
   const effectiveTotal = !isNaN(totalNum) ? totalNum + (providerType === 'Other' ? feeNum : 0) : 0;
   const installmentAmount = totalInstNum > 0 && effectiveTotal > 0 ? effectiveTotal / totalInstNum : 0;
 
+  const inputClass = 'form-input font-sans text-xs py-1.5 px-2.5';
+  const selectClass = 'select-field font-sans text-xs py-1.5 px-2.5';
+
   const handleSubmit = async () => {
     if (
       !client.trim() ||
@@ -94,14 +97,14 @@ export function AddLoanModal({ open, onClose, onAdd }: AddLoanModalProps) {
             placeholder="Client Name"
             value={client}
             onChange={(e) => setClient(e.target.value)}
-            className="flex-1 min-w-0 bg-surface border border-border text-text py-2 px-3 rounded-lg font-sans text-[13px] outline-none focus:border-accent"
+            className={`${inputClass} flex-1 min-w-0`}
           />
           <input
             type="text"
             placeholder="Ref (e.g. L530)"
             value={ref}
             onChange={(e) => setRef(e.target.value)}
-            className="w-[120px] bg-surface border border-border text-text py-2 px-3 rounded-lg font-sans text-[13px] outline-none focus:border-accent"
+            className={`${inputClass} w-[120px]`}
           />
         </div>
 
@@ -110,7 +113,7 @@ export function AddLoanModal({ open, onClose, onAdd }: AddLoanModalProps) {
           <select
             value={providerType}
             onChange={(e) => setProviderType(e.target.value as LoanProviderType)}
-            className="bg-surface border border-border text-text py-2 px-3 rounded-lg font-sans text-[13px] outline-none focus:border-accent"
+            className={selectClass}
           >
             <option value="TruFunding">TruFunding</option>
             <option value="Other">Other</option>
@@ -124,7 +127,7 @@ export function AddLoanModal({ open, onClose, onAdd }: AddLoanModalProps) {
               placeholder="Provider (name)"
               value={providerName}
               onChange={(e) => setProviderName(e.target.value)}
-              className="w-full bg-surface border border-border text-text py-2 px-3 rounded-lg font-sans text-[13px] outline-none focus:border-accent"
+              className={`${inputClass} w-full`}
             />
             <input
               type="number"
@@ -133,7 +136,7 @@ export function AddLoanModal({ open, onClose, onAdd }: AddLoanModalProps) {
               onChange={(e) => setFactoringFee(e.target.value)}
               min={0}
               step={0.01}
-              className="w-full bg-surface border border-border text-text py-2 px-3 rounded-lg font-sans text-[13px] outline-none focus:border-accent"
+              className={`${inputClass} w-full`}
             />
             <p className="text-[11px] text-muted2">
               Factoring fee is added to the total; installment = (Total + Factoring fee) ÷ # installments.
@@ -149,7 +152,7 @@ export function AddLoanModal({ open, onClose, onAdd }: AddLoanModalProps) {
             onChange={(e) => setTotal(e.target.value)}
             min={0}
             step={0.01}
-            className="flex-1 min-w-0 bg-surface border border-border text-text py-2 px-3 rounded-lg font-sans text-[13px] outline-none focus:border-accent"
+            className={`${inputClass} flex-1 min-w-0`}
           />
           <input
             type="number"
@@ -157,7 +160,7 @@ export function AddLoanModal({ open, onClose, onAdd }: AddLoanModalProps) {
             value={totalInstallments}
             onChange={(e) => setTotalInstallments(e.target.value)}
             min={1}
-            className="flex-1 min-w-0 bg-surface border border-border text-text py-2 px-3 rounded-lg font-sans text-[13px] outline-none focus:border-accent"
+            className={`${inputClass} flex-1 min-w-0`}
           />
         </div>
 
@@ -167,7 +170,7 @@ export function AddLoanModal({ open, onClose, onAdd }: AddLoanModalProps) {
             type="text"
             readOnly
             value={installmentAmount > 0 ? fmt(installmentAmount) : '—'}
-            className="flex-1 min-w-0 max-w-[140px] bg-surface/50 border border-border text-text py-2 px-3 rounded-lg font-sans text-[13px] font-mono text-muted2"
+            className={`${inputClass} flex-1 min-w-0 max-w-[140px] font-mono text-muted2 opacity-90`}
           />
         </div>
 
@@ -178,13 +181,13 @@ export function AddLoanModal({ open, onClose, onAdd }: AddLoanModalProps) {
             value={freqDays}
             onChange={(e) => setFreqDays(parseInt(e.target.value, 10) || 7)}
             min={1}
-            className="w-[130px] bg-surface border border-border text-text py-2 px-3 rounded-lg font-sans text-[13px] outline-none focus:border-accent"
+            className={`${inputClass} w-[130px]`}
           />
           <input
             type="date"
             value={startDate}
             onChange={(e) => setStartDate(e.target.value)}
-            className="flex-1 min-w-0 bg-surface border border-border text-text py-2 px-3 rounded-lg font-sans text-[13px] outline-none focus:border-accent"
+            className={`${inputClass} flex-1 min-w-0`}
           />
         </div>
 
@@ -200,7 +203,7 @@ export function AddLoanModal({ open, onClose, onAdd }: AddLoanModalProps) {
             type="button"
             onClick={handleSubmit}
             disabled={submitting}
-            className="py-1.5 px-3.5 rounded-lg border-0 bg-accent text-white text-xs font-medium hover:bg-[#3a7de8] disabled:opacity-50"
+            className="py-1.5 px-3.5 rounded-lg border-0 bg-accent text-white text-xs font-medium hover:opacity-90 disabled:opacity-50"
           >
             Add Loan
           </button>

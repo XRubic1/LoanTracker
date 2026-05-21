@@ -244,24 +244,24 @@ export function LoanDetailModal({
     <>
       <Modal open={open} onClose={onClose} title={`${loan.client} — ${loan.ref}`}>
         <div className="space-y-4">
-          <div className="flex justify-between items-center py-2.5 border-b border-border text-[13px]">
+          <div className="flex justify-between items-center py-1.5 border-b border-border text-[13px]">
             <span className="text-muted2">Total Loan</span>
             <span className="font-mono font-medium">{fmt(loan.total)}</span>
           </div>
-          <div className="flex justify-between items-center py-2.5 border-b border-border text-[13px]">
+          <div className="flex justify-between items-center py-1.5 border-b border-border text-[13px]">
             <span className="text-muted2">Installment</span>
             <span className="font-mono font-medium">{fmt(loan.installment)}</span>
           </div>
-          <div className="flex justify-between items-center py-2.5 border-b border-border text-[13px]">
+          <div className="flex justify-between items-center py-1.5 border-b border-border text-[13px]">
             <span className="text-muted2">Total Installments</span>
             <span className="font-mono font-medium">{loan.totalInstallments}</span>
           </div>
-          <div className="flex justify-between items-center py-2.5 border-b border-border text-[13px]">
+          <div className="flex justify-between items-center py-1.5 border-b border-border text-[13px]">
             <span className="text-muted2">Paid</span>
             <span className="font-mono font-medium text-green">{loan.paidCount}</span>
           </div>
           {loan.note && (
-            <div className="flex justify-between items-center py-2.5 border-b border-border text-[13px]">
+            <div className="flex justify-between items-center py-1.5 border-b border-border text-[13px]">
               <span className="text-muted2">Note</span>
               <span className="text-xs text-yellow">{loan.note}</span>
             </div>
@@ -286,7 +286,7 @@ export function LoanDetailModal({
                   tabIndex={0}
                   onClick={() => openInstallmentPopup(i)}
                   onKeyDown={(e) => e.key === 'Enter' && openInstallmentPopup(i)}
-                  className={`flex items-center justify-between gap-2 py-2.5 px-3.5 rounded-[10px] bg-surface text-[13px] cursor-pointer hover:bg-white/[0.04] transition-colors ${paid ? 'opacity-90' : ''}`}
+                  className={`flex items-center justify-between gap-2 py-1.5 px-2.5 rounded-[10px] bg-surface text-[13px] cursor-pointer hover:bg-border/60 transition-colors ${paid ? 'opacity-90' : ''}`}
                 >
                   <div className="flex items-center gap-2 min-w-0">
                     <span className="text-muted2 text-[11px] shrink-0">
@@ -328,7 +328,7 @@ export function LoanDetailModal({
                 e.stopPropagation();
                 onToggleHidden(!(loan.hidden ?? false));
               }}
-              className="mr-auto flex items-center gap-2 text-[11px] text-muted2 cursor-pointer rounded-md py-1.5 pr-2 pl-1 border-0 bg-transparent hover:bg-white/5 text-left"
+              className="mr-auto flex items-center gap-2 text-[11px] text-muted2 cursor-pointer rounded-md py-1.5 pr-2 pl-1 border-0 bg-transparent row-hover text-left"
             >
               <span
                 className={`flex items-center justify-center w-[22px] h-[22px] rounded-md border flex-shrink-0 transition-all
@@ -385,7 +385,7 @@ export function LoanDetailModal({
               type="button"
               onClick={onMarkPaid}
               disabled={isFullyPaid}
-              className="py-1.5 px-3.5 rounded-lg border-0 bg-accent text-white text-xs font-medium hover:bg-[#3a7de8] disabled:opacity-50 disabled:cursor-not-allowed"
+              className="py-1.5 px-3.5 rounded-lg border-0 bg-accent text-white text-xs font-medium hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {isFullyPaid ? 'Fully Paid' : 'Mark Next Paid'}
             </button>
@@ -403,7 +403,7 @@ export function LoanDetailModal({
           aria-labelledby="installment-modal-title"
         >
           <div
-            className="bg-card border border-border rounded-[20px] p-6 w-[400px] max-w-[95vw]"
+            className="bg-panel border border-border rounded-[20px] p-6 w-[400px] max-w-[95vw]"
             onClick={(e) => e.stopPropagation()}
           >
             <h3 id="installment-modal-title" className="text-base font-semibold mb-1">
@@ -431,7 +431,7 @@ export function LoanDetailModal({
               type="date"
               value={popupCloseDate}
               onChange={(e) => setPopupCloseDate(e.target.value)}
-              className="w-full bg-surface border border-border rounded-lg py-2 px-3 text-[13px] text-text outline-none focus:border-accent mb-4"
+              className="w-full bg-surface border border-border rounded-lg py-2 px-3 text-[13px] text-ink outline-none focus:border-accent mb-4"
             />
             <label className="block text-[11px] text-muted uppercase tracking-wider mb-1.5">
               Note
@@ -441,7 +441,7 @@ export function LoanDetailModal({
               onChange={(e) => setPopupNote(e.target.value)}
               placeholder="Add a note (optional)…"
               rows={3}
-              className="w-full bg-surface border border-border rounded-lg py-2 px-3 text-[13px] text-text placeholder:text-muted outline-none focus:border-accent resize-none"
+              className="w-full bg-surface border border-border rounded-lg py-2 px-3 text-[13px] text-ink placeholder:text-muted outline-none focus:border-accent resize-none"
             />
             <div className="flex flex-wrap gap-2 justify-end mt-4">
               <button
@@ -455,7 +455,7 @@ export function LoanDetailModal({
                 <button
                   type="button"
                   onClick={handleCloseInstallment}
-                  className="py-1.5 px-3.5 rounded-lg border-0 bg-accent text-white text-xs font-medium hover:bg-[#3a7de8]"
+                  className="py-1.5 px-3.5 rounded-lg border-0 bg-accent text-white text-xs font-medium hover:opacity-90"
                 >
                   Close installment
                 </button>

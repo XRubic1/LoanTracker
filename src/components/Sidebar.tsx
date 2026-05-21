@@ -1,9 +1,11 @@
 import type { PageId } from '@/types';
+import { BrandLogo, BrandWordmark } from '@/components/BrandLogo';
 
 interface SidebarProps {
   page: PageId;
   onPage: (page: PageId) => void;
   onSignOut?: () => void;
+  weekRange?: string;
 }
 
 const navItems: { id: PageId; label: string; icon: React.ReactNode }[] = [
@@ -79,45 +81,62 @@ const navItems: { id: PageId; label: string; icon: React.ReactNode }[] = [
   },
 ];
 
-export function Sidebar({ page, onPage, onSignOut }: SidebarProps) {
+export function Sidebar({ page, onPage, onSignOut, weekRange }: SidebarProps) {
   return (
-    <nav className="group w-16 hover:w-[200px] bg-surface border-r border-border flex flex-col items-center py-5 gap-1.5 overflow-hidden flex-shrink-0 transition-[width] duration-200 ease-out z-10">
-      <div className="w-9 h-9 bg-accent rounded-[10px] flex items-center justify-center mb-4 flex-shrink-0">
-        <svg className="w-5 h-5 fill-white" viewBox="0 0 24 24">
-          <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" />
-        </svg>
+    <nav className="topbar flex-shrink-0 z-10 flex items-center h-12 px-6 overflow-x-auto gap-0">
+      {/* Brand */}
+      <div className="flex items-center gap-1.5 mr-8 flex-shrink-0">
+        <BrandLogo size="xs" />
+        <BrandWordmark className="hidden sm:inline text-[13px] font-medium text-ink" />
       </div>
-      {navItems.map(({ id, label, icon }) => (
-        <button
-          key={id}
-          type="button"
-          onClick={() => onPage(id)}
-          className={`w-[calc(100%-16px)] flex items-center gap-3 py-2.5 px-3.5 rounded-[10px] transition-colors whitespace-nowrap font-medium text-muted2 hover:bg-card hover:text-text ${
-            page === id ? 'bg-accent/10 text-accent' : ''
-          }`}
-        >
-          <span className="w-5 h-5 flex-shrink-0 [&>svg]:w-5 [&>svg]:h-5">{icon}</span>
-          <span className="text-[13px] opacity-0 group-hover:opacity-100 transition-opacity">
-            {label}
-          </span>
-        </button>
-      ))}
-      {onSignOut && (
-        <button
-          type="button"
-          onClick={onSignOut}
-          className="mt-auto w-[calc(100%-16px)] flex items-center gap-3 py-2.5 px-3.5 rounded-[10px] transition-colors whitespace-nowrap font-medium text-muted2 hover:bg-card hover:text-red"
-        >
-          <svg className="w-5 h-5 flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
-            <path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4" />
-            <polyline points="16 17 21 12 16 7" />
-            <line x1="21" y1="12" x2="9" y2="12" />
-          </svg>
-          <span className="text-[13px] opacity-0 group-hover:opacity-100 transition-opacity">
-            Sign out
-          </span>
-        </button>
-      )}
+
+      {/* Nav items — active item shows a bottom underline */}
+      <div className="flex items-center flex-1 min-w-0 h-full">
+        {navItems.map(({ id, label, icon }) => (
+          <button
+            key={id}
+            type="button"
+            onClick={() => onPage(id)}
+            className={`h-full flex items-center gap-[5px] px-[14px] text-[12px] whitespace-nowrap transition-colors border-b-2 ${
+              page === id
+                ? 'text-ink font-medium border-ink'
+                : 'text-muted font-normal border-transparent hover:text-ink'
+            }`}
+          >
+            <span className="w-[14px] h-[14px] flex-shrink-0 [&>svg]:w-[14px] [&>svg]:h-[14px]">
+              {icon}
+            </span>
+            <span className="hidden md:inline">{label}</span>
+          </button>
+        ))}
+      </div>
+
+      {/* Right side: week range + sign out */}
+      <div className="flex items-center gap-4 flex-shrink-0">
+        {weekRange && (
+          <span className="date-badge">{weekRange}</span>
+        )}
+        {onSignOut && (
+          <button
+            type="button"
+            onClick={onSignOut}
+            className="flex-shrink-0 flex items-center gap-[5px] text-[12px] text-muted hover:text-red transition-colors"
+          >
+            <svg
+              className="w-[14px] h-[14px] flex-shrink-0"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth={2}
+            >
+              <path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4" />
+              <polyline points="16 17 21 12 16 7" />
+              <line x1="21" y1="12" x2="9" y2="12" />
+            </svg>
+            <span className="hidden md:inline">Sign out</span>
+          </button>
+        )}
+      </div>
     </nav>
   );
 }

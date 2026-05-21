@@ -35,34 +35,24 @@ export function ReservesPage({
 
   return (
     <>
-      <div className="flex items-center justify-between mb-7">
-        <h1 className="text-[22px] font-semibold">Reserves</h1>
+      <div className="page-header">
+        <h1 className="page-title">Reserves</h1>
         <button
           type="button"
           onClick={onAddReserve}
-          className="inline-flex items-center gap-1.5 py-1.5 px-3.5 rounded-lg border-0 bg-accent text-white text-xs font-medium transition-colors hover:bg-[#3a7de8]"
+          className="inline-flex items-center gap-1.5 py-1.5 px-3.5 rounded-lg border-0 bg-accent text-white text-xs font-medium transition-colors hover:opacity-90"
         >
           + Add Reserve
         </button>
       </div>
 
-      <div className="flex items-center justify-end mb-5">
+      <div className="flex items-center justify-end mb-3">
         <button
           type="button"
           onClick={() => setHideClosed((v) => !v)}
-          className={`inline-flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-md border transition-colors ${
-            hideClosed
-              ? 'border-accent bg-accent/10 text-accent'
-              : 'border-border bg-surface text-muted2 hover:text-text'
-          }`}
+          className={`toggle-chip ${hideClosed ? 'toggle-chip-active' : ''}`}
         >
-          <span
-            className={`w-[14px] h-[14px] rounded-[4px] border flex items-center justify-center text-[10px] ${
-              hideClosed ? 'bg-accent border-accent text-white' : 'border-border'
-            }`}
-          >
-            {hideClosed ? '✓' : ''}
-          </span>
+          <span className="toggle-chip-box">{hideClosed ? '✓' : ''}</span>
           <span>Hide closed reserves</span>
         </button>
       </div>
@@ -71,31 +61,31 @@ export function ReservesPage({
         <table className="w-full border-collapse">
           <thead>
             <tr>
-              <th className="text-[10px] text-muted uppercase tracking-widest py-0 pb-2.5 pr-3 text-left border-b border-border">
+              <th className="text-[10px] text-muted uppercase tracking-widest py-0 pb-1.5 pr-2 text-left border-b border-border">
                 Client
               </th>
-              <th className="text-[10px] text-muted uppercase tracking-widest py-0 pb-2.5 pr-3 text-left border-b border-border">
+              <th className="text-[10px] text-muted uppercase tracking-widest py-0 pb-1.5 pr-2 text-left border-b border-border">
                 Per Deduction
               </th>
-              <th className="text-[10px] text-muted uppercase tracking-widest py-0 pb-2.5 pr-3 text-left border-b border-border min-w-[100px]">
+              <th className="text-[10px] text-muted uppercase tracking-widest py-0 pb-1.5 pr-2 text-left border-b border-border min-w-[100px]">
                 Progress
               </th>
-              <th className="text-[10px] text-muted uppercase tracking-widest py-0 pb-2.5 pr-3 text-left border-b border-border">
+              <th className="text-[10px] text-muted uppercase tracking-widest py-0 pb-1.5 pr-2 text-left border-b border-border">
                 Next Due
               </th>
-              <th className="text-[10px] text-muted uppercase tracking-widest py-0 pb-2.5 pr-3 text-left border-b border-border">
+              <th className="text-[10px] text-muted uppercase tracking-widest py-0 pb-1.5 pr-2 text-left border-b border-border">
                 Last Deducted
               </th>
-              <th className="text-[10px] text-muted uppercase tracking-widest py-0 pb-2.5 pr-3 text-left border-b border-border">
+              <th className="text-[10px] text-muted uppercase tracking-widest py-0 pb-1.5 pr-2 text-left border-b border-border">
                 Status
               </th>
-              <th className="text-[10px] text-muted uppercase tracking-widest py-0 pb-2.5 pr-3 text-left border-b border-border" />
+              <th className="text-[10px] text-muted uppercase tracking-widest py-0 pb-1.5 pr-2 text-left border-b border-border" />
             </tr>
           </thead>
           <tbody>
             {list.length === 0 ? (
               <tr>
-                <td colSpan={8} className="text-center py-10 text-muted text-[13px]">
+                <td colSpan={8} className="text-center py-6 text-muted text-[13px]">
                   No reserves
                 </td>
               </tr>
@@ -120,35 +110,35 @@ export function ReservesPage({
                 return (
                   <tr
                     key={r.id}
-                    className="cursor-pointer hover:bg-white/[0.015] transition-colors"
+                    className="cursor-pointer row-hover transition-colors"
                     onClick={() => onOpenDetail(r.id)}
                   >
-                    <td className="py-2.5 pr-3 border-b border-border/40 align-middle">
-                      <span className="font-medium text-text">{r.client}</span>
+                    <td className="py-1.5 pr-2 border-b border-border/40 align-middle">
+                      <span className="font-medium text-ink">{r.client}</span>
                     </td>
-                    <td className="py-2.5 pr-3 border-b border-border/40 align-middle">
+                    <td className="py-1.5 pr-2 border-b border-border/40 align-middle">
                       <span className="font-mono font-medium">{fmt(r.amount / r.installments)}</span>
                       <span className="text-[10px] text-muted block">per deduction</span>
                     </td>
-                    <td className="py-2.5 pr-3 border-b border-border/40 align-middle font-mono">
+                    <td className="py-1.5 pr-2 border-b border-border/40 align-middle font-mono">
                       {r.paidCount}/{r.installments}
                     </td>
-                    <td className="py-2.5 pr-3 border-b border-border/40 align-middle">
+                    <td className="py-1.5 pr-2 border-b border-border/40 align-middle">
                       <span className="font-mono text-[11px] text-muted2 block">{fmtDate(r.date)}</span>
                       <span className="text-[10px] text-muted block">every {freq}d</span>
                     </td>
-                    <td className="py-2.5 pr-3 border-b border-border/40 align-middle">
+                    <td className="py-1.5 pr-2 border-b border-border/40 align-middle">
                       <span
                         className={`font-mono text-[11px] ${isDueNow ? 'text-yellow' : ''}`}
                       >
                         {nextDue && !isClosed ? fmtDate(nextDue) : '—'}
                       </span>
                     </td>
-                    <td className="py-2.5 pr-3 border-b border-border/40 align-middle font-mono text-[11px] text-muted2">
+                    <td className="py-1.5 pr-2 border-b border-border/40 align-middle font-mono text-[11px] text-muted2">
                       {lastDeducted}
                     </td>
-                    <td className="py-2.5 pr-3 border-b border-border/40 align-middle">{status}</td>
-                    <td className="py-2.5 pr-3 border-b border-border/40 align-middle" />
+                    <td className="py-1.5 pr-2 border-b border-border/40 align-middle">{status}</td>
+                    <td className="py-1.5 pr-2 border-b border-border/40 align-middle" />
                   </tr>
                 );
               })
