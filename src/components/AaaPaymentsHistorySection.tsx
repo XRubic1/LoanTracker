@@ -177,19 +177,19 @@ export function AaaPaymentsHistorySection({
         <table className="w-full border-collapse">
           <thead>
             <tr>
-              <th className="text-[10px] text-muted uppercase tracking-widest py-0 pb-1.5 pr-2 text-left border-b border-border">
+              <th className="text-[10px] text-label uppercase tracking-widest py-0 pb-1.5 pr-2 text-left border-b border-border">
                 Date
               </th>
-              <th className="text-[10px] text-muted uppercase tracking-widest py-0 pb-1.5 pr-2 text-left border-b border-border">
+              <th className="text-[10px] text-label uppercase tracking-widest py-0 pb-1.5 pr-2 text-left border-b border-border">
                 Client
               </th>
-              <th className="text-[10px] text-muted uppercase tracking-widest py-0 pb-1.5 pr-2 text-left border-b border-border">
+              <th className="text-[10px] text-label uppercase tracking-widest py-0 pb-1.5 pr-2 text-left border-b border-border">
                 Payee
               </th>
-              <th className="text-[10px] text-muted uppercase tracking-widest py-0 pb-1.5 pr-2 text-left border-b border-border">
+              <th className="text-[10px] text-label uppercase tracking-widest py-0 pb-1.5 pr-2 text-left border-b border-border">
                 Amount
               </th>
-              <th className="text-[10px] text-muted uppercase tracking-widest py-0 pb-2.5 text-right border-b border-border w-16">
+              <th className="text-[10px] text-label uppercase tracking-widest py-0 pb-2.5 text-right border-b border-border w-16">
                 
               </th>
             </tr>

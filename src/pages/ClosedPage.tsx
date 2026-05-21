@@ -59,19 +59,19 @@ export function ClosedPage({
             <table className="w-full border-collapse">
               <thead>
                 <tr>
-                  <th className="text-[10px] text-muted uppercase tracking-widest py-0 pb-1.5 pr-2 text-left border-b border-border">
+                  <th className="text-[10px] text-label uppercase tracking-widest py-0 pb-1.5 pr-2 text-left border-b border-border">
                     Client
                   </th>
-                  <th className="text-[10px] text-muted uppercase tracking-widest py-0 pb-1.5 pr-2 text-left border-b border-border">
+                  <th className="text-[10px] text-label uppercase tracking-widest py-0 pb-1.5 pr-2 text-left border-b border-border">
                     Ref
                   </th>
-                  <th className="text-[10px] text-muted uppercase tracking-widest py-0 pb-1.5 pr-2 text-left border-b border-border">
+                  <th className="text-[10px] text-label uppercase tracking-widest py-0 pb-1.5 pr-2 text-left border-b border-border">
                     Total Paid
                   </th>
-                  <th className="text-[10px] text-muted uppercase tracking-widest py-0 pb-1.5 pr-2 text-left border-b border-border">
+                  <th className="text-[10px] text-label uppercase tracking-widest py-0 pb-1.5 pr-2 text-left border-b border-border">
                     Installments
                   </th>
-                  <th className="text-[10px] text-muted uppercase tracking-widest py-0 pb-1.5 pr-2 text-left border-b border-border">
+                  <th className="text-[10px] text-label uppercase tracking-widest py-0 pb-1.5 pr-2 text-left border-b border-border">
                     Status
                   </th>
                 </tr>
@@ -114,22 +114,22 @@ export function ClosedPage({
             <table className="w-full border-collapse">
               <thead>
                 <tr>
-                  <th className="text-[10px] text-muted uppercase tracking-widest py-0 pb-1.5 pr-2 text-left border-b border-border">
+                  <th className="text-[10px] text-label uppercase tracking-widest py-0 pb-1.5 pr-2 text-left border-b border-border">
                     Client
                   </th>
-                  <th className="text-[10px] text-muted uppercase tracking-widest py-0 pb-1.5 pr-2 text-left border-b border-border">
+                  <th className="text-[10px] text-label uppercase tracking-widest py-0 pb-1.5 pr-2 text-left border-b border-border">
                     Per Deduction
                   </th>
-                  <th className="text-[10px] text-muted uppercase tracking-widest py-0 pb-1.5 pr-2 text-left border-b border-border">
+                  <th className="text-[10px] text-label uppercase tracking-widest py-0 pb-1.5 pr-2 text-left border-b border-border">
                     Total
                   </th>
-                  <th className="text-[10px] text-muted uppercase tracking-widest py-0 pb-1.5 pr-2 text-left border-b border-border">
+                  <th className="text-[10px] text-label uppercase tracking-widest py-0 pb-1.5 pr-2 text-left border-b border-border">
                     Installments
                   </th>
-                  <th className="text-[10px] text-muted uppercase tracking-widest py-0 pb-1.5 pr-2 text-left border-b border-border">
+                  <th className="text-[10px] text-label uppercase tracking-widest py-0 pb-1.5 pr-2 text-left border-b border-border">
                     Last Deducted
                   </th>
-                  <th className="text-[10px] text-muted uppercase tracking-widest py-0 pb-1.5 pr-2 text-left border-b border-border">
+                  <th className="text-[10px] text-label uppercase tracking-widest py-0 pb-1.5 pr-2 text-left border-b border-border">
                     Status
                   </th>
                 </tr>

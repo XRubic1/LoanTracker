@@ -91,7 +91,7 @@ export function AuthPage() {
           <button
             type="submit"
             disabled={loading}
-            className="w-full py-2.5 rounded-lg bg-accent text-white font-medium text-sm hover:opacity-90 disabled:opacity-50 transition-colors"
+            className="btn-primary w-full py-2.5 rounded-lg font-medium text-sm disabled:opacity-50"
           >
             {loading ? 'Please wait…' : mode === 'login' ? 'Sign in' : 'Sign up'}
           </button>

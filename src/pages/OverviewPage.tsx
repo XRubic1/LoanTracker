@@ -140,7 +140,7 @@ export function OverviewPage({
             <StatCard
               label="Reserve due"
               value={fmt(resWeekTotal)}
-              valueClassName="text-accent2"
+              valueClassName="text-reserve"
               sub={`${resWeek.length} deductions`}
             />
             <StatCard
@@ -165,7 +165,7 @@ export function OverviewPage({
                   {['Client', 'Provider', 'Installment', 'Remaining', 'Status'].map((h) => (
                     <th
                       key={h}
-                      className="text-[10px] text-muted font-normal uppercase tracking-[0.05em] px-4 py-2 text-left border-b border-border"
+                      className="text-[10px] text-label font-normal uppercase tracking-[0.05em] px-4 py-2 text-left border-b border-border"
                     >
                       {h}
                     </th>
@@ -248,7 +248,7 @@ export function OverviewPage({
                     {['Client', 'Loan', 'Provider', 'Next date', 'Amount'].map((h) => (
                       <th
                         key={h}
-                        className="text-[10px] text-muted font-normal uppercase tracking-[0.05em] px-4 py-2 text-left border-b border-border"
+                        className="text-[10px] text-label font-normal uppercase tracking-[0.05em] px-4 py-2 text-left border-b border-border"
                       >
                         {h}
                       </th>
@@ -326,7 +326,7 @@ export function OverviewPage({
                           <div className="text-[10px] text-muted truncate">{r.note}</div>
                         )}
                       </div>
-                      <span className="text-[11px] font-medium text-yellow flex-shrink-0">{fmt(perInst)}</span>
+                      <span className="text-[11px] font-medium text-reserve flex-shrink-0">{fmt(perInst)}</span>
                       <span className="text-[10px] text-muted flex-shrink-0">
                         {nextDue ? fmtDate(nextDue) : '—'}
                       </span>

@@ -243,7 +243,7 @@ export function ReserveDetailModal({
               type="button"
               onClick={onMarkDeducted}
               disabled={isClosed}
-              className="py-1.5 px-3.5 rounded-lg border-0 bg-accent text-white text-xs font-medium hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
+              className="py-1.5 px-3.5 rounded-lg btn-primary text-xs font-medium hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {isClosed ? 'Fully Deducted' : '✓ Mark Deducted'}
             </button>
@@ -304,7 +304,7 @@ export function ReserveDetailModal({
                 <button
                   type="button"
                   onClick={handleCloseDeduction}
-                  className="py-1.5 px-3.5 rounded-lg border-0 bg-accent text-white text-xs font-medium hover:opacity-90"
+                  className="py-1.5 px-3.5 rounded-lg btn-primary text-xs font-medium hover:opacity-90"
                 >
                   Close deduction
                 </button>

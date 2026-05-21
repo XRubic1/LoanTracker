@@ -146,7 +146,7 @@ export function ClientInsurancePage({
           <button
             type="button"
             onClick={onAddClient}
-            className="inline-flex items-center gap-1.5 py-1.5 px-3.5 rounded-lg border-0 bg-accent text-white text-xs font-medium transition-colors hover:opacity-90"
+            className="inline-flex items-center gap-1.5 py-1.5 px-3.5 rounded-lg btn-primary text-xs font-medium transition-colors hover:opacity-90"
           >
             + Add client
           </button>
@@ -181,16 +181,16 @@ export function ClientInsurancePage({
         <table className="w-full border-collapse">
           <thead>
             <tr>
-              <th className="text-[10px] text-muted uppercase tracking-widest py-0 pb-1.5 pr-2 text-left border-b border-border">
+              <th className="text-[10px] text-label uppercase tracking-widest py-0 pb-1.5 pr-2 text-left border-b border-border">
                 Client
               </th>
-              <th className="text-[10px] text-muted uppercase tracking-widest py-0 pb-1.5 pr-2 text-left border-b border-border">
+              <th className="text-[10px] text-label uppercase tracking-widest py-0 pb-1.5 pr-2 text-left border-b border-border">
                 MC
               </th>
-              <th className="text-[10px] text-muted uppercase tracking-widest py-0 pb-1.5 pr-2 text-left border-b border-border">
+              <th className="text-[10px] text-label uppercase tracking-widest py-0 pb-1.5 pr-2 text-left border-b border-border">
                 Status
               </th>
-              <th className="text-[10px] text-muted uppercase tracking-widest py-0 pb-1.5 pr-2 text-left border-b border-border w-16" />
+              <th className="text-[10px] text-label uppercase tracking-widest py-0 pb-1.5 pr-2 text-left border-b border-border w-16" />
             </tr>
           </thead>
           <tbody>
@@ -323,7 +323,7 @@ export function ClientInsurancePage({
             type="button"
             onClick={handleRecordVerification}
             disabled={!recordCheckedBy.trim() || savingVerification}
-            className="py-1.5 px-3.5 rounded-lg border-0 bg-accent text-white text-xs font-medium disabled:opacity-50 disabled:cursor-not-allowed hover:opacity-90"
+            className="py-1.5 px-3.5 rounded-lg btn-primary text-xs font-medium disabled:opacity-50 disabled:cursor-not-allowed hover:opacity-90"
           >
             {savingVerification ? 'Saving…' : 'Save'}
           </button>

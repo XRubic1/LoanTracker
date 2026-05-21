@@ -40,7 +40,7 @@ export function ReservesPage({
         <button
           type="button"
           onClick={onAddReserve}
-          className="inline-flex items-center gap-1.5 py-1.5 px-3.5 rounded-lg border-0 bg-accent text-white text-xs font-medium transition-colors hover:opacity-90"
+          className="inline-flex items-center gap-1.5 py-1.5 px-3.5 rounded-lg btn-primary text-xs font-medium transition-colors hover:opacity-90"
         >
           + Add Reserve
         </button>
@@ -61,25 +61,25 @@ export function ReservesPage({
         <table className="w-full border-collapse">
           <thead>
             <tr>
-              <th className="text-[10px] text-muted uppercase tracking-widest py-0 pb-1.5 pr-2 text-left border-b border-border">
+              <th className="text-[10px] text-label uppercase tracking-widest py-0 pb-1.5 pr-2 text-left border-b border-border">
                 Client
               </th>
-              <th className="text-[10px] text-muted uppercase tracking-widest py-0 pb-1.5 pr-2 text-left border-b border-border">
+              <th className="text-[10px] text-label uppercase tracking-widest py-0 pb-1.5 pr-2 text-left border-b border-border">
                 Per Deduction
               </th>
-              <th className="text-[10px] text-muted uppercase tracking-widest py-0 pb-1.5 pr-2 text-left border-b border-border min-w-[100px]">
+              <th className="text-[10px] text-label uppercase tracking-widest py-0 pb-1.5 pr-2 text-left border-b border-border min-w-[100px]">
                 Progress
               </th>
-              <th className="text-[10px] text-muted uppercase tracking-widest py-0 pb-1.5 pr-2 text-left border-b border-border">
+              <th className="text-[10px] text-label uppercase tracking-widest py-0 pb-1.5 pr-2 text-left border-b border-border">
                 Next Due
               </th>
-              <th className="text-[10px] text-muted uppercase tracking-widest py-0 pb-1.5 pr-2 text-left border-b border-border">
+              <th className="text-[10px] text-label uppercase tracking-widest py-0 pb-1.5 pr-2 text-left border-b border-border">
                 Last Deducted
               </th>
-              <th className="text-[10px] text-muted uppercase tracking-widest py-0 pb-1.5 pr-2 text-left border-b border-border">
+              <th className="text-[10px] text-label uppercase tracking-widest py-0 pb-1.5 pr-2 text-left border-b border-border">
                 Status
               </th>
-              <th className="text-[10px] text-muted uppercase tracking-widest py-0 pb-1.5 pr-2 text-left border-b border-border" />
+              <th className="text-[10px] text-label uppercase tracking-widest py-0 pb-1.5 pr-2 text-left border-b border-border" />
             </tr>
           </thead>
           <tbody>

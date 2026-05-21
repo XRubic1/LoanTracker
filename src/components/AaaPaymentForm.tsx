@@ -93,7 +93,7 @@ export function AaaPaymentForm({ onSubmit, compact = false }: AaaPaymentFormProp
           <button
             type="submit"
             disabled={submitting}
-            className="h-7 px-3 rounded-[3px] bg-ink text-white text-[11px] font-medium hover:opacity-85 disabled:opacity-50 transition-opacity shrink-0 whitespace-nowrap"
+            className="btn-primary h-7 px-3 rounded-[3px] text-[11px] hover:opacity-85 disabled:opacity-50 shrink-0 whitespace-nowrap"
           >
             {submitting ? '…' : 'Record'}
           </button>
@@ -140,7 +140,7 @@ export function AaaPaymentForm({ onSubmit, compact = false }: AaaPaymentFormProp
       <button
         type="submit"
         disabled={submitting}
-        className="py-2 px-4 rounded-lg bg-accent text-white text-[13px] font-medium hover:bg-accent/90 disabled:opacity-50 transition-colors"
+        className="btn-primary py-2 px-4 rounded-lg text-[13px] disabled:opacity-50"
       >
         {submitting ? 'Saving…' : 'Add payment'}
       </button>

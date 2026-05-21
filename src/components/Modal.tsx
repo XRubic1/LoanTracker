@@ -19,7 +19,7 @@ export function Modal({ open, onClose, title, children }: ModalProps) {
         className="panel-surface rounded-xl p-5 w-[440px] max-w-[95vw]"
         onClick={(e) => e.stopPropagation()}
       >
-        <h3 id="modal-title" className="text-sm font-semibold mb-3 tracking-tight">
+        <h3 id="modal-title" className="text-sm font-semibold text-ink mb-3 tracking-tight">
           {title}
         </h3>
         {children}

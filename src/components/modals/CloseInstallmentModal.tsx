@@ -103,7 +103,7 @@ export function CloseInstallmentModal({
             type="button"
             onClick={handleCloseInstallment}
             disabled={isFullyPaid}
-            className="py-1.5 px-3.5 rounded-lg border-0 bg-accent text-white text-xs font-medium hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
+            className="py-1.5 px-3.5 rounded-lg btn-primary text-xs font-medium hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             Close installment
           </button>

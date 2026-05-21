@@ -81,7 +81,7 @@ export function PasswordConfirmModal({
           </button>
           <button
             type="submit"
-            className="py-2 px-4 rounded-lg bg-accent text-white text-[13px] font-medium hover:opacity-90 transition-colors"
+            className="btn-primary py-2 px-4 rounded-lg text-[13px]"
           >
             Confirm
           </button>

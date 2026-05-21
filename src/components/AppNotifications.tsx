@@ -114,13 +114,13 @@ export function AppNotifications({ loans, clientInsurance }: AppNotificationsPro
             <table className="w-full border-collapse text-xs">
               <thead>
                 <tr>
-                  <th className="text-[10px] text-muted uppercase tracking-widest py-2 pr-3 text-left border-b border-border">
+                  <th className="text-[10px] text-label uppercase tracking-widest py-2 pr-3 text-left border-b border-border">
                     Client
                   </th>
-                  <th className="text-[10px] text-muted uppercase tracking-widest py-2 pr-3 text-left border-b border-border">
+                  <th className="text-[10px] text-label uppercase tracking-widest py-2 pr-3 text-left border-b border-border">
                     MC
                   </th>
-                  <th className="text-[10px] text-muted uppercase tracking-widest py-2 pr-3 text-left border-b border-border">
+                  <th className="text-[10px] text-label uppercase tracking-widest py-2 pr-3 text-left border-b border-border">
                     Cancellation
                   </th>
                 </tr>

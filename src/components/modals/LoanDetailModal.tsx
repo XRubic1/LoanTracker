@@ -385,7 +385,7 @@ export function LoanDetailModal({
               type="button"
               onClick={onMarkPaid}
               disabled={isFullyPaid}
-              className="py-1.5 px-3.5 rounded-lg border-0 bg-accent text-white text-xs font-medium hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
+              className="py-1.5 px-3.5 rounded-lg btn-primary text-xs font-medium hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {isFullyPaid ? 'Fully Paid' : 'Mark Next Paid'}
             </button>
@@ -455,7 +455,7 @@ export function LoanDetailModal({
                 <button
                   type="button"
                   onClick={handleCloseInstallment}
-                  className="py-1.5 px-3.5 rounded-lg border-0 bg-accent text-white text-xs font-medium hover:opacity-90"
+                  className="py-1.5 px-3.5 rounded-lg btn-primary text-xs font-medium hover:opacity-90"
                 >
                   Close installment
                 </button>

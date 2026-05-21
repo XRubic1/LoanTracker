@@ -118,7 +118,7 @@ export function AddClientInsuranceModal({ open, onClose, onAdd }: AddClientInsur
             type="button"
             onClick={handleSubmit}
             disabled={submitting}
-            className="py-1.5 px-3.5 rounded-lg border-0 bg-accent text-white text-xs font-medium hover:opacity-90 disabled:opacity-50"
+            className="py-1.5 px-3.5 rounded-lg btn-primary text-xs font-medium hover:opacity-90 disabled:opacity-50"
           >
             {submitting ? 'Adding…' : 'Add client'}
           </button>

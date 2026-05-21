@@ -95,7 +95,7 @@ export function UsersPage() {
         <button
           type="submit"
           disabled={adding || !email.trim()}
-          className="py-2 px-4 rounded-lg bg-accent text-white text-sm font-medium hover:brightness-90 disabled:opacity-50"
+          className="btn-primary py-2 px-4 rounded-lg text-sm disabled:opacity-50"
         >
           {adding ? 'Adding…' : 'Add user'}
         </button>
@@ -116,13 +116,13 @@ export function UsersPage() {
           <table className="w-full border-collapse">
             <thead>
               <tr>
-                <th className="text-[10px] text-muted uppercase tracking-widest py-3 px-4 text-left border-b border-border">
+                <th className="text-[10px] text-label uppercase tracking-widest py-3 px-4 text-left border-b border-border">
                   Email
                 </th>
-                <th className="text-[10px] text-muted uppercase tracking-widest py-3 px-4 text-left border-b border-border">
+                <th className="text-[10px] text-label uppercase tracking-widest py-3 px-4 text-left border-b border-border">
                   Status
                 </th>
-                <th className="text-[10px] text-muted uppercase tracking-widest py-3 px-4 text-left border-b border-border w-24">
+                <th className="text-[10px] text-label uppercase tracking-widest py-3 px-4 text-left border-b border-border w-24">
                   Actions
                 </th>
               </tr>

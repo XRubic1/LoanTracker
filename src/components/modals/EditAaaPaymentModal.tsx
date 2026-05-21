@@ -102,7 +102,7 @@ export function EditAaaPaymentModal({ payment, open, onClose, onSave }: EditAaaP
             type="button"
             disabled={submitting}
             onClick={() => void handleSubmit()}
-            className="py-1.5 px-3.5 rounded-lg bg-accent text-white text-xs font-medium hover:bg-accent/90 disabled:opacity-50"
+            className="btn-primary py-1.5 px-3.5 rounded-lg text-xs disabled:opacity-50"
           >
             {submitting ? 'Saving…' : 'Save'}
           </button>
