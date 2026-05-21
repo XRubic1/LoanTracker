@@ -1,5 +1,6 @@
 import type { PageId } from '@/types';
 import { BrandLogo, BrandWordmark } from '@/components/BrandLogo';
+import { ThemeToggle } from '@/components/ThemeToggle';
 
 interface SidebarProps {
   page: PageId;
@@ -111,8 +112,9 @@ export function Sidebar({ page, onPage, onSignOut, weekRange }: SidebarProps) {
         ))}
       </div>
 
-      {/* Right side: week range + sign out */}
-      <div className="flex items-center gap-4 flex-shrink-0">
+      {/* Right side: theme, week range, sign out */}
+      <div className="flex items-center gap-3 flex-shrink-0">
+        <ThemeToggle />
         {weekRange && (
           <span className="date-badge">{weekRange}</span>
         )}

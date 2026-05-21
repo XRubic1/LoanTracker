@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { BrandLogo, BrandWordmark } from '@/components/BrandLogo';
+import { ThemeToggle } from '@/components/ThemeToggle';
 
 type Mode = 'login' | 'register';
 
@@ -37,7 +38,10 @@ export function AuthPage() {
   };
 
   return (
-    <div className="min-h-screen w-full flex items-center justify-center bg-page px-4">
+    <div className="min-h-screen w-full flex items-center justify-center bg-page px-4 relative">
+      <div className="absolute top-4 right-4">
+        <ThemeToggle />
+      </div>
       <div
         key={mode}
         className="w-full max-w-sm bg-panel border border-border rounded-xl p-8 shadow-xl animate-auth-switch"
