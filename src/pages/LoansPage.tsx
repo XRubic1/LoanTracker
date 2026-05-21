@@ -242,7 +242,7 @@ export function LoansPage({
                     <td className="py-1.5 pr-2 border-b border-border/40 align-middle font-mono font-medium">
                       {fmt(l.total)}
                     </td>
-                    <td className="py-1.5 pr-2 border-b border-border/40 align-middle font-mono font-medium">
+                    <td className="py-1.5 pr-2 border-b border-border/40 align-middle font-mono font-medium text-yellow">
                       {fmt(l.installment)}
                     </td>
                     <td className="py-1.5 pr-2 border-b border-border/40 align-middle min-w-[110px]">

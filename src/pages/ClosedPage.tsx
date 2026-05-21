@@ -152,7 +152,7 @@ export function ClosedPage({
                           <div className="text-[11px] text-muted font-mono">{r.note}</div>
                         )}
                       </td>
-                      <td className="py-1.5 pr-2 border-b border-border/40 align-middle font-mono font-medium text-accent2">
+                      <td className="py-1.5 pr-2 border-b border-border/40 align-middle font-mono font-medium text-reserve">
                         {fmt(r.amount / r.installments)}
                       </td>
                       <td className="py-1.5 pr-2 border-b border-border/40 align-middle font-mono font-medium text-green">

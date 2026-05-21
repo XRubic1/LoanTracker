@@ -9,7 +9,7 @@ interface StatCardProps {
 export function StatCard({ label, value, sub, accent, valueClassName }: StatCardProps) {
   return (
     <div
-      className={`panel-surface px-4 py-[14px] ${accent ? 'border-amber/40' : ''}`}
+      className={`panel-surface px-4 py-[14px] ${accent ? 'border-accent/30' : ''}`}
     >
       <div className="text-[10px] text-label uppercase tracking-[0.05em] mb-[5px]">{label}</div>
       <div className={`text-[20px] font-medium leading-none ${valueClassName ?? 'text-ink'}`}>{value}</div>

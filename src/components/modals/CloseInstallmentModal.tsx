@@ -57,7 +57,7 @@ export function CloseInstallmentModal({
         <div className="py-2 border-b border-border text-[13px]">
           <div className="flex justify-between items-center">
             <span className="text-muted2">Amount</span>
-            <span className="font-mono font-medium">{fmt(loan.installment)}</span>
+            <span className="font-mono font-medium text-yellow">{fmt(loan.installment)}</span>
           </div>
           {loan.factoringFee != null && loan.factoringFee > 0 && (
             <div className="mt-1.5 text-[12px] text-muted2 space-y-0.5">

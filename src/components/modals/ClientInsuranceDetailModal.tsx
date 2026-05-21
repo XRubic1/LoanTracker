@@ -63,7 +63,7 @@ export function ClientInsuranceDetailModal({
           <span className="text-muted2">Status</span>
           <span
             className={`font-medium ${
-              isOut ? 'text-red' : isWarning ? 'text-yellow' : statusLabel.toLowerCase() === 'ok' ? 'text-green' : ''
+              isOut ? 'text-red' : isWarning ? 'text-accent' : statusLabel.toLowerCase() === 'ok' ? 'text-green' : ''
             }`}
           >
             {statusLabel}

@@ -250,7 +250,7 @@ export function LoanDetailModal({
           </div>
           <div className="flex justify-between items-center py-1.5 border-b border-border text-[13px]">
             <span className="text-muted2">Installment</span>
-            <span className="font-mono font-medium">{fmt(loan.installment)}</span>
+            <span className="font-mono font-medium text-yellow">{fmt(loan.installment)}</span>
           </div>
           <div className="flex justify-between items-center py-1.5 border-b border-border text-[13px]">
             <span className="text-muted2">Total Installments</span>
@@ -263,7 +263,7 @@ export function LoanDetailModal({
           {loan.note && (
             <div className="flex justify-between items-center py-1.5 border-b border-border text-[13px]">
               <span className="text-muted2">Note</span>
-              <span className="text-xs text-yellow">{loan.note}</span>
+              <span className="text-xs text-muted">{loan.note}</span>
             </div>
           )}
 
@@ -302,7 +302,7 @@ export function LoanDetailModal({
                     )}
                   </div>
                   <div className="flex items-center gap-1 shrink-0">
-                    <span className="font-mono">{fmt(loan.installment)}</span>
+                    <span className="font-mono text-yellow">{fmt(loan.installment)}</span>
                     <NoteIcon hasNote={hasNote} onClick={() => openInstallmentPopup(i)} />
                     <span
                       className={`text-[11px] w-12 text-right ${paid ? 'text-green' : isNext ? 'text-yellow' : 'text-muted'}`}
@@ -368,7 +368,7 @@ export function LoanDetailModal({
               type="button"
               onClick={handleReverse}
               disabled={!canReverse}
-              className="py-1.5 px-3.5 rounded-lg border border-yellow/30 text-yellow text-xs font-medium bg-transparent hover:bg-yellow/10 disabled:opacity-50 disabled:cursor-not-allowed"
+              className="py-1.5 px-3.5 rounded-lg border border-border text-muted text-xs font-medium bg-transparent hover:bg-surface hover:text-ink disabled:opacity-50 disabled:cursor-not-allowed"
             >
               ↩ Reverse
             </button>

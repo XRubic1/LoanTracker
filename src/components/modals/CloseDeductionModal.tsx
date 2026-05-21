@@ -55,7 +55,7 @@ export function CloseDeductionModal({
         </p>
         <div className="flex justify-between items-center py-2 border-b border-border text-[13px]">
           <span className="text-muted2">Amount</span>
-          <span className="font-mono font-medium">{fmt(perInst)}</span>
+          <span className="font-mono font-medium text-reserve">{fmt(perInst)}</span>
         </div>
         <label className="block text-[11px] text-muted uppercase tracking-wider mb-1.5">
           Note

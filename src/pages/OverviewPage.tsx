@@ -209,7 +209,7 @@ export function OverviewPage({
                           </div>
                           {l.factoringFee != null && l.factoringFee > 0 && (
                             <div className="text-[10px] text-muted">
-                              +{fmt(getLoanFeePerInstallment(l))} → {fmt(l.installment)}
+                              +{fmt(getLoanFeePerInstallment(l))} → <span className="text-yellow">{fmt(l.installment)}</span>
                             </div>
                           )}
                         </td>
@@ -280,7 +280,7 @@ export function OverviewPage({
                         <td className="px-4 py-[9px] border-b border-border align-middle text-[11px] text-muted">
                           {l.nextDate ? fmtDate(l.nextDate) : '—'}
                         </td>
-                        <td className="px-4 py-[9px] border-b border-border align-middle text-[11px] font-medium">
+                        <td className="px-4 py-[9px] border-b border-border align-middle text-[11px] font-medium text-yellow">
                           {l.factoringFee != null && l.factoringFee > 0 ? (
                             <>
                               <div>{fmt(getLoanBasePerInstallment(l))}</div>

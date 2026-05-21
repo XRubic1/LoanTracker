@@ -170,7 +170,7 @@ export function AddLoanModal({ open, onClose, onAdd }: AddLoanModalProps) {
             type="text"
             readOnly
             value={installmentAmount > 0 ? fmt(installmentAmount) : '—'}
-            className={`${inputClass} flex-1 min-w-0 max-w-[140px] font-mono text-muted2 opacity-90`}
+            className={`${inputClass} flex-1 min-w-0 max-w-[140px] font-mono text-yellow opacity-90`}
           />
         </div>
 

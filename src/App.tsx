@@ -314,7 +314,7 @@ export default function App() {
       <AppNotifications loans={loans} clientInsurance={clientInsurance} />
       <main className="main flex-1 min-h-0 overflow-y-auto py-4 px-6">
         {configMissing && (
-          <div className="mb-3 py-2 px-3 rounded-lg text-xs flex items-center justify-between gap-2 bg-alert-warn border border-yellow/40 text-alert-warn-fg">
+          <div className="mb-3 py-2 px-3 rounded-lg text-xs flex items-center justify-between gap-2 bg-alert-warn border border-red/30 text-alert-warn-fg">
             <span>
               Configure Supabase: set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY in .env (see
               .env.example).

@@ -256,7 +256,7 @@ export function ClientInsurancePage({
                           isOut || isCancellationSoon
                             ? 'text-red font-medium hover:opacity-80 transition-opacity'
                             : isWarning
-                              ? 'text-yellow font-medium hover:opacity-80 transition-opacity'
+                              ? 'text-accent font-medium hover:opacity-80 transition-opacity'
                               : statusLabel.toLowerCase() === 'ok'
                                 ? 'text-green hover:opacity-80 transition-opacity'
                                 : 'hover:text-accent transition-colors'
