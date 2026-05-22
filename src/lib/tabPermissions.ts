@@ -3,11 +3,11 @@ import type { PageId } from '@/types';
 /** Pages an owner can grant to team members (not Users, User Activity, or Admin). */
 export const ASSIGNABLE_PAGE_IDS: PageId[] = [
   'overview',
+  'worksheet',
   'loans',
   'reserves',
   'closed',
   'aaaPayments',
-  'worksheet',
   'clients',
   'clientInsurance',
 ];
