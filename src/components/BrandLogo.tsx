@@ -12,7 +12,7 @@ const sizeStyles = {
 } as const;
 
 /**
- * OpsDesk mark — stacked layers + activity pulse (operations desk).
+ * OpsDesk mark — stacked layers (operations desk).
  */
 export function BrandLogo({ size = 'sm', className = '' }: BrandLogoProps) {
   const { wrap, icon } = sizeStyles[size];
@@ -31,14 +31,6 @@ export function BrandLogo({ size = 'sm', className = '' }: BrandLogoProps) {
         <rect x="6" y="19" width="20" height="4" rx="2" className="fill-accent opacity-30" />
         <rect x="6" y="13" width="15" height="4" rx="2" className="fill-accent opacity-55" />
         <rect x="6" y="7" width="10" height="4" rx="2" className="fill-accent" />
-        <path
-          d="M22 8.5 26.5 5 26.5 12"
-          className="stroke-green"
-          strokeWidth="2"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        />
-        <circle cx="26" cy="6" r="2" className="fill-accent" />
       </svg>
     </div>
   );

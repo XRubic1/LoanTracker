@@ -1,19 +1,17 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Section } from '@/components/Section';
+import { ActivityEntryFlags } from '@/components/userActivity/ActivityEntryFlags';
 import { fetchTeamMembers } from '@/lib/supabase-db';
 import { exportWorksheetActivityExcel } from '@/lib/exportWorksheetExcel';
-import { getWeekBoundsDateOnly } from '@/lib/utils';
+import { getPriorWeekBoundsDateOnly, getWeekBoundsDateOnly } from '@/lib/utils';
 import { UserActivityOverview } from '@/components/userActivity/UserActivityOverview';
-import { WorksheetClientAlerts } from '@/components/WorksheetClientAlerts';
 import { buildUserActivityAnalytics } from '@/lib/userActivityStats';
 import {
-  findInsuranceForClient,
+  entryHasAttentionFlags,
   getWorksheetAuthorLabel,
-  getWorksheetClientAlerts,
   getWorksheetEntryDisplayName,
+  getWorksheetEntryFlags,
   getWorksheetIssues,
-  hasWorksheetClientAlerts,
-  isWorksheetUnknownClientEntry,
 } from '@/lib/worksheetUtils';
 import type { UseDataResult } from '@/hooks/useData';
 import type { Client, ClientInsurance, TeamMember, WorksheetEntry } from '@/types';
@@ -27,8 +25,10 @@ export function UserActivityPage({ worksheetEntries, clients, clientInsurance, o
   const [dateFrom, setDateFrom] = useState(week.start);
   const [dateTo, setDateTo] = useState(week.end);
   const [userFilter, setUserFilter] = useState<string>('all');
+  const [issuesOnly, setIssuesOnly] = useState(false);
   const [teamMembers, setTeamMembers] = useState<TeamMember[]>([]);
   const [exporting, setExporting] = useState(false);
+  const [highlightEntryId, setHighlightEntryId] = useState<number | null>(null);
 
   useEffect(() => {
     void fetchTeamMembers(ownerId).then(setTeamMembers).catch(() => setTeamMembers([]));
@@ -43,10 +43,30 @@ export function UserActivityPage({ worksheetEntries, clients, clientInsurance, o
       .sort((a, b) => b.work_date.localeCompare(a.work_date) || b.id - a.id);
   }, [worksheetEntries, dateFrom, dateTo, userFilter]);
 
+  const tableRows = useMemo(() => {
+    if (!issuesOnly) return filtered;
+    return filtered.filter((e) =>
+      entryHasAttentionFlags(getWorksheetEntryFlags(e, clientsById, clientInsurance))
+    );
+  }, [filtered, issuesOnly, clientsById, clientInsurance]);
+
+  useEffect(() => {
+    if (highlightEntryId == null) return;
+    document.getElementById(`activity-row-${highlightEntryId}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }, [highlightEntryId, tableRows]);
+
   const issues = useMemo(
     () => getWorksheetIssues(filtered, clientsById, clientInsurance),
     [filtered, clientsById, clientInsurance]
   );
+
+  const issueSummary = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const i of issues) {
+      counts.set(i.type, (counts.get(i.type) ?? 0) + 1);
+    }
+    return counts;
+  }, [issues]);
 
   const analytics = useMemo(
     () => buildUserActivityAnalytics(filtered, clientsById, ownerId, teamMembers, dateFrom, dateTo),
@@ -96,9 +116,37 @@ export function UserActivityPage({ worksheetEntries, clients, clientInsurance, o
         </button>
       </div>
 
-      <p className="text-muted2 text-[13px] mb-4">
-        Visual overview of team worksheet activity, then the full batch list below.
+      <p className="text-muted2 text-[13px] mb-4 max-w-2xl">
+        Accountability (who logged work), workload, client handoffs, and exceptions — use the batch log for
+        full detail.
       </p>
+
+      <div className="flex flex-wrap gap-2 mb-3">
+        <button
+          type="button"
+          onClick={() => {
+            const w = getWeekBoundsDateOnly();
+            setDateFrom(w.start);
+            setDateTo(w.end);
+            setIssuesOnly(false);
+          }}
+          className="text-[12px] px-3 py-1.5 rounded-lg border border-border bg-surface text-ink hover:border-accent/40 transition-colors"
+        >
+          This week
+        </button>
+        <button
+          type="button"
+          onClick={() => {
+            const w = getPriorWeekBoundsDateOnly();
+            setDateFrom(w.start);
+            setDateTo(w.end);
+            setIssuesOnly(false);
+          }}
+          className="text-[12px] px-3 py-1.5 rounded-lg border border-border bg-surface text-ink hover:border-accent/40 transition-colors"
+        >
+          Last week
+        </button>
+      </div>
 
       <div className="flex flex-wrap gap-3 mb-4 items-end">
         <div>
@@ -134,43 +182,103 @@ export function UserActivityPage({ worksheetEntries, clients, clientInsurance, o
             ))}
           </select>
         </div>
+        <label className="flex items-center gap-2 pb-2 cursor-pointer select-none">
+          <input
+            type="checkbox"
+            checked={issuesOnly}
+            onChange={(e) => setIssuesOnly(e.target.checked)}
+            className="rounded border-border"
+          />
+          <span className="text-[13px] text-ink">Issues only</span>
+        </label>
       </div>
 
       {issues.length > 0 && (
         <div className="mb-4 rounded-xl border border-red/30 bg-red/5 px-4 py-3">
-          <p className="text-[13px] font-medium text-red mb-2">{issues.length} issue{issues.length !== 1 ? 's' : ''}</p>
-          <ul className="text-[12px] text-ink space-y-1 max-h-32 overflow-y-auto">
-            {issues.slice(0, 20).map((issue, i) => (
-              <li key={`${issue.entryId}-${issue.type}-${i}`}>{issue.message}</li>
+          <div className="flex flex-wrap items-baseline justify-between gap-2 mb-2">
+            <p className="text-[13px] font-medium text-red">
+              {issues.length} exception{issues.length !== 1 ? 's' : ''} in this range
+            </p>
+            <button
+              type="button"
+              onClick={() => {
+                setIssuesOnly(true);
+                setHighlightEntryId(issues[0]?.entryId ?? null);
+              }}
+              className="text-[12px] text-accent hover:underline"
+            >
+              Show in table
+            </button>
+          </div>
+          <p className="text-[12px] text-muted2 mb-2">
+            {[
+              issueSummary.get('unverified') && `${issueSummary.get('unverified')} unverified`,
+              issueSummary.get('unknown_client') && `${issueSummary.get('unknown_client')} not on list`,
+              issueSummary.get('warning_note') && `${issueSummary.get('warning_note')} warnings`,
+              issueSummary.get('new_client_review') && `${issueSummary.get('new_client_review')} new-client reviews`,
+              issueSummary.get('insurance_cancellation') &&
+                `${issueSummary.get('insurance_cancellation')} insurance verify`,
+            ]
+              .filter(Boolean)
+              .join(' · ')}
+          </p>
+          <ul className="text-[12px] text-ink space-y-1 max-h-28 overflow-y-auto list-disc list-inside">
+            {issues.slice(0, 8).map((issue, i) => (
+              <li key={`${issue.entryId}-${issue.type}-${i}`}>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIssuesOnly(true);
+                    setHighlightEntryId(issue.entryId);
+                  }}
+                  className="text-left hover:text-accent underline-offset-2 hover:underline"
+                >
+                  {issue.message}
+                </button>
+              </li>
             ))}
-            {issues.length > 20 && <li className="text-muted2">+{issues.length - 20} more</li>}
+            {issues.length > 8 && (
+              <li className="text-muted2 list-none">+{issues.length - 8} more — use “Issues only” or export</li>
+            )}
           </ul>
         </div>
       )}
 
-      <UserActivityOverview analytics={analytics} hasEntries={filtered.length > 0} />
+      <UserActivityOverview
+        analytics={analytics}
+        hasEntries={filtered.length > 0}
+        onSelectUser={(id) => {
+          setUserFilter(id);
+          setIssuesOnly(false);
+        }}
+      />
 
-      <Section title={`All batches (${filtered.length})`}>
+      <Section
+        title={
+          issuesOnly
+            ? `Exceptions (${tableRows.length})`
+            : `Batch log (${tableRows.length})`
+        }
+      >
         <div className="overflow-x-auto -mx-1">
-          <table className="data-table w-full min-w-[900px] [&_th]:text-center [&_td]:text-center">
+          <table className="w-full min-w-[720px] border-collapse text-[13px]">
             <thead>
-              <tr>
-                <th>Date</th>
-                <th>User</th>
-                <th>Client</th>
-                <th>Invoices</th>
-                <th>Group</th>
-                <th>Verified</th>
-                <th>Expenses</th>
-                <th className="min-w-[200px]">Alerts</th>
-                <th>Note</th>
+              <tr className="border-b border-border text-[10px] uppercase tracking-wider text-label">
+                <th className="text-left font-normal px-3 py-2 w-[100px]">Date</th>
+                <th className="text-left font-normal px-3 py-2 w-[120px]">User</th>
+                <th className="text-left font-normal px-3 py-2">Client</th>
+                <th className="text-right font-normal px-3 py-2 w-16">Inv.</th>
+                <th className="text-center font-normal px-3 py-2 w-20">Verified</th>
+                <th className="text-center font-normal px-3 py-2 min-w-[160px]">Flags</th>
+                <th className="text-left font-normal px-3 py-2 max-w-[200px]">Note</th>
               </tr>
             </thead>
             <tbody>
-              {filtered.map((e) => (
+              {tableRows.map((e) => (
                 <ActivityRow
                   key={e.id}
                   entry={e}
+                  highlighted={highlightEntryId === e.id}
                   clientsById={clientsById}
                   clientInsurance={clientInsurance}
                   ownerId={ownerId}
@@ -179,8 +287,12 @@ export function UserActivityPage({ worksheetEntries, clients, clientInsurance, o
               ))}
             </tbody>
           </table>
-          {filtered.length === 0 && (
-            <p className="text-muted2 text-[13px] py-6 text-center">No activity in this range.</p>
+          {tableRows.length === 0 && (
+            <p className="text-muted2 text-[13px] py-8 text-center">
+              {issuesOnly
+                ? 'No batches with exceptions in this range.'
+                : 'No activity in this range.'}
+            </p>
           )}
         </div>
       </Section>
@@ -190,60 +302,58 @@ export function UserActivityPage({ worksheetEntries, clients, clientInsurance, o
 
 function ActivityRow({
   entry,
+  highlighted,
   clientsById,
   clientInsurance,
   ownerId,
   teamMembers,
 }: {
   entry: WorksheetEntry;
+  highlighted?: boolean;
   clientsById: Map<number, Client>;
   clientInsurance: ClientInsurance[];
   ownerId: string;
   teamMembers: TeamMember[];
 }) {
-  const unknown = isWorksheetUnknownClientEntry(entry);
-  const client = entry.client_id != null ? clientsById.get(entry.client_id) : undefined;
   const displayName = getWorksheetEntryDisplayName(entry, clientsById);
-  const insurance = client ? findInsuranceForClient(client, clientInsurance) : null;
-  const alerts = client ? getWorksheetClientAlerts(client, insurance) : null;
+  const flags = getWorksheetEntryFlags(entry, clientsById, clientInsurance);
+  const needsAttention = entryHasAttentionFlags(flags);
   const author = getWorksheetAuthorLabel(entry.created_by, ownerId, teamMembers);
-  const highlight =
-    unknown ||
-    !entry.verified ||
-    (alerts && hasWorksheetClientAlerts(alerts)) ||
-    (alerts?.requiresFullVerification && !entry.verified);
+
   return (
-    <tr className={highlight ? 'bg-accent/5' : undefined}>
-      <td>{entry.work_date}</td>
-      <td className="text-[12px] text-muted2">{author}</td>
-      <td className="font-medium text-ink">
-        {displayName}
-        {unknown && (
-          <span className="block text-[10px] font-normal text-accent mt-0.5">Not on client list</span>
-        )}
+    <tr
+      id={`activity-row-${entry.id}`}
+      className={`border-b border-border row-hover ${
+        highlighted ? 'bg-accent/15 ring-1 ring-inset ring-accent/30' : needsAttention ? 'bg-accent/5' : ''
+      }`}
+    >
+      <td className="px-3 py-2.5 text-muted2 tabular-nums whitespace-nowrap">{entry.work_date}</td>
+      <td className="px-3 py-2.5 text-[12px] text-muted2 truncate max-w-[120px]" title={author}>
+        {author}
       </td>
-      <td>{entry.invoice_count}</td>
-      <td>{entry.group_work ? 'YES' : 'NO'}</td>
-      <td
-        className={
-          entry.verified
-            ? 'text-green'
-            : alerts?.requiresFullVerification
-              ? 'text-red font-semibold'
-              : 'text-accent'
-        }
-      >
-        {entry.verified ? 'YES' : 'NO'}
+      <td className="px-3 py-2.5 font-medium text-ink">
+        <span className="line-clamp-2" title={displayName}>
+          {displayName}
+        </span>
       </td>
-      <td className="text-muted2">{client?.expenses ?? '—'}</td>
-      <td className="align-middle py-2 max-w-[280px]">
-        {client && alerts && hasWorksheetClientAlerts(alerts) ? (
-          <WorksheetClientAlerts client={client} insurance={insurance} variant="compact" alerts={alerts} />
-        ) : (
-          <span className="text-muted2 text-[12px]">—</span>
-        )}
+      <td className="px-3 py-2.5 text-right tabular-nums">{entry.invoice_count}</td>
+      <td className="px-3 py-2.5 text-center">
+        <span
+          className={
+            entry.verified
+              ? 'text-green text-[12px] font-medium'
+              : 'text-red text-[12px] font-semibold'
+          }
+        >
+          {entry.verified ? 'Yes' : 'No'}
+        </span>
       </td>
-      <td className="text-[12px] max-w-[120px] text-muted2">{entry.note || '—'}</td>
+      <td className="px-3 py-2.5 align-middle">
+        <ActivityEntryFlags flags={flags} hideNeutralWhenClean />
+      </td>
+      <td className="px-3 py-2.5 text-[12px] text-muted2 truncate max-w-[200px]" title={entry.note || undefined}>
+        {entry.note?.trim() || '—'}
+      </td>
     </tr>
   );
 }

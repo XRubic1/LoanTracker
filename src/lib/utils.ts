@@ -147,6 +147,38 @@ export function getWeekBoundsDateOnly(): { start: string; end: string } {
   return { start: toStr(start), end: toStr(end) };
 }
 
+/** Previous Mon–Sun (the week before the current week). */
+export function getPriorWeekBoundsDateOnly(): { start: string; end: string } {
+  const { start: thisMon } = getWeekBoundsDateOnly();
+  const [y, m, d] = thisMon.split('-').map(Number);
+  const priorMon = new Date(y, m - 1, d);
+  priorMon.setDate(priorMon.getDate() - 7);
+  const priorSun = new Date(priorMon);
+  priorSun.setDate(priorMon.getDate() + 6);
+  const toStr = (date: Date) =>
+    `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+  return { start: toStr(priorMon), end: toStr(priorSun) };
+}
+
+/** True for Monday–Friday (local calendar day from YYYY-MM-DD). */
+export function isWeekdayDateOnly(iso: string): boolean {
+  const [y, m, d] = iso.split('-').map(Number);
+  const date = new Date(y, m - 1, d);
+  if (isNaN(date.getTime())) return false;
+  const day = date.getDay();
+  return day >= 1 && day <= 5;
+}
+
+/** Inclusive day count between two YYYY-MM-DD strings. */
+export function daysInRangeInclusive(dateFrom: string, dateTo: string): number {
+  const [y1, m1, d1] = dateFrom.split('-').map(Number);
+  const [y2, m2, d2] = dateTo.split('-').map(Number);
+  const a = new Date(y1, m1 - 1, d1);
+  const b = new Date(y2, m2 - 1, d2);
+  if (isNaN(a.getTime()) || isNaN(b.getTime()) || b < a) return 1;
+  return Math.floor((b.getTime() - a.getTime()) / 86400000) + 1;
+}
+
 /** Next week (Mon–Sun after current week) as date-only strings. */
 function getNextWeekBoundsDateOnly(): { start: string; end: string } {
   const { start } = getWeekBoundsDateOnly();

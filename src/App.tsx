@@ -134,6 +134,7 @@ export default function App() {
     removeClient,
     addWorksheetEntry,
     updateWorksheetEntryById,
+    removeWorksheetEntry,
   } = useData(effectiveOwnerId ?? null, user?.id ?? null);
 
   const showAdminNav = isPlatformAdmin(user?.email);
@@ -546,6 +547,7 @@ export default function App() {
             clientInsurance={clientInsurance}
             currentUserId={user.id}
             addWorksheetEntry={addWorksheetEntry}
+            removeWorksheetEntry={removeWorksheetEntry}
             onEditEntry={setWorksheetEntryId}
           />
         )}

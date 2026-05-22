@@ -28,7 +28,7 @@ interface WorksheetPageProps extends Pick<
 
   UseDataResult,
 
-  'worksheetEntries' | 'clients' | 'clientInsurance' | 'addWorksheetEntry'
+  'worksheetEntries' | 'clients' | 'clientInsurance' | 'addWorksheetEntry' | 'removeWorksheetEntry'
 
 > {
 
@@ -50,6 +50,8 @@ export function WorksheetPage({
 
   addWorksheetEntry,
 
+  removeWorksheetEntry,
+
   currentUserId,
 
   onEditEntry,
@@ -61,6 +63,8 @@ export function WorksheetPage({
   const [dateFrom, setDateFrom] = useState(week.start);
 
   const [dateTo, setDateTo] = useState(week.end);
+
+  const [deletingId, setDeletingId] = useState<number | null>(null);
 
 
 
@@ -83,6 +87,36 @@ export function WorksheetPage({
     [worksheetEntries, currentUserId, dateFrom, dateTo]
 
   );
+
+
+
+  const handleDelete = async (entry: WorksheetEntry) => {
+
+    const name = getWorksheetEntryDisplayName(entry, clientsById);
+
+    if (!window.confirm(`Delete batch for ${name} on ${entry.work_date}? This cannot be undone.`)) {
+
+      return;
+
+    }
+
+    setDeletingId(entry.id);
+
+    try {
+
+      await removeWorksheetEntry(entry.id);
+
+    } catch (err) {
+
+      window.alert(err instanceof Error ? err.message : String(err));
+
+    } finally {
+
+      setDeletingId(null);
+
+    }
+
+  };
 
 
 
@@ -164,6 +198,10 @@ export function WorksheetPage({
 
           onEdit={onEditEntry}
 
+          onDelete={handleDelete}
+
+          deletingId={deletingId}
+
         />
 
       </Section>
@@ -186,6 +224,10 @@ function WorksheetTable({
 
   onEdit,
 
+  onDelete,
+
+  deletingId,
+
 }: {
 
   entries: WorksheetEntry[];
@@ -195,6 +237,10 @@ function WorksheetTable({
   clientInsurance: ClientInsurance[];
 
   onEdit: (id: number) => void;
+
+  onDelete: (entry: WorksheetEntry) => void;
+
+  deletingId: number | null;
 
 }) {
 
@@ -321,14 +367,22 @@ function WorksheetTable({
 
                 <td className="text-[12px] max-w-[120px] text-muted2">{e.note || '—'}</td>
 
-                <td>
-
-                  <button type="button" onClick={() => onEdit(e.id)} className="text-xs text-muted2 hover:text-accent">
-
+                <td className="whitespace-nowrap">
+                  <button
+                    type="button"
+                    onClick={() => onEdit(e.id)}
+                    className="text-xs text-muted2 hover:text-accent mr-2"
+                  >
                     Edit
-
                   </button>
-
+                  <button
+                    type="button"
+                    onClick={() => void onDelete(e)}
+                    disabled={deletingId === e.id}
+                    className="text-xs text-muted2 hover:text-red disabled:opacity-50"
+                  >
+                    {deletingId === e.id ? '…' : 'Delete'}
+                  </button>
                 </td>
 
               </tr>

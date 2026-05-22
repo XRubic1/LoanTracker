@@ -99,6 +99,46 @@ const baseOptions = {
   },
 };
 
+/** Horizontal bars: batches per user (invoices in tooltip). */
+export function teamWorkloadChart(
+  labels: string[],
+  batches: number[],
+  invoices: number[]
+): ChartConfiguration | null {
+  if (labels.length === 0) return null;
+  return {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: [
+        {
+          label: 'Batches',
+          data: batches,
+          backgroundColor: PALETTE[0],
+          borderRadius: 4,
+        },
+      ],
+    },
+    options: {
+      indexAxis: 'y',
+      ...baseOptions,
+      plugins: {
+        ...baseOptions.plugins,
+        legend: { display: false },
+        tooltip: {
+          callbacks: {
+            afterLabel: (ctx) => {
+              const i = ctx.dataIndex;
+              const inv = invoices[i];
+              return inv != null ? ` Invoices: ${inv}` : '';
+            },
+          },
+        },
+      },
+    },
+  };
+}
+
 /** Bar chart: batches per user. */
 export function batchesByUserChart(
   labels: string[],

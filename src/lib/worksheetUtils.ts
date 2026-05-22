@@ -92,6 +92,71 @@ export function hasWorksheetClientAlerts(alerts: WorksheetClientAlertInfo): bool
   return !!(alerts.warningNote || alerts.cancellationMessage);
 }
 
+export type WorksheetEntryFlagType =
+  | 'unknown'
+  | 'unverified'
+  | 'warning'
+  | 'cancellation'
+  | 'new_client'
+  | 'group';
+
+export interface WorksheetEntryFlag {
+  type: WorksheetEntryFlagType;
+  label: string;
+  title?: string;
+}
+
+/** Short labels for owner activity / audit tables (no long alert paragraphs). */
+export function getWorksheetEntryFlags(
+  entry: WorksheetEntry,
+  clientsById: Map<number, Client>,
+  insuranceList: ClientInsurance[] = []
+): WorksheetEntryFlag[] {
+  const flags: WorksheetEntryFlag[] = [];
+
+  if (isWorksheetUnknownClientEntry(entry)) {
+    flags.push({ type: 'unknown', label: 'Not listed', title: WORKSHEET_UNKNOWN_CLIENT_MESSAGE });
+    if (!entry.verified) {
+      flags.push({ type: 'unverified', label: 'Unverified' });
+    }
+    return flags;
+  }
+
+  if (entry.client_id == null) return flags;
+
+  const client = clientsById.get(entry.client_id);
+  if (!client) return flags;
+
+  const insurance = findInsuranceForClient(client, insuranceList);
+  const alerts = getWorksheetClientAlerts(client, insurance);
+
+  if (!entry.verified) {
+    flags.push({
+      type: 'unverified',
+      label: alerts.requiresFullVerification ? 'Must verify' : 'Unverified',
+      title: alerts.requiresFullVerification ? alerts.cancellationMessage ?? undefined : undefined,
+    });
+  }
+  if (alerts.warningNote) {
+    flags.push({ type: 'warning', label: 'Warning', title: alerts.warningNote });
+  }
+  if (alerts.cancellationMessage && entry.verified) {
+    flags.push({ type: 'cancellation', label: 'Insurance', title: alerts.cancellationMessage });
+  }
+  if (isNewClientNeedsReview(client)) {
+    flags.push({ type: 'new_client', label: 'New client', title: 'New-client review overdue' });
+  }
+  if (entry.group_work) {
+    flags.push({ type: 'group', label: 'Group' });
+  }
+
+  return flags;
+}
+
+export function entryHasAttentionFlags(flags: WorksheetEntryFlag[]): boolean {
+  return flags.some((f) => f.type !== 'group');
+}
+
 /** Detect issues on worksheet entries for owner review. */
 export function getWorksheetIssues(
   entries: WorksheetEntry[],
