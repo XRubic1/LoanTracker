@@ -5,10 +5,8 @@ import {
   getClientInsuranceStatusLabel,
   isClientInsuranceWarning,
   isClientInsuranceOut,
-  isNewClientNeedsReview,
 } from '@/lib/clientInsuranceUtils';
 import { fetchCancellationAuditByClientId } from '@/lib/supabase-db';
-import { NewClientReviewPanel } from '@/components/NewClientReviewPanel';
 
 interface ClientInsuranceDetailModalProps {
   clientInsurance: ClientInsurance | null;
@@ -25,7 +23,6 @@ export function ClientInsuranceDetailModal({
   onClose,
   onEdit,
   onDelete,
-  onSave,
 }: ClientInsuranceDetailModalProps) {
   const [cancellationAudit, setCancellationAudit] = useState<ClientInsuranceCancellationAudit[]>([]);
   const [auditLoading, setAuditLoading] = useState(false);
@@ -100,15 +97,6 @@ export function ClientInsuranceDetailModal({
               })}
             </span>
           </div>
-        )}
-        {clientInsurance.is_new_client && onSave && (
-          <NewClientReviewPanel
-            client={clientInsurance}
-            onSave={(record) => onSave(clientInsurance.id, record)}
-          />
-        )}
-        {clientInsurance.is_new_client && isNewClientNeedsReview(clientInsurance) && !onSave && (
-          <p className="text-[12px] text-accent font-medium">New client — review required</p>
         )}
         <div className="flex flex-wrap gap-2 justify-end pt-2 items-center">
           {onDelete && (

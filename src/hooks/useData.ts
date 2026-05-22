@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import type { Loan, Reserve, ClientInsurance, InsuranceVerification, AaaPayment } from '@/types';
+import type { Loan, Reserve, Client, ClientInsurance, InsuranceVerification, AaaPayment, WorksheetEntry } from '@/types';
 import { isConfigMissing, getSupabase } from '@/lib/supabase';
 import {
   fetchLoans,
@@ -19,12 +19,22 @@ import {
   fetchAaaPayments,
   insertAaaPayment,
   updateAaaPayment,
+  fetchClients,
+  insertClient,
+  updateClient,
+  deleteClientById,
+  fetchWorksheetEntries,
+  insertWorksheetEntry,
+  updateWorksheetEntry,
+  deleteWorksheetEntryById,
 } from '@/lib/supabase-db';
 
 export interface UseDataResult {
   loans: Loan[];
   reserves: Reserve[];
   aaaPayments: AaaPayment[];
+  clients: Client[];
+  worksheetEntries: WorksheetEntry[];
   clientInsurance: ClientInsurance[];
   insuranceVerification: InsuranceVerification | null;
   loading: boolean;
@@ -51,12 +61,22 @@ export interface UseDataResult {
   ) => Promise<InsuranceVerification>;
   addAaaPayment: (payload: Omit<AaaPayment, 'id' | 'createdAt'>) => Promise<AaaPayment>;
   updateAaaPaymentById: (id: number, payment: AaaPayment) => Promise<AaaPayment>;
+  addClient: (payload: Omit<Client, 'id'>) => Promise<Client>;
+  updateClientById: (id: number, record: Client) => Promise<Client>;
+  removeClient: (id: number) => Promise<void>;
+  addWorksheetEntry: (
+    payload: Omit<WorksheetEntry, 'id' | 'owner_id' | 'created_by'>
+  ) => Promise<WorksheetEntry>;
+  updateWorksheetEntryById: (id: number, entry: WorksheetEntry) => Promise<WorksheetEntry>;
+  removeWorksheetEntry: (id: number) => Promise<void>;
 }
 
-export function useData(ownerId: string | null): UseDataResult {
+export function useData(ownerId: string | null, userId: string | null = null): UseDataResult {
   const [loans, setLoans] = useState<Loan[]>([]);
   const [reserves, setReserves] = useState<Reserve[]>([]);
   const [aaaPayments, setAaaPayments] = useState<AaaPayment[]>([]);
+  const [clients, setClients] = useState<Client[]>([]);
+  const [worksheetEntries, setWorksheetEntries] = useState<WorksheetEntry[]>([]);
   const [clientInsurance, setClientInsurance] = useState<ClientInsurance[]>([]);
   const [insuranceVerification, setInsuranceVerification] = useState<InsuranceVerification | null>(null);
   const [loading, setLoading] = useState(true);
@@ -93,6 +113,18 @@ export function useData(ownerId: string | null): UseDataResult {
         setAaaPayments(aaaData);
       } catch {
         setAaaPayments([]);
+      }
+      try {
+        const clientsData = await fetchClients();
+        setClients(clientsData);
+      } catch {
+        setClients([]);
+      }
+      try {
+        const worksheetData = await fetchWorksheetEntries();
+        setWorksheetEntries(worksheetData);
+      } catch {
+        setWorksheetEntries([]);
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
@@ -137,6 +169,16 @@ export function useData(ownerId: string | null): UseDataResult {
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'aaa_payments' },
+        () => { refetchRef.current(); }
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'clients' },
+        () => { refetchRef.current(); }
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'worksheet_entries' },
         () => { refetchRef.current(); }
       )
       .subscribe();
@@ -319,10 +361,55 @@ export function useData(ownerId: string | null): UseDataResult {
     return updated;
   }, []);
 
+  const addClientRecord = useCallback(
+    async (payload: Omit<Client, 'id'>) => {
+      const added = await insertClient(payload, ownerId);
+      setClients((prev) => [...prev, added].sort((a, b) => a.name.localeCompare(b.name)));
+      return added;
+    },
+    [ownerId]
+  );
+
+  const updateClientById = useCallback(async (id: number, record: Client) => {
+    const updated = await updateClient(id, record);
+    setClients((prev) =>
+      prev.map((r) => (r.id === id ? updated : r)).sort((a, b) => a.name.localeCompare(b.name))
+    );
+    return updated;
+  }, []);
+
+  const removeClient = useCallback(async (id: number) => {
+    await deleteClientById(id);
+    setClients((prev) => prev.filter((r) => r.id !== id));
+  }, []);
+
+  const addWorksheetEntry = useCallback(
+    async (payload: Omit<WorksheetEntry, 'id' | 'owner_id' | 'created_by'>) => {
+      if (!ownerId || !userId) throw new Error('Must be signed in');
+      const added = await insertWorksheetEntry(payload, ownerId, userId);
+      setWorksheetEntries((prev) => [added, ...prev]);
+      return added;
+    },
+    [ownerId, userId]
+  );
+
+  const updateWorksheetEntryById = useCallback(async (id: number, entry: WorksheetEntry) => {
+    const updated = await updateWorksheetEntry(id, entry);
+    setWorksheetEntries((prev) => prev.map((e) => (e.id === id ? updated : e)));
+    return updated;
+  }, []);
+
+  const removeWorksheetEntry = useCallback(async (id: number) => {
+    await deleteWorksheetEntryById(id);
+    setWorksheetEntries((prev) => prev.filter((e) => e.id !== id));
+  }, []);
+
   return {
     loans,
     reserves,
     aaaPayments,
+    clients,
+    worksheetEntries,
     clientInsurance,
     insuranceVerification,
     loading,
@@ -347,5 +434,11 @@ export function useData(ownerId: string | null): UseDataResult {
     updateInsuranceVerification,
     addAaaPayment,
     updateAaaPaymentById,
+    addClient: addClientRecord,
+    updateClientById,
+    removeClient,
+    addWorksheetEntry,
+    updateWorksheetEntryById,
+    removeWorksheetEntry,
   };
 }

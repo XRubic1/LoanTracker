@@ -1,9 +1,7 @@
-import type { ClientInsurance, Loan } from '@/types';
+import type { Client, ClientInsurance, Loan } from '@/types';
 import { isNewLoan } from '@/lib/utils';
-import {
-  getNewClientsNeedingReview,
-  isClientInsuranceCancellationWithDate,
-} from '@/lib/clientInsuranceUtils';
+import { getNewClientsNeedingReview } from '@/lib/clientUtils';
+import { isClientInsuranceCancellationWithDate } from '@/lib/clientInsuranceUtils';
 
 export const NOTIFICATIONS_HIDDEN_STORAGE_KEY = 'loan-tracker-notifications-hidden';
 
@@ -25,12 +23,16 @@ export function setNotificationsHidden(hidden: boolean): void {
 }
 
 /** True when insurance cancellation and/or new-loan alerts would be shown. */
-export function hasActiveNotifications(loans: Loan[], clientInsurance: ClientInsurance[]): boolean {
+export function hasActiveNotifications(
+  loans: Loan[],
+  clientInsurance: ClientInsurance[],
+  clients: Client[] = []
+): boolean {
   const visibleLoans = loans.filter((l) => !l.hidden);
   const activeLoans = visibleLoans.filter((l) => l.paidCount < l.totalInstallments);
   const newLoans = activeLoans.filter(isNewLoan);
   const cancellationWithDate = clientInsurance.filter(isClientInsuranceCancellationWithDate);
-  const newClientsNeedReview = getNewClientsNeedingReview(clientInsurance);
+  const newClientsNeedReview = getNewClientsNeedingReview(clients);
   return (
     cancellationWithDate.length > 0 ||
     newLoans.length > 0 ||

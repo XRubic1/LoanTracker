@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef, useMemo } from 'react';
+import { useState, useCallback, useRef, useMemo, useEffect } from 'react';
 import type { PageId } from '@/types';
 import { Sidebar } from '@/components/Sidebar';
 import { AppNotifications } from '@/components/AppNotifications';
@@ -9,7 +9,18 @@ import { ReservesPage } from '@/pages/ReservesPage';
 import { ClosedPage } from '@/pages/ClosedPage';
 import { AaaPaymentsPage } from '@/pages/AaaPaymentsPage';
 import { ClientInsurancePage } from '@/pages/ClientInsurancePage';
+import { ClientsPage } from '@/pages/ClientsPage';
+import { WorksheetPage } from '@/pages/WorksheetPage';
+import { UserActivityPage } from '@/pages/UserActivityPage';
+import { AdminPage } from '@/pages/AdminPage';
 import { UsersPage } from '@/pages/UsersPage';
+import { AddClientModal } from '@/components/modals/AddClientModal';
+import { EditClientModal } from '@/components/modals/EditClientModal';
+import { ClientDetailModal } from '@/components/modals/ClientDetailModal';
+import { WorksheetEntryModal } from '@/components/modals/WorksheetEntryModal';
+import { ImportClientsModal } from '@/components/modals/ImportClientsModal';
+import { isPlatformAdmin } from '@/lib/platformAdmin';
+import { normalizeClientName } from '@/lib/importClients';
 import { AuthPage } from '@/pages/AuthPage';
 import { LoanDetailModal } from '@/components/modals/LoanDetailModal';
 import { ReserveDetailModal } from '@/components/modals/ReserveDetailModal';
@@ -21,7 +32,7 @@ import { AddClientInsuranceModal } from '@/components/modals/AddClientInsuranceM
 import { ClientInsuranceDetailModal } from '@/components/modals/ClientInsuranceDetailModal';
 import { EditClientInsuranceModal } from '@/components/modals/EditClientInsuranceModal';
 import { EditAaaPaymentModal } from '@/components/modals/EditAaaPaymentModal';
-import type { Loan } from '@/types';
+import type { Client, Loan } from '@/types';
 import { PasswordConfirmModal } from '@/components/PasswordConfirmModal';
 import { useAuth } from '@/contexts/AuthContext';
 import { useData } from '@/hooks/useData';
@@ -30,9 +41,18 @@ import {
   hasActiveNotifications,
   setNotificationsHidden,
 } from '@/lib/notificationsBanner';
+import { canAccessPage, getDefaultPageForUser } from '@/lib/tabPermissions';
 
 export default function App() {
-  const { session, effectiveOwnerId, loading: authLoading, signOut } = useAuth();
+  const {
+    session,
+    user,
+    effectiveOwnerId,
+    isOwner,
+    memberAllowedPages,
+    loading: authLoading,
+    signOut,
+  } = useAuth();
   const [page, setPage] = useState<PageId>('overview');
   const [loanDetailId, setLoanDetailId] = useState<number | null>(null);
   const [reserveDetailId, setReserveDetailId] = useState<number | null>(null);
@@ -44,6 +64,12 @@ export default function App() {
   const [clientInsuranceDetailId, setClientInsuranceDetailId] = useState<number | null>(null);
   const [editClientInsuranceId, setEditClientInsuranceId] = useState<number | null>(null);
   const [editAaaPaymentId, setEditAaaPaymentId] = useState<number | null>(null);
+  const [addClientOpen, setAddClientOpen] = useState(false);
+  const [clientDetailId, setClientDetailId] = useState<number | null>(null);
+  const [editClientId, setEditClientId] = useState<number | null>(null);
+  const [worksheetEntryId, setWorksheetEntryId] = useState<number | null>(null);
+  const [importClientsOpen, setImportClientsOpen] = useState(false);
+  const [addClientInsuranceInitialName, setAddClientInsuranceInitialName] = useState('');
   const [passwordModalOpen, setPasswordModalOpen] = useState(false);
   const [notificationsHidden, setNotificationsHiddenState] = useState(getNotificationsHidden);
   const pendingPasswordActionRef = useRef<(() => void) | null>(null);
@@ -101,11 +127,32 @@ export default function App() {
     aaaPayments,
     addAaaPayment,
     updateAaaPaymentById,
-  } = useData(effectiveOwnerId ?? null);
+    clients,
+    worksheetEntries,
+    addClient,
+    updateClientById,
+    removeClient,
+    addWorksheetEntry,
+    updateWorksheetEntryById,
+  } = useData(effectiveOwnerId ?? null, user?.id ?? null);
+
+  const showAdminNav = isPlatformAdmin(user?.email);
+
+  const tabAccess = useMemo(
+    () => ({ isOwner, showAdmin: showAdminNav, allowedPages: memberAllowedPages }),
+    [isOwner, showAdminNav, memberAllowedPages]
+  );
+
+  useEffect(() => {
+    if (!user || authLoading || effectiveOwnerId == null) return;
+    if (!canAccessPage(page, tabAccess)) {
+      setPage(getDefaultPageForUser(tabAccess));
+    }
+  }, [page, tabAccess, user, authLoading, effectiveOwnerId]);
 
   const showNotificationsToggle = useMemo(
-    () => hasActiveNotifications(loans, clientInsurance),
-    [loans, clientInsurance]
+    () => hasActiveNotifications(loans, clientInsurance, clients),
+    [loans, clientInsurance, clients]
   );
 
   const selectedClientInsurance =
@@ -118,6 +165,11 @@ export default function App() {
       : null;
   const editingAaaPayment =
     editAaaPaymentId != null ? aaaPayments.find((p) => p.id === editAaaPaymentId) ?? null : null;
+  const selectedClient =
+    clientDetailId != null ? clients.find((c) => c.id === clientDetailId) ?? null : null;
+  const editingClient = editClientId != null ? clients.find((c) => c.id === editClientId) ?? null : null;
+  const editingWorksheetEntry =
+    worksheetEntryId != null ? worksheetEntries.find((e) => e.id === worksheetEntryId) ?? null : null;
 
   const selectedLoan = loanDetailId != null ? loans.find((l) => l.id === loanDetailId) ?? null : null;
   const selectedReserve =
@@ -279,6 +331,60 @@ export default function App() {
   );
 
   /** Single update: save note and mark next deduction (avoids note being overwritten). */
+  const handleImportClients = useCallback(
+    async (batch: { toAdd: Omit<Client, 'id'>[]; toUpdate: Client[]; toDelete: Client[] }) => {
+      const errors: string[] = [];
+      for (const client of batch.toUpdate) {
+        await updateClientById(client.id, client);
+      }
+      for (const payload of batch.toAdd) {
+        await addClient(payload);
+      }
+      for (const client of batch.toDelete) {
+        try {
+          await removeClient(client.id);
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : String(err);
+          errors.push(`${client.name}: ${msg}`);
+        }
+      }
+      if (errors.length > 0) {
+        throw new Error(
+          `Some clients could not be deleted (worksheet entries may block removal):\n${errors.join('\n')}`
+        );
+      }
+    },
+    [addClient, updateClientById, removeClient]
+  );
+
+  const handleAddClientInsurance = useCallback(
+    async (payload: Parameters<typeof addClientInsurance>[0]) => {
+      const added = await addClientInsurance(payload);
+      const exists = clients.some(
+        (c) => normalizeClientName(c.name) === normalizeClientName(payload.client)
+      );
+      if (!exists) {
+        await addClient({
+          name: payload.client.trim(),
+          expenses: null,
+          warning_note: null,
+          is_new_client: false,
+          started_date: null,
+          new_client_reviewed: false,
+          verification_days: 30,
+          verification_always: false,
+        });
+      }
+      return added;
+    },
+    [addClientInsurance, addClient, clients]
+  );
+
+  const openAddInsurance = useCallback((prefillName = '') => {
+    setAddClientInsuranceInitialName(prefillName);
+    setAddClientInsuranceOpen(true);
+  }, []);
+
   const handleOverviewCloseDeduction = useCallback(
     async (note: string) => {
       if (overviewCloseDeductionReserve == null) return;
@@ -337,9 +443,12 @@ export default function App() {
         showNotificationsToggle={showNotificationsToggle}
         notificationsHidden={notificationsHidden}
         onToggleNotificationsHidden={toggleNotificationsHidden}
+        isOwner={isOwner}
+        showAdmin={showAdminNav}
+        memberAllowedPages={memberAllowedPages}
       />
       {!notificationsHidden && (
-        <AppNotifications loans={loans} clientInsurance={clientInsurance} />
+        <AppNotifications loans={loans} clientInsurance={clientInsurance} clients={clients} />
       )}
       <main className="main flex-1 min-h-0 overflow-y-auto py-4 px-6">
         {configMissing && (
@@ -422,13 +531,43 @@ export default function App() {
         {page === 'clientInsurance' && (
           <ClientInsurancePage
             clientInsurance={clientInsurance}
+            clients={clients}
             insuranceVerification={insuranceVerification}
-            addClientInsurance={addClientInsurance}
             updateInsuranceVerification={updateInsuranceVerification}
-            onAddClient={() => setAddClientInsuranceOpen(true)}
-            onViewClient={setClientInsuranceDetailId}
+            onAddInsurance={() => openAddInsurance()}
+            onAddInsuranceForClient={openAddInsurance}
+            onViewInsurance={setClientInsuranceDetailId}
           />
         )}
+        {page === 'worksheet' && user && (
+          <WorksheetPage
+            worksheetEntries={worksheetEntries}
+            clients={clients}
+            clientInsurance={clientInsurance}
+            currentUserId={user.id}
+            addWorksheetEntry={addWorksheetEntry}
+            onEditEntry={setWorksheetEntryId}
+          />
+        )}
+        {page === 'clients' && (
+          <ClientsPage
+            clients={clients}
+            onAddClient={() => setAddClientOpen(true)}
+            onImportClients={() => setImportClientsOpen(true)}
+            onViewClient={setClientDetailId}
+            onEditClient={setEditClientId}
+            onDeleteClient={removeClient}
+          />
+        )}
+        {page === 'userActivity' && isOwner && effectiveOwnerId && (
+          <UserActivityPage
+            worksheetEntries={worksheetEntries}
+            clients={clients}
+            clientInsurance={clientInsurance}
+            ownerId={effectiveOwnerId}
+          />
+        )}
+        {page === 'admin' && showAdminNav && <AdminPage />}
         {page === 'users' && <UsersPage />}
       </main>
 
@@ -484,10 +623,21 @@ export default function App() {
         onClose={() => setAddReserveOpen(false)}
         onAdd={addReserve}
       />
+      <ImportClientsModal
+        open={importClientsOpen}
+        onClose={() => setImportClientsOpen(false)}
+        clients={clients}
+        onImport={handleImportClients}
+      />
       <AddClientInsuranceModal
         open={addClientInsuranceOpen}
-        onClose={() => setAddClientInsuranceOpen(false)}
-        onAdd={addClientInsurance}
+        initialClientName={addClientInsuranceInitialName}
+        registryClients={clients}
+        onClose={() => {
+          setAddClientInsuranceOpen(false);
+          setAddClientInsuranceInitialName('');
+        }}
+        onAdd={handleAddClientInsurance}
       />
       <ClientInsuranceDetailModal
         clientInsurance={selectedClientInsurance}
@@ -522,6 +672,41 @@ export default function App() {
           const updated = await updateAaaPaymentById(id, record);
           setEditAaaPaymentId(null);
           return updated;
+        }}
+      />
+      <AddClientModal
+        open={addClientOpen}
+        onClose={() => setAddClientOpen(false)}
+        onAdd={addClient}
+      />
+      <ClientDetailModal
+        open={clientDetailId != null}
+        client={selectedClient}
+        onClose={() => setClientDetailId(null)}
+        onEdit={() => {
+          if (clientDetailId != null) {
+            setEditClientId(clientDetailId);
+            setClientDetailId(null);
+          }
+        }}
+        onSave={updateClientById}
+      />
+      <EditClientModal
+        open={editClientId != null}
+        client={editingClient}
+        onClose={() => setEditClientId(null)}
+        onSave={updateClientById}
+      />
+      <WorksheetEntryModal
+        open={worksheetEntryId != null}
+        entry={editingWorksheetEntry}
+        clients={clients}
+        clientInsurance={clientInsurance}
+        onClose={() => setWorksheetEntryId(null)}
+        onSave={async (payload) => {
+          if ('id' in payload && typeof payload.id === 'number') {
+            await updateWorksheetEntryById(payload.id, payload);
+          }
         }}
       />
       <PasswordConfirmModal

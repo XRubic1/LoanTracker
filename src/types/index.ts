@@ -119,7 +119,90 @@ export type PageId =
   | 'closed'
   | 'aaaPayments'
   | 'users'
-  | 'clientInsurance';
+  | 'clientInsurance'
+  | 'worksheet'
+  | 'clients'
+  | 'userActivity'
+  | 'admin';
+
+/** Client expense payment method. */
+export const CLIENT_EXPENSE_OPTIONS = ['Wire', 'ACH'] as const;
+export type ClientExpenseType = (typeof CLIENT_EXPENSE_OPTIONS)[number];
+
+/** Master client registry (per owner). */
+export interface Client {
+  id: number;
+  owner_id?: string | null;
+  name: string;
+  /** Wire or ACH. */
+  expenses: ClientExpenseType | null;
+  warning_note: string | null;
+  is_new_client: boolean;
+  started_date: string | null;
+  new_client_reviewed: boolean;
+  verification_days: number;
+  /** When true, client is always fully verified (no review due). */
+  verification_always: boolean;
+}
+
+/** Supabase row: clients table (snake_case). */
+export interface ClientRow {
+  id: number;
+  owner_id: string | null;
+  name: string;
+  expenses: string | null;
+  warning_note: string | null;
+  is_new_client?: boolean;
+  started_date?: string | null;
+  new_client_reviewed?: boolean;
+  verification_days?: number;
+  verification_always?: boolean;
+}
+
+/** Worksheet batch entry (per user). */
+export interface WorksheetEntry {
+  id: number;
+  owner_id: string;
+  created_by: string;
+  work_date: string;
+  /** Registry client; null when logged under client_name only. */
+  client_id: number | null;
+  /** Free-text name when client is not on the Clients list. */
+  client_name: string | null;
+  invoice_count: number;
+  group_work: boolean;
+  verified: boolean;
+  note: string | null;
+}
+
+/** Supabase row: worksheet_entries table (snake_case). */
+export interface WorksheetEntryRow {
+  id: number;
+  owner_id: string;
+  created_by: string;
+  work_date: string;
+  client_id: number | null;
+  client_name: string | null;
+  invoice_count: number;
+  group_work: boolean;
+  verified: boolean;
+  note: string | null;
+}
+
+/** Company group linking multiple owner accounts. */
+export interface OwnerCompanyGroup {
+  id: number;
+  name: string;
+  created_at?: string;
+  members?: OwnerCompanyGroupMember[];
+}
+
+export interface OwnerCompanyGroupMember {
+  group_id: number;
+  owner_id: string;
+  created_at?: string;
+  owner_email?: string;
+}
 
 /** Client insurance: client name, MC number, status (OK, inactive, cancellation, date, etc.). */
 export interface ClientInsurance {
@@ -133,14 +216,6 @@ export interface ClientInsurance {
   expiration_date: string | null;
   /** Audit: last date this client was in cancellation (kept when status changes back). */
   last_cancellation_date: string | null;
-  /** New-client onboarding: track start date and verification review. */
-  is_new_client: boolean;
-  /** Date the client started working with us (YYYY-MM-DD). */
-  started_date: string | null;
-  /** User confirmed new-client review is complete. */
-  new_client_reviewed: boolean;
-  /** Days after started_date until review is due (default 30; extendable). */
-  verification_days: number;
 }
 
 /** Supabase row: client_insurance table (snake_case). */
@@ -152,10 +227,6 @@ export interface ClientInsuranceRow {
   status: string;
   expiration_date: string | null;
   last_cancellation_date?: string | null;
-  is_new_client?: boolean;
-  started_date?: string | null;
-  new_client_reviewed?: boolean;
-  verification_days?: number;
 }
 
 /** One row per cancellation event (full history for Audit). */
@@ -196,4 +267,6 @@ export interface TeamMember {
   email: string;
   member_id: string | null;
   created_at: string;
+  /** Tab ids this member may access; null = all assignable tabs. */
+  allowed_pages: PageId[] | null;
 }

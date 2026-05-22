@@ -5,6 +5,8 @@ import type {
   ReserveRow,
   TeamMember,
   LoanProviderType,
+  Client,
+  ClientRow,
   ClientInsurance,
   ClientInsuranceRow,
   ClientInsuranceCancellationAudit,
@@ -14,8 +16,13 @@ import type {
   AaaPayment,
   AaaPaymentRow,
   AaaPayee,
+  WorksheetEntry,
+  WorksheetEntryRow,
+  OwnerCompanyGroup,
+  OwnerCompanyGroupMember,
 } from '@/types';
-import { AAA_PAYEES } from '@/types';
+import { AAA_PAYEES, CLIENT_EXPENSE_OPTIONS, type ClientExpenseType, type PageId } from '@/types';
+import { DEFAULT_MEMBER_ALLOWED_PAGES, normalizeAllowedPages } from '@/lib/tabPermissions';
 import { getSupabase } from './supabase';
 
 /** True when status indicates cancellation and we have an expiration/cancellation date. */
@@ -35,10 +42,6 @@ function clientInsuranceFromRow(row: ClientInsuranceRow | null): ClientInsurance
     status: row.status ?? 'OK',
     expiration_date: row.expiration_date ?? null,
     last_cancellation_date: row.last_cancellation_date ?? null,
-    is_new_client: Boolean(row.is_new_client ?? false),
-    started_date: row.started_date ?? null,
-    new_client_reviewed: Boolean(row.new_client_reviewed ?? false),
-    verification_days: Number(row.verification_days ?? 30),
   };
 }
 
@@ -55,13 +58,237 @@ function clientInsuranceToRow(
     last_cancellation_date: isCancellationWithDate(record.status ?? '', record.expiration_date ?? null)
       ? record.expiration_date
       : record.last_cancellation_date ?? null,
-    is_new_client: record.is_new_client ?? false,
-    started_date: record.is_new_client && record.started_date ? record.started_date : null,
-    new_client_reviewed: record.is_new_client ? Boolean(record.new_client_reviewed) : false,
-    verification_days: record.is_new_client
+  };
+}
+
+// --- Clients (master registry) ---
+
+function parseClientExpense(value: string | null | undefined): ClientExpenseType | null {
+  if (!value?.trim()) return null;
+  const v = value.trim();
+  return (CLIENT_EXPENSE_OPTIONS as readonly string[]).includes(v) ? (v as ClientExpenseType) : null;
+}
+
+function clientFromRow(row: ClientRow | null): Client | null {
+  if (!row) return null;
+  const verificationAlways = Boolean(row.verification_always ?? false);
+  return {
+    id: row.id,
+    owner_id: row.owner_id ?? undefined,
+    name: row.name,
+    expenses: parseClientExpense(row.expenses),
+    warning_note: row.warning_note ?? null,
+    is_new_client: Boolean(row.is_new_client ?? false) || verificationAlways,
+    started_date: row.started_date ?? null,
+    new_client_reviewed: Boolean(row.new_client_reviewed ?? false) || verificationAlways,
+    verification_days: Number(row.verification_days ?? 30),
+    verification_always: verificationAlways,
+  };
+}
+
+function clientToRow(record: Client, ownerId?: string | null): Omit<ClientRow, 'id'> {
+  const verificationAlways = Boolean(record.verification_always ?? false);
+  const isNewClient = Boolean(record.is_new_client ?? false) || verificationAlways;
+  return {
+    owner_id: ownerId ?? record.owner_id ?? null,
+    name: record.name.trim(),
+    expenses: record.expenses ?? null,
+    warning_note: record.warning_note?.trim() || null,
+    is_new_client: isNewClient,
+    started_date: isNewClient && record.started_date?.trim() ? record.started_date.trim() : null,
+    verification_always: isNewClient ? verificationAlways : false,
+    new_client_reviewed: isNewClient
+      ? Boolean(record.new_client_reviewed || verificationAlways)
+      : false,
+    verification_days: isNewClient
       ? Math.max(1, Math.round(record.verification_days ?? 30))
       : 30,
   };
+}
+
+export async function fetchClients(): Promise<Client[]> {
+  const supabase = getSupabase();
+  if (!supabase) throw new Error('Supabase not configured');
+  const { data, error } = await supabase.from('clients').select('*').order('name', { ascending: true });
+  if (error) throw error;
+  return (data as ClientRow[] || []).map((row) => clientFromRow(row)!);
+}
+
+export async function insertClient(payload: Omit<Client, 'id'>, ownerId?: string | null): Promise<Client> {
+  const supabase = getSupabase();
+  if (!supabase) throw new Error('Supabase not configured');
+  const row = clientToRow({ ...payload, id: 0 }, ownerId);
+  const { data, error } = await supabase.from('clients').insert(row).select('*').single();
+  if (error) throw error;
+  return clientFromRow(data as ClientRow)!;
+}
+
+export async function updateClient(id: number, record: Client): Promise<Client> {
+  const supabase = getSupabase();
+  if (!supabase) throw new Error('Supabase not configured');
+  const row = clientToRow(record, record.owner_id ?? null);
+  const { data, error } = await supabase.from('clients').update(row).eq('id', id).select('*').single();
+  if (error) throw error;
+  return clientFromRow(data as ClientRow)!;
+}
+
+export async function deleteClientById(id: number): Promise<void> {
+  const supabase = getSupabase();
+  if (!supabase) throw new Error('Supabase not configured');
+  const { error } = await supabase.from('clients').delete().eq('id', id);
+  if (error) throw error;
+}
+
+// --- Worksheet entries ---
+
+function worksheetEntryFromRow(row: WorksheetEntryRow | null): WorksheetEntry | null {
+  if (!row) return null;
+  return {
+    id: row.id,
+    owner_id: row.owner_id,
+    created_by: row.created_by,
+    work_date: row.work_date,
+    client_id: row.client_id ?? null,
+    client_name: row.client_name?.trim() || null,
+    invoice_count: row.invoice_count ?? 0,
+    group_work: Boolean(row.group_work),
+    verified: Boolean(row.verified),
+    note: row.note ?? null,
+  };
+}
+
+function worksheetEntryToRow(
+  entry: Pick<
+    WorksheetEntry,
+    'work_date' | 'client_id' | 'client_name' | 'invoice_count' | 'group_work' | 'verified' | 'note'
+  >,
+  ownerId: string,
+  createdBy: string
+): Omit<WorksheetEntryRow, 'id'> {
+  return {
+    owner_id: ownerId,
+    created_by: createdBy,
+    work_date: entry.work_date,
+    client_id: entry.client_id ?? null,
+    client_name: entry.client_id == null ? entry.client_name?.trim() || null : null,
+    invoice_count: Math.max(0, Math.round(entry.invoice_count ?? 0)),
+    group_work: entry.group_work ?? false,
+    verified: entry.verified ?? false,
+    note: entry.note?.trim() || null,
+  };
+}
+
+/** Fetches worksheet entries visible to current user (RLS-scoped). */
+export async function fetchWorksheetEntries(): Promise<WorksheetEntry[]> {
+  const supabase = getSupabase();
+  if (!supabase) throw new Error('Supabase not configured');
+  const { data, error } = await supabase
+    .from('worksheet_entries')
+    .select('*')
+    .order('work_date', { ascending: false })
+    .order('id', { ascending: false });
+  if (error) throw error;
+  return (data as WorksheetEntryRow[] || []).map((row) => worksheetEntryFromRow(row)!);
+}
+
+export async function insertWorksheetEntry(
+  payload: Omit<WorksheetEntry, 'id' | 'owner_id' | 'created_by'>,
+  ownerId: string,
+  createdBy: string
+): Promise<WorksheetEntry> {
+  const supabase = getSupabase();
+  if (!supabase) throw new Error('Supabase not configured');
+  const row = worksheetEntryToRow(payload, ownerId, createdBy);
+  const { data, error } = await supabase.from('worksheet_entries').insert(row).select('*').single();
+  if (error) throw error;
+  return worksheetEntryFromRow(data as WorksheetEntryRow)!;
+}
+
+export async function updateWorksheetEntry(id: number, entry: WorksheetEntry): Promise<WorksheetEntry> {
+  const supabase = getSupabase();
+  if (!supabase) throw new Error('Supabase not configured');
+  const row = {
+    work_date: entry.work_date,
+    client_id: entry.client_id ?? null,
+    client_name: entry.client_id == null ? entry.client_name?.trim() || null : null,
+    invoice_count: Math.max(0, Math.round(entry.invoice_count ?? 0)),
+    group_work: entry.group_work ?? false,
+    verified: entry.verified ?? false,
+    note: entry.note?.trim() || null,
+  };
+  const { data, error } = await supabase.from('worksheet_entries').update(row).eq('id', id).select('*').single();
+  if (error) throw error;
+  return worksheetEntryFromRow(data as WorksheetEntryRow)!;
+}
+
+export async function deleteWorksheetEntryById(id: number): Promise<void> {
+  const supabase = getSupabase();
+  if (!supabase) throw new Error('Supabase not configured');
+  const { error } = await supabase.from('worksheet_entries').delete().eq('id', id);
+  if (error) throw error;
+}
+
+// --- Company groups (platform admin) ---
+
+export async function fetchCompanyGroups(): Promise<OwnerCompanyGroup[]> {
+  const supabase = getSupabase();
+  if (!supabase) throw new Error('Supabase not configured');
+  const { data: groups, error } = await supabase
+    .from('owner_company_groups')
+    .select('*')
+    .order('name', { ascending: true });
+  if (error) throw error;
+  const { data: members, error: memErr } = await supabase.from('owner_company_group_members').select('*');
+  if (memErr) throw memErr;
+  const memberList = (members ?? []) as OwnerCompanyGroupMember[];
+  return (groups ?? []).map((g: { id: number; name: string; created_at?: string }) => ({
+    id: g.id,
+    name: g.name,
+    created_at: g.created_at,
+    members: memberList.filter((m) => m.group_id === g.id),
+  }));
+}
+
+export async function createCompanyGroup(name: string): Promise<OwnerCompanyGroup> {
+  const supabase = getSupabase();
+  if (!supabase) throw new Error('Supabase not configured');
+  const { data, error } = await supabase.from('owner_company_groups').insert({ name: name.trim() }).select('*').single();
+  if (error) throw error;
+  return { id: data.id, name: data.name, created_at: data.created_at, members: [] };
+}
+
+export async function deleteCompanyGroup(groupId: number): Promise<void> {
+  const supabase = getSupabase();
+  if (!supabase) throw new Error('Supabase not configured');
+  const { error } = await supabase.from('owner_company_groups').delete().eq('id', groupId);
+  if (error) throw error;
+}
+
+export async function addOwnerToCompanyGroup(groupId: number, ownerId: string): Promise<void> {
+  const supabase = getSupabase();
+  if (!supabase) throw new Error('Supabase not configured');
+  const { error } = await supabase.from('owner_company_group_members').insert({ group_id: groupId, owner_id: ownerId });
+  if (error) throw error;
+}
+
+export async function removeOwnerFromCompanyGroup(groupId: number, ownerId: string): Promise<void> {
+  const supabase = getSupabase();
+  if (!supabase) throw new Error('Supabase not configured');
+  const { error } = await supabase
+    .from('owner_company_group_members')
+    .delete()
+    .eq('group_id', groupId)
+    .eq('owner_id', ownerId);
+  if (error) throw error;
+}
+
+/** Look up owner_id by account email (auth.users). */
+export async function lookupOwnerIdByEmail(email: string): Promise<string | null> {
+  const supabase = getSupabase();
+  if (!supabase) throw new Error('Supabase not configured');
+  const { data, error } = await supabase.rpc('owner_id_by_email', { p_email: email.trim() });
+  if (error) throw error;
+  return (data as string | null) ?? null;
 }
 
 function loanFromRow(row: LoanRow | null): Loan | null {
@@ -362,6 +589,22 @@ export async function upsertInsuranceVerification(
 
 // --- Team members (for Users page) ---
 
+function teamMemberFromRow(r: {
+  owner_id: string;
+  email: string;
+  member_id: string | null;
+  created_at: string;
+  allowed_pages?: unknown;
+}): TeamMember {
+  return {
+    owner_id: r.owner_id,
+    email: r.email,
+    member_id: r.member_id,
+    created_at: r.created_at,
+    allowed_pages: r.allowed_pages == null ? null : normalizeAllowedPages(r.allowed_pages),
+  };
+}
+
 export async function fetchTeamMembers(ownerId: string): Promise<TeamMember[]> {
   const supabase = getSupabase();
   if (!supabase) throw new Error('Supabase not configured');
@@ -371,12 +614,28 @@ export async function fetchTeamMembers(ownerId: string): Promise<TeamMember[]> {
     .eq('owner_id', ownerId)
     .order('created_at', { ascending: false });
   if (error) throw error;
-  return (data ?? []).map((r: { owner_id: string; email: string; member_id: string | null; created_at: string }) => ({
-    owner_id: r.owner_id,
-    email: r.email,
-    member_id: r.member_id,
-    created_at: r.created_at,
-  }));
+  return (data ?? []).map((r) => teamMemberFromRow(r));
+}
+
+/** Current user's team membership row (for tab permissions). */
+export async function fetchMyTeamMembership(
+  userId: string
+): Promise<{ owner_id: string; allowed_pages: PageId[] | null } | null> {
+  const supabase = getSupabase();
+  if (!supabase) throw new Error('Supabase not configured');
+  const { data, error } = await supabase
+    .from('team_members')
+    .select('owner_id, allowed_pages')
+    .eq('member_id', userId)
+    .limit(1)
+    .maybeSingle();
+  if (error) throw error;
+  if (!data) return null;
+  return {
+    owner_id: data.owner_id,
+    allowed_pages:
+      data.allowed_pages == null ? null : normalizeAllowedPages(data.allowed_pages),
+  };
 }
 
 export async function addTeamMember(ownerId: string, email: string): Promise<TeamMember> {
@@ -384,16 +643,34 @@ export async function addTeamMember(ownerId: string, email: string): Promise<Tea
   if (!supabase) throw new Error('Supabase not configured');
   const { data, error } = await supabase
     .from('team_members')
-    .insert({ owner_id: ownerId, email: email.trim().toLowerCase() })
+    .insert({
+      owner_id: ownerId,
+      email: email.trim().toLowerCase(),
+      allowed_pages: DEFAULT_MEMBER_ALLOWED_PAGES,
+    })
     .select('*')
     .single();
   if (error) throw error;
-  return {
-    owner_id: data.owner_id,
-    email: data.email,
-    member_id: data.member_id,
-    created_at: data.created_at,
-  };
+  return teamMemberFromRow(data);
+}
+
+/** Owner updates which tabs a team member may access. */
+export async function updateTeamMemberAllowedPages(
+  ownerId: string,
+  email: string,
+  allowedPages: PageId[]
+): Promise<TeamMember> {
+  const supabase = getSupabase();
+  if (!supabase) throw new Error('Supabase not configured');
+  const { data, error } = await supabase
+    .from('team_members')
+    .update({ allowed_pages: allowedPages })
+    .eq('owner_id', ownerId)
+    .eq('email', email.trim().toLowerCase())
+    .select('*')
+    .single();
+  if (error) throw error;
+  return teamMemberFromRow(data);
 }
 
 export async function removeTeamMember(ownerId: string, email: string): Promise<void> {

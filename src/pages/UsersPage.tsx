@@ -1,7 +1,21 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
-import { fetchTeamMembers, addTeamMember, removeTeamMember } from '@/lib/supabase-db';
-import type { TeamMember } from '@/types';
+import {
+  fetchTeamMembers,
+  addTeamMember,
+  removeTeamMember,
+  updateTeamMemberAllowedPages,
+} from '@/lib/supabase-db';
+import { TeamMemberTabsModal } from '@/components/modals/TeamMemberTabsModal';
+import { ASSIGNABLE_PAGE_IDS, PAGE_LABELS, normalizeAllowedPages } from '@/lib/tabPermissions';
+import type { PageId, TeamMember } from '@/types';
+
+function tabsSummary(allowed: PageId[] | null): string {
+  const pages = normalizeAllowedPages(allowed);
+  if (pages.length >= ASSIGNABLE_PAGE_IDS.length) return 'All tabs';
+  if (pages.length === 0) return 'No tabs';
+  return pages.map((p) => PAGE_LABELS[p]).join(', ');
+}
 
 export function UsersPage() {
   const { effectiveOwnerId, isOwner } = useAuth();
@@ -11,6 +25,8 @@ export function UsersPage() {
   const [email, setEmail] = useState('');
   const [adding, setAdding] = useState(false);
   const [removing, setRemoving] = useState<string | null>(null);
+  const [tabsMember, setTabsMember] = useState<TeamMember | null>(null);
+  const [savingTabs, setSavingTabs] = useState(false);
 
   const load = useCallback(async () => {
     if (!effectiveOwnerId || !isOwner) {
@@ -63,6 +79,21 @@ export function UsersPage() {
     }
   };
 
+  const handleSaveTabs = async (pages: PageId[]) => {
+    if (!effectiveOwnerId || !tabsMember) return;
+    setSavingTabs(true);
+    setError(null);
+    try {
+      await updateTeamMemberAllowedPages(effectiveOwnerId, tabsMember.email, pages);
+      await load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+      throw err;
+    } finally {
+      setSavingTabs(false);
+    }
+  };
+
   if (!isOwner) {
     return (
       <div>
@@ -81,7 +112,9 @@ export function UsersPage() {
       </div>
 
       <p className="text-muted2 text-sm mb-3">
-        Add users by email. When they sign up with that email, they’ll see your loans and reserves and can interact with payments.
+        Add users by email. When they sign up with that email, they’ll see your data on the tabs you
+        allow. Use <strong className="text-ink font-medium">Manage tabs</strong> to control which
+        pages each person can open.
       </p>
 
       <form onSubmit={handleAdd} className="flex gap-2 mb-3 flex-wrap">
@@ -122,7 +155,10 @@ export function UsersPage() {
                 <th className="text-[10px] text-label uppercase tracking-widest py-3 px-4 text-left border-b border-border">
                   Status
                 </th>
-                <th className="text-[10px] text-label uppercase tracking-widest py-3 px-4 text-left border-b border-border w-24">
+                <th className="text-[10px] text-label uppercase tracking-widest py-3 px-4 text-left border-b border-border">
+                  Tabs
+                </th>
+                <th className="text-[10px] text-label uppercase tracking-widest py-3 px-4 text-left border-b border-border w-40">
                   Actions
                 </th>
               </tr>
@@ -142,15 +178,27 @@ export function UsersPage() {
                       {m.member_id ? 'Active' : 'Pending invite'}
                     </span>
                   </td>
+                  <td className="py-3 px-4 border-b border-divider text-sm text-muted2 max-w-[240px] truncate" title={tabsSummary(m.allowed_pages)}>
+                    {tabsSummary(m.allowed_pages)}
+                  </td>
                   <td className="py-3 px-4 border-b border-divider">
-                    <button
-                      type="button"
-                      onClick={() => handleRemove(m.email)}
-                      disabled={removing === m.email}
-                      className="text-muted hover:text-red text-sm disabled:opacity-50"
-                    >
-                      {removing === m.email ? '…' : 'Remove'}
-                    </button>
+                    <div className="flex items-center gap-3">
+                      <button
+                        type="button"
+                        onClick={() => setTabsMember(m)}
+                        className="text-accent hover:text-accent/80 text-sm"
+                      >
+                        Manage tabs
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleRemove(m.email)}
+                        disabled={removing === m.email}
+                        className="text-muted hover:text-red text-sm disabled:opacity-50"
+                      >
+                        {removing === m.email ? '…' : 'Remove'}
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -158,6 +206,15 @@ export function UsersPage() {
           </table>
         </div>
       )}
+
+      <TeamMemberTabsModal
+        open={tabsMember != null}
+        onClose={() => setTabsMember(null)}
+        memberEmail={tabsMember?.email ?? ''}
+        allowedPages={tabsMember?.allowed_pages ?? null}
+        saving={savingTabs}
+        onSave={handleSaveTabs}
+      />
     </div>
   );
 }

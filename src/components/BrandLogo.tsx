@@ -1,37 +1,44 @@
+import { BRAND_NAME } from '@/lib/brand';
+
 interface BrandLogoProps {
   size?: 'xs' | 'sm' | 'md';
   className?: string;
 }
 
 const sizeStyles = {
-  xs: { box: 'w-7 h-7', icon: 'w-6 h-6' },
-  sm: { box: 'w-8 h-8', icon: 'w-7 h-7' },
-  md: { box: 'w-10 h-10', icon: 'w-9 h-9' },
+  xs: { wrap: 'w-7 h-7 rounded-lg', icon: 'w-5 h-5' },
+  sm: { wrap: 'w-8 h-8 rounded-lg', icon: 'w-6 h-6' },
+  md: { wrap: 'w-12 h-12 rounded-xl', icon: 'w-8 h-8' },
 } as const;
 
-/** Loan Tracker mark — minimal ascending trend (no node dots). */
+/**
+ * OpsDesk mark — stacked layers + activity pulse (operations desk).
+ */
 export function BrandLogo({ size = 'sm', className = '' }: BrandLogoProps) {
-  const { box, icon } = sizeStyles[size];
+  const { wrap, icon } = sizeStyles[size];
+  const showPanel = size === 'md';
 
   return (
-    <div className={`${box} shrink-0 flex items-center justify-center ${className}`} aria-hidden>
-      <svg className={icon} viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <div
+      className={`${wrap} shrink-0 flex items-center justify-center ${
+        showPanel
+          ? 'bg-accent/10 border border-accent/25 shadow-sm'
+          : 'bg-accent/8 border border-border'
+      } ${className}`}
+      aria-hidden
+    >
+      <svg className={icon} viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <rect x="6" y="19" width="20" height="4" rx="2" className="fill-accent opacity-30" />
+        <rect x="6" y="13" width="15" height="4" rx="2" className="fill-accent opacity-55" />
+        <rect x="6" y="7" width="10" height="4" rx="2" className="fill-accent" />
         <path
-          d="M4 19.5h16"
-          className="text-muted2"
-          stroke="currentColor"
-          strokeWidth="1.5"
-          strokeLinecap="round"
-          opacity="0.45"
-        />
-        <path
-          d="M5.5 17.25 9.75 13.25 13.25 15.5 18.5 8.75"
-          className="text-accent"
-          stroke="currentColor"
-          strokeWidth="2.5"
+          d="M22 8.5 26.5 5 26.5 12"
+          className="stroke-green"
+          strokeWidth="2"
           strokeLinecap="round"
           strokeLinejoin="round"
         />
+        <circle cx="26" cy="6" r="2" className="fill-accent" />
       </svg>
     </div>
   );
@@ -40,9 +47,15 @@ export function BrandLogo({ size = 'sm', className = '' }: BrandLogoProps) {
 export function BrandWordmark({ className = '' }: { className?: string }) {
   return (
     <span
-      className={`font-display font-semibold tracking-tight text-ink whitespace-nowrap ${className}`}
+      className={`font-display font-semibold tracking-tight whitespace-nowrap ${className}`}
     >
-      Loan Tracker
+      <span className="text-ink">Ops</span>
+      <span className="text-accent">Desk</span>
     </span>
   );
+}
+
+/** Full name for document title and accessibility. */
+export function brandTitle(page?: string): string {
+  return page ? `${page} · ${BRAND_NAME}` : BRAND_NAME;
 }

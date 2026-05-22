@@ -1,39 +1,46 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Section } from '@/components/Section';
 import { Modal } from '@/components/Modal';
 import {
+  buildClientInsuranceList,
+  getInsuranceListItemName,
+  type ClientInsuranceListItem,
+} from '@/lib/clientInsuranceList';
+import {
   getClientInsuranceStatusLabel,
-  getDaysUntilNewClientReview,
-  getNewClientsNeedingReview,
   isClientInsuranceCancellationSoon,
   isClientInsuranceWarning,
   isClientInsuranceOut,
-  isNewClientNeedsReview,
-  isNewClientInVerificationPeriod,
 } from '@/lib/clientInsuranceUtils';
 import { printCancellationReport } from '@/lib/printClientInsurance';
 import type { UseDataResult } from '@/hooks/useData';
+import type { Client } from '@/types';
 
 interface ClientInsurancePageProps extends Pick<
   UseDataResult,
   | 'clientInsurance'
-  | 'addClientInsurance'
   | 'insuranceVerification'
   | 'updateInsuranceVerification'
 > {
-  onAddClient: () => void;
-  onViewClient: (id: number) => void;
+  clients: Client[];
+  onAddInsurance: () => void;
+  onAddInsuranceForClient: (clientName: string) => void;
+  onViewInsurance: (id: number) => void;
 }
 
 export function ClientInsurancePage({
   clientInsurance,
+  clients,
   insuranceVerification,
   updateInsuranceVerification,
-  onAddClient,
-  onViewClient,
+  onAddInsurance,
+  onAddInsuranceForClient,
+  onViewInsurance,
 }: ClientInsurancePageProps) {
   const [hideInactive, setHideInactive] = useState(true);
-  const [statusFilter, setStatusFilter] = useState<'all' | 'ok' | 'inactive' | 'out' | 'cancellation' | 'needs_review'>('all');
+  const [statusFilter, setStatusFilter] = useState<
+    'all' | 'ok' | 'inactive' | 'out' | 'cancellation' | 'no_insurance'
+  >('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [recordVerificationOpen, setRecordVerificationOpen] = useState(false);
   const [recordDate, setRecordDate] = useState(() => new Date().toISOString().split('T')[0]);
@@ -66,28 +73,41 @@ export function ClientInsurancePage({
     }
   };
 
-  const newClientsNeedingReview = getNewClientsNeedingReview(clientInsurance);
+  const mergedList = useMemo(
+    () => buildClientInsuranceList(clientInsurance, clients),
+    [clientInsurance, clients]
+  );
 
   const normalizedSearch = searchQuery.trim().toLowerCase();
-  const list = clientInsurance
-    .filter((c) => !hideInactive || !isClientInsuranceOut(c))
-    .filter((c) => {
-      const normalizedStatus = (c.status ?? '').trim().toLowerCase();
-      if (statusFilter === 'all') return true;
-      if (statusFilter === 'ok') return normalizedStatus === 'ok';
-      if (statusFilter === 'inactive') return normalizedStatus === 'inactive';
-      if (statusFilter === 'out') return normalizedStatus === 'out';
-      if (statusFilter === 'cancellation') return normalizedStatus.includes('cancellation');
-      if (statusFilter === 'needs_review') return isNewClientNeedsReview(c);
-      return true;
+  const list = mergedList
+    .filter((item) => {
+      if (item.kind === 'registry') {
+        if (statusFilter !== 'all' && statusFilter !== 'no_insurance') return false;
+        return true;
+      }
+      const c = item.record;
+      if (!hideInactive || !isClientInsuranceOut(c)) {
+        const normalizedStatus = (c.status ?? '').trim().toLowerCase();
+        if (statusFilter === 'all') return true;
+        if (statusFilter === 'no_insurance') return false;
+        if (statusFilter === 'ok') return normalizedStatus === 'ok';
+        if (statusFilter === 'inactive') return normalizedStatus === 'inactive';
+        if (statusFilter === 'out') return normalizedStatus === 'out';
+        if (statusFilter === 'cancellation') return normalizedStatus.includes('cancellation');
+      }
+      return false;
     })
-    .filter((c) => {
+    .filter((item) => {
       if (!normalizedSearch) return true;
-      return (
-        c.client.toLowerCase().includes(normalizedSearch) ||
-        c.mc.toLowerCase().includes(normalizedSearch) ||
-        getClientInsuranceStatusLabel(c).toLowerCase().includes(normalizedSearch)
-      );
+      const name = getInsuranceListItemName(item).toLowerCase();
+      if (name.includes(normalizedSearch)) return true;
+      if (item.kind === 'insurance') {
+        return (
+          item.record.mc.toLowerCase().includes(normalizedSearch) ||
+          getClientInsuranceStatusLabel(item.record).toLowerCase().includes(normalizedSearch)
+        );
+      }
+      return false;
     });
 
   return (
@@ -124,34 +144,6 @@ export function ClientInsurancePage({
         </button>
       </div>
 
-      {newClientsNeedingReview.length > 0 && (
-        <div
-          className="mb-4 rounded-xl border border-accent/40 bg-accent/5 px-4 py-3"
-          role="alert"
-        >
-          <p className="text-[13px] font-medium text-accent mb-1">
-            {newClientsNeedingReview.length} new client
-            {newClientsNeedingReview.length === 1 ? '' : 's'} need review
-          </p>
-          <p className="text-[12px] text-muted2 mb-2">
-            The 30-day verification period has ended. Open each client to mark reviewed or extend the period.
-          </p>
-          <ul className="flex flex-wrap gap-2">
-            {newClientsNeedingReview.map((c) => (
-              <li key={c.id}>
-                <button
-                  type="button"
-                  onClick={() => onViewClient(c.id)}
-                  className="text-[12px] py-1 px-2.5 rounded-md border border-accent/30 text-accent hover:bg-accent/10 transition-colors"
-                >
-                  {c.client}
-                </button>
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
-
       <div className="flex flex-col gap-2 mb-4 sm:flex-row sm:items-center sm:justify-between">
         <h1 className="page-title">Client Insurance</h1>
         <div className="flex flex-wrap gap-2 justify-start sm:justify-end items-center">
@@ -185,10 +177,10 @@ export function ClientInsurancePage({
           </button>
           <button
             type="button"
-            onClick={onAddClient}
+            onClick={onAddInsurance}
             className="inline-flex items-center gap-1.5 py-1.5 px-3.5 rounded-lg btn-primary text-xs font-medium transition-colors hover:opacity-90"
           >
-            + Add client
+            + Add insurance
           </button>
         </div>
       </div>
@@ -214,7 +206,7 @@ export function ClientInsurancePage({
           <option value="inactive">Inactive</option>
           <option value="out">OUT</option>
           <option value="cancellation">Cancellation</option>
-          <option value="needs_review">Needs new-client review</option>
+          <option value="no_insurance">No insurance record</option>
         </select>
       </div>
 
@@ -231,116 +223,31 @@ export function ClientInsurancePage({
               <th className="text-[10px] text-label uppercase tracking-widest py-0 pb-1.5 pr-2 text-left border-b border-border">
                 Status
               </th>
-              <th className="text-[10px] text-label uppercase tracking-widest py-0 pb-1.5 pr-2 text-left border-b border-border">
-                New client
-              </th>
               <th className="text-[10px] text-label uppercase tracking-widest py-0 pb-1.5 pr-2 text-left border-b border-border w-16" />
             </tr>
           </thead>
           <tbody>
             {list.length === 0 ? (
               <tr>
-                <td colSpan={5} className="text-center py-6 text-muted text-[13px]">
-                  {clientInsurance.length === 0
-                    ? 'No clients yet. Add a client or run the seed SQL to load initial data.'
-                    : 'No clients to show. Turn off "Hide OUT clients" to see OUT clients.'}
+                <td colSpan={4} className="text-center py-6 text-muted text-[13px]">
+                  {mergedList.length === 0
+                    ? 'No clients yet. Add clients on the Clients tab or add insurance here.'
+                    : 'No clients to show. Turn off "Hide OUT clients" or change filters.'}
                 </td>
               </tr>
             ) : (
-              list.map((c) => {
-                const isOut = isClientInsuranceOut(c);
-                const isWarning = isClientInsuranceWarning(c);
-                const isCancellationSoon = isClientInsuranceCancellationSoon(c, 10);
-                const statusLabel = getClientInsuranceStatusLabel(c);
-                const statusFilterValue = getFilterValueFromRecord(c.status);
-                const newClientNeedsReview = isNewClientNeedsReview(c);
-                const newClientPending = isNewClientInVerificationPeriod(c);
-                const daysUntilReview = getDaysUntilNewClientReview(c);
-                const copyMc = () => {
-                  navigator.clipboard.writeText(c.mc).then(() => {}, () => {});
-                };
-                const applyClientFilter = () => {
-                  setSearchQuery((prev) => (prev.trim().toLowerCase() === c.client.toLowerCase() ? '' : c.client));
-                };
-                const applyStatusFilter = () => {
-                  if (statusFilterValue === 'all') return;
-                  setStatusFilter((prev) =>
-                    prev === statusFilterValue ? 'all' : statusFilterValue
-                  );
-                };
-                return (
-                  <tr key={c.id} className="row-hover transition-colors">
-                    <td className="py-1.5 pr-2 border-b border-divider align-middle">
-                      <button
-                        type="button"
-                        onClick={applyClientFilter}
-                        className="font-medium text-ink hover:text-accent transition-colors"
-                        title="Filter by this client"
-                      >
-                        {c.client}
-                      </button>
-                    </td>
-                    <td className="py-1.5 pr-2 border-b border-divider align-middle">
-                      <div className="flex items-center gap-1.5 font-mono text-[13px]">
-                        <button
-                          type="button"
-                          onClick={(e) => { e.stopPropagation(); copyMc(); }}
-                          className="p-0.5 rounded text-muted2 hover:text-accent hover:bg-accent/10"
-                          title="Copy MC"
-                          aria-label="Copy"
-                        >
-                          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
-                          </svg>
-                        </button>
-                        {c.mc}
-                      </div>
-                    </td>
-                    <td className="py-1.5 pr-2 border-b border-divider align-middle">
-                      <button
-                        type="button"
-                        onClick={applyStatusFilter}
-                        title={statusFilterValue === 'all' ? 'Status not available in quick filter' : 'Filter by this status'}
-                        className={
-                          isOut || isCancellationSoon
-                            ? 'text-red font-medium hover:opacity-80 transition-opacity'
-                            : isWarning
-                              ? 'text-accent font-medium hover:opacity-80 transition-opacity'
-                              : statusLabel.toLowerCase() === 'ok'
-                                ? 'text-green hover:opacity-80 transition-opacity'
-                                : 'hover:text-accent transition-colors'
-                        }
-                      >
-                        {statusLabel}
-                      </button>
-                    </td>
-                    <td className="py-1.5 pr-2 border-b border-divider align-middle text-[11px]">
-                      {!c.is_new_client ? (
-                        <span className="text-muted2">—</span>
-                      ) : c.new_client_reviewed ? (
-                        <span className="text-green">Reviewed</span>
-                      ) : newClientNeedsReview ? (
-                        <span className="text-accent font-medium">Review due</span>
-                      ) : newClientPending && daysUntilReview != null ? (
-                        <span className="text-muted2">
-                          {daysUntilReview}d left
-                        </span>
-                      ) : (
-                        <span className="text-muted2">New</span>
-                      )}
-                    </td>
-                    <td className="py-1.5 pr-2 border-b border-divider align-middle">
-                      <button
-                        type="button"
-                        onClick={() => onViewClient(c.id)}
-                        className="text-[11px] text-accent hover:underline"
-                      >
-                        View
-                      </button>
-                    </td>
-                  </tr>
-                );
-              })
+              list.map((item) => (
+                <InsuranceTableRow
+                  key={item.kind === 'insurance' ? `ins-${item.record.id}` : `reg-${item.client.id}`}
+                  item={item}
+                  searchQuery={searchQuery}
+                  onSearchQuery={setSearchQuery}
+                  onStatusFilter={setStatusFilter}
+                  getFilterValueFromRecord={getFilterValueFromRecord}
+                  onViewInsurance={onViewInsurance}
+                  onAddInsuranceForClient={onAddInsuranceForClient}
+                />
+              ))
             )}
           </tbody>
         </table>
@@ -394,5 +301,148 @@ export function ClientInsurancePage({
         </div>
       </Modal>
     </>
+  );
+}
+
+function InsuranceTableRow({
+  item,
+  searchQuery,
+  onSearchQuery,
+  onStatusFilter,
+  getFilterValueFromRecord,
+  onViewInsurance,
+  onAddInsuranceForClient,
+}: {
+  item: ClientInsuranceListItem;
+  searchQuery: string;
+  onSearchQuery: (q: string) => void;
+  onStatusFilter: React.Dispatch<
+    React.SetStateAction<'all' | 'ok' | 'inactive' | 'out' | 'cancellation' | 'no_insurance'>
+  >;
+  getFilterValueFromRecord: (status: string) => 'all' | 'ok' | 'inactive' | 'out' | 'cancellation';
+  onViewInsurance: (id: number) => void;
+  onAddInsuranceForClient: (clientName: string) => void;
+}) {
+  if (item.kind === 'registry') {
+    const name = item.client.name;
+    const applyClientFilter = () => {
+      onSearchQuery(
+        searchQuery.trim().toLowerCase() === name.toLowerCase() ? '' : name
+      );
+    };
+    return (
+      <tr className="row-hover transition-colors bg-surface/30">
+        <td className="py-1.5 pr-2 border-b border-divider align-middle">
+          <button
+            type="button"
+            onClick={applyClientFilter}
+            className="font-medium text-ink hover:text-accent transition-colors"
+          >
+            {name}
+          </button>
+          <span className="ml-1.5 text-[10px] text-muted2 uppercase tracking-wide">Clients</span>
+        </td>
+        <td className="py-1.5 pr-2 border-b border-divider align-middle text-muted2 text-[13px]">—</td>
+        <td className="py-1.5 pr-2 border-b border-divider align-middle text-muted2 text-[12px] italic">
+          No insurance record
+        </td>
+        <td className="py-1.5 pr-2 border-b border-divider align-middle">
+          <button
+            type="button"
+            onClick={() => onAddInsuranceForClient(name)}
+            className="text-[11px] text-accent hover:underline"
+          >
+            Add insurance
+          </button>
+        </td>
+      </tr>
+    );
+  }
+
+  const c = item.record;
+  const isOut = isClientInsuranceOut(c);
+  const isWarning = isClientInsuranceWarning(c);
+  const isCancellationSoon = isClientInsuranceCancellationSoon(c, 10);
+  const statusLabel = getClientInsuranceStatusLabel(c);
+  const statusFilterValue = getFilterValueFromRecord(c.status);
+  const copyMc = () => {
+    navigator.clipboard.writeText(c.mc).then(() => {}, () => {});
+  };
+  const applyClientFilter = () => {
+    onSearchQuery(
+      searchQuery.trim().toLowerCase() === c.client.toLowerCase() ? '' : c.client
+    );
+  };
+  const applyStatusFilter = () => {
+    if (statusFilterValue === 'all') return;
+    onStatusFilter((prev) => (prev === statusFilterValue ? 'all' : statusFilterValue));
+  };
+
+  return (
+    <tr className="row-hover transition-colors">
+      <td className="py-1.5 pr-2 border-b border-divider align-middle">
+        <button
+          type="button"
+          onClick={applyClientFilter}
+          className="font-medium text-ink hover:text-accent transition-colors"
+          title="Filter by this client"
+        >
+          {c.client}
+        </button>
+      </td>
+      <td className="py-1.5 pr-2 border-b border-divider align-middle">
+        <div className="flex items-center gap-1.5 font-mono text-[13px]">
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              copyMc();
+            }}
+            className="p-0.5 rounded text-muted2 hover:text-accent hover:bg-accent/10"
+            title="Copy MC"
+            aria-label="Copy"
+          >
+            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path
+                strokeWidth={2}
+                d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"
+              />
+            </svg>
+          </button>
+          {c.mc}
+        </div>
+      </td>
+      <td className="py-1.5 pr-2 border-b border-divider align-middle">
+        <button
+          type="button"
+          onClick={applyStatusFilter}
+          title={
+            statusFilterValue === 'all'
+              ? 'Status not available in quick filter'
+              : 'Filter by this status'
+          }
+          className={
+            isOut || isCancellationSoon
+              ? 'text-red font-medium hover:opacity-80 transition-opacity'
+              : isWarning
+                ? 'text-accent font-medium hover:opacity-80 transition-opacity'
+                : statusLabel.toLowerCase() === 'ok'
+                  ? 'text-green hover:opacity-80 transition-opacity'
+                  : 'hover:text-accent transition-colors'
+          }
+        >
+          {statusLabel}
+        </button>
+      </td>
+      <td className="py-1.5 pr-2 border-b border-divider align-middle">
+        <button
+          type="button"
+          onClick={() => onViewInsurance(c.id)}
+          className="text-[11px] text-accent hover:underline"
+        >
+          View
+        </button>
+      </td>
+    </tr>
   );
 }

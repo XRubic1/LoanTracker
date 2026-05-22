@@ -7,13 +7,18 @@ import {
   type ReactNode,
 } from 'react';
 import type { User, Session } from '@supabase/supabase-js';
+import type { PageId } from '@/types';
 import { getSupabase } from '@/lib/supabase';
+import { fetchMyTeamMembership } from '@/lib/supabase-db';
+import { DEFAULT_MEMBER_ALLOWED_PAGES, normalizeAllowedPages } from '@/lib/tabPermissions';
 
 interface AuthContextValue {
   user: User | null;
   session: Session | null;
   effectiveOwnerId: string | null;
   isOwner: boolean;
+  /** Tab ids the signed-in member may access; null when user is the account owner. */
+  memberAllowedPages: PageId[] | null;
   loading: boolean;
   signIn: (email: string, password: string) => Promise<{ error: Error | null }>;
   signUp: (email: string, password: string) => Promise<{ error: Error | null }>;
@@ -50,6 +55,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [effectiveOwnerId, setEffectiveOwnerId] = useState<string | null>(null);
+  const [memberAllowedPages, setMemberAllowedPages] = useState<PageId[] | null>(null);
   const [loading, setLoading] = useState(true);
 
   const supabase = getSupabase();
@@ -59,6 +65,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (!supabase) return;
       const ownerId = await resolveEffectiveOwnerId(supabase, uid);
       setEffectiveOwnerId(ownerId);
+      if (ownerId === uid) {
+        setMemberAllowedPages(null);
+      } else {
+        try {
+          const membership = await fetchMyTeamMembership(uid);
+          setMemberAllowedPages(
+            membership?.allowed_pages == null
+              ? [...DEFAULT_MEMBER_ALLOWED_PAGES]
+              : normalizeAllowedPages(membership.allowed_pages)
+          );
+        } catch (err) {
+          console.warn('Load tab permissions:', err);
+          setMemberAllowedPages([...DEFAULT_MEMBER_ALLOWED_PAGES]);
+        }
+      }
     },
     [supabase]
   );
@@ -78,6 +99,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           await refreshEffectiveOwner(session.user.id);
         } else {
           setEffectiveOwnerId(null);
+          setMemberAllowedPages(null);
         }
       } finally {
         setLoading(false);
@@ -104,6 +126,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setSession(null);
         setUser(null);
         setEffectiveOwnerId(null);
+        setMemberAllowedPages(null);
         setLoading(false);
       });
 
@@ -133,6 +156,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(null);
     setSession(null);
     setEffectiveOwnerId(null);
+    setMemberAllowedPages(null);
   }, [supabase]);
 
   const isOwner = user != null && effectiveOwnerId === user.id;
@@ -142,6 +166,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     session,
     effectiveOwnerId,
     isOwner,
+    memberAllowedPages,
     loading,
     signIn,
     signUp,

@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { BrandLogo, BrandWordmark } from '@/components/BrandLogo';
+import { BRAND_TAGLINE } from '@/lib/brand';
 import { ThemeToggle } from '@/components/ThemeToggle';
 
 type Mode = 'login' | 'register';
@@ -49,6 +50,7 @@ export function AuthPage() {
         <div className="flex flex-col items-center text-center mb-6">
           <BrandLogo size="md" className="mb-3" />
           <BrandWordmark className="text-[1.35rem]" />
+          <p className="text-[12px] text-muted2 mt-2 max-w-[240px]">{BRAND_TAGLINE}</p>
         </div>
         <p className="text-muted2 text-sm mb-3">
           {mode === 'login' ? 'Sign in to your account' : 'Create an account'}

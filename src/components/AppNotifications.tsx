@@ -4,23 +4,25 @@ import { Modal } from '@/components/Modal';
 import { getDateWeekLabel } from '@/lib/utils';
 import {
   getDaysUntilCancellation,
-  getNewClientsNeedingReview,
   isClientInsuranceCancellationSoon,
   isClientInsuranceCancellationWithDate,
 } from '@/lib/clientInsuranceUtils';
+import { getNewClientsNeedingReview } from '@/lib/clientUtils';
+import type { Client } from '@/types';
 import { hasActiveNotifications } from '@/lib/notificationsBanner';
 import { isNewLoan } from '@/lib/utils';
 
 interface AppNotificationsProps {
   loans: Loan[];
   clientInsurance: ClientInsurance[];
+  clients?: Client[];
 }
 
-export function AppNotifications({ loans, clientInsurance }: AppNotificationsProps) {
+export function AppNotifications({ loans, clientInsurance, clients = [] }: AppNotificationsProps) {
   const [cancellationPopupOpen, setCancellationPopupOpen] = useState(false);
   const [newClientPopupOpen, setNewClientPopupOpen] = useState(false);
 
-  if (!hasActiveNotifications(loans, clientInsurance)) return null;
+  if (!hasActiveNotifications(loans, clientInsurance, clients)) return null;
 
   const visibleLoans = loans.filter((l) => !l.hidden);
   const activeLoans = visibleLoans.filter((l) => l.paidCount < l.totalInstallments);
@@ -37,7 +39,7 @@ export function AppNotifications({ loans, clientInsurance }: AppNotificationsPro
     .map((c) => ({ ...c, daysUntil: getDaysUntilCancellation(c) ?? 0 }))
     .sort((a, b) => a.daysUntil - b.daysUntil);
 
-  const newClientsNeedingReview = getNewClientsNeedingReview(clientInsurance);
+  const newClientsNeedingReview = getNewClientsNeedingReview(clients);
 
   const showCancellation = cancellationWithDate.length > 0;
   const showNewLoans = newLoans.length > 0;
@@ -94,7 +96,7 @@ export function AppNotifications({ loans, clientInsurance }: AppNotificationsPro
               {' — '}
               {newClientsNeedingReview
                 .slice(0, 3)
-                .map((c) => c.client)
+                .map((c) => c.name)
                 .join(', ')}
               {newClientsNeedingReview.length > 3
                 ? ` +${newClientsNeedingReview.length - 3} more`
@@ -145,7 +147,7 @@ export function AppNotifications({ loans, clientInsurance }: AppNotificationsPro
           title="New clients — review required"
         >
           <p className="text-[13px] text-muted2 mb-3">
-            These clients passed the verification period. Open them on Client Insurance to mark reviewed or extend.
+            These clients passed the verification period. Open them on the Clients tab to mark reviewed or extend.
           </p>
           <ul className="space-y-2 max-h-[50vh] overflow-y-auto">
             {newClientsNeedingReview.map((c) => (
@@ -153,8 +155,7 @@ export function AppNotifications({ loans, clientInsurance }: AppNotificationsPro
                 key={c.id}
                 className="flex justify-between items-center py-2 border-b border-divider text-[13px]"
               >
-                <span className="font-medium">{c.client}</span>
-                <span className="font-mono text-muted2 text-[11px]">{c.mc}</span>
+                <span className="font-medium">{c.name}</span>
               </li>
             ))}
           </ul>

@@ -1,4 +1,5 @@
 import type { PageId } from '@/types';
+import { canAccessPage } from '@/lib/tabPermissions';
 import { BrandLogo, BrandWordmark } from '@/components/BrandLogo';
 import { NotificationsToggle } from '@/components/NotificationsToggle';
 import { ThemeToggle } from '@/components/ThemeToggle';
@@ -11,9 +12,13 @@ interface SidebarProps {
   showNotificationsToggle?: boolean;
   notificationsHidden?: boolean;
   onToggleNotificationsHidden?: () => void;
+  isOwner?: boolean;
+  showAdmin?: boolean;
+  /** null when account owner (all tabs except admin gating). */
+  memberAllowedPages?: PageId[] | null;
 }
 
-const navItems: { id: PageId; label: string; icon: React.ReactNode }[] = [
+const navItems: { id: PageId; label: string; icon: React.ReactNode; ownerOnly?: boolean; adminOnly?: boolean }[] = [
   {
     id: 'overview',
     label: 'Overview',
@@ -65,6 +70,30 @@ const navItems: { id: PageId; label: string; icon: React.ReactNode }[] = [
     ),
   },
   {
+    id: 'worksheet',
+    label: 'Worksheet',
+    icon: (
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+        <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z" />
+        <polyline points="14 2 14 8 20 8" />
+        <line x1="16" y1="13" x2="8" y2="13" />
+        <line x1="16" y1="17" x2="8" y2="17" />
+      </svg>
+    ),
+  },
+  {
+    id: 'clients',
+    label: 'Clients',
+    icon: (
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+        <path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2" />
+        <circle cx="9" cy="7" r="4" />
+        <path d="M23 21v-2a4 4 0 00-3-3.87" />
+        <path d="M16 3.13a4 4 0 010 7.75" />
+      </svg>
+    ),
+  },
+  {
     id: 'clientInsurance',
     label: 'Client Insurance',
     icon: (
@@ -74,13 +103,35 @@ const navItems: { id: PageId; label: string; icon: React.ReactNode }[] = [
     ),
   },
   {
+    id: 'userActivity',
+    label: 'User Activity',
+    ownerOnly: true,
+    icon: (
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+        <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" />
+      </svg>
+    ),
+  },
+  {
     id: 'users',
     label: 'Users',
+    ownerOnly: true,
     icon: (
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
         <path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2" />
         <circle cx="9" cy="7" r="4" />
         <path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75" />
+      </svg>
+    ),
+  },
+  {
+    id: 'admin',
+    label: 'Admin',
+    adminOnly: true,
+    icon: (
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+        <circle cx="12" cy="12" r="3" />
+        <path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42" />
       </svg>
     ),
   },
@@ -94,7 +145,17 @@ export function Sidebar({
   showNotificationsToggle,
   notificationsHidden = false,
   onToggleNotificationsHidden,
+  isOwner = false,
+  showAdmin = false,
+  memberAllowedPages = null,
 }: SidebarProps) {
+  const accessOptions = { isOwner, showAdmin, allowedPages: memberAllowedPages };
+  const visibleNav = navItems.filter((item) => {
+    if (item.ownerOnly && !isOwner) return false;
+    if (item.adminOnly && !showAdmin) return false;
+    return canAccessPage(item.id, accessOptions);
+  });
+
   return (
     <nav className="topbar flex-shrink-0 z-10 flex items-center h-12 px-6 overflow-x-auto gap-0">
       {/* Brand */}
@@ -105,7 +166,7 @@ export function Sidebar({
 
       {/* Nav items — active item shows a bottom underline */}
       <div className="flex items-center flex-1 min-w-0 h-full">
-        {navItems.map(({ id, label, icon }) => (
+        {visibleNav.map(({ id, label, icon }) => (
           <button
             key={id}
             type="button"

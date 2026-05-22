@@ -1,6 +1,6 @@
-# Loan Dashboard
+# OpsDesk
 
-A multi-user loan and reserve tracking dashboard built with **React**, **TypeScript**, **Tailwind CSS**, and **Supabase**. Uses **Supabase Auth** for login/register; each user’s data is isolated. Owners can invite users by email; invited users sign up and then view and interact with the owner’s loans and reserves.
+**OpsDesk** is a multi-user operations dashboard for loans, reserves, client registry, insurance, worksheets, and team activity — built with **React**, **TypeScript**, **Tailwind CSS**, and **Supabase**. Uses **Supabase Auth** for login/register; each user’s data is isolated. Owners can invite users by email; invited users sign up and then view and interact with the owner’s data.
 
 ## Setup
 
@@ -13,6 +13,8 @@ A multi-user loan and reserve tracking dashboard built with **React**, **TypeScr
    - Run `supabase/migrations/002_auth_multi_user.sql` (adds `owner_id`, `team_members`, and RLS for multi-user).
    - Run `supabase/migrations/003_fix_team_members_rls.sql` (fixes “permission denied for table users” by using JWT email instead of reading `auth.users`).
    - Run `supabase/migrations/004_installment_notes.sql` (adds per-installment notes: `payment_notes` on loans, `deduction_notes` on reserves).
+   - Run migrations `005` through `019` in order (includes Worksheet, Clients, company linking, and new-client field migration off insurance).
+   - After `018`, seed platform admin: `INSERT INTO public.platform_admins (email) VALUES ('your@email.com');`
 
 ### 2. Configure the app
 
@@ -21,6 +23,7 @@ A multi-user loan and reserve tracking dashboard built with **React**, **TypeScr
 3. Set in `.env`:
    - `VITE_SUPABASE_URL` — Project URL
    - `VITE_SUPABASE_ANON_KEY` — anon public key
+   - `VITE_PLATFORM_ADMIN_EMAILS` — optional comma-separated emails that see the **Admin** tab (company linking). Must also exist in `platform_admins` table for writes.
 
 Do not commit `.env` (with real keys) to version control.
 

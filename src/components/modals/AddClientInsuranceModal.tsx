@@ -1,6 +1,6 @@
-import { useState } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { Modal } from '@/components/Modal';
-import type { ClientInsurance } from '@/types';
+import type { Client, ClientInsurance } from '@/types';
 
 type StatusOption = 'OK' | 'Inactive' | 'Cancellation' | 'OUT';
 
@@ -15,17 +15,35 @@ function statusToValue(opt: StatusOption): string {
 interface AddClientInsuranceModalProps {
   open: boolean;
   onClose: () => void;
+  initialClientName?: string;
+  registryClients?: Client[];
   onAdd: (payload: Omit<ClientInsurance, 'id'>) => Promise<ClientInsurance>;
 }
 
-export function AddClientInsuranceModal({ open, onClose, onAdd }: AddClientInsuranceModalProps) {
+export function AddClientInsuranceModal({
+  open,
+  onClose,
+  initialClientName = '',
+  registryClients = [],
+  onAdd,
+}: AddClientInsuranceModalProps) {
   const [client, setClient] = useState('');
+  const [showSuggestions, setShowSuggestions] = useState(false);
   const [mc, setMc] = useState('');
   const [status, setStatus] = useState<StatusOption>('OK');
   const [cancellationDate, setCancellationDate] = useState('');
-  const [isNewClient, setIsNewClient] = useState(false);
-  const [startedDate, setStartedDate] = useState(() => new Date().toISOString().split('T')[0]);
   const [submitting, setSubmitting] = useState(false);
+
+  useEffect(() => {
+    if (open) setClient(initialClientName);
+  }, [open, initialClientName]);
+
+  const suggestions = useMemo(() => {
+    const q = client.trim().toLowerCase();
+    const list = registryClients.map((c) => c.name);
+    if (!q) return list.slice(0, 12);
+    return list.filter((n) => n.toLowerCase().includes(q)).slice(0, 12);
+  }, [client, registryClients]);
 
   const handleSubmit = async () => {
     if (!client.trim() || !mc.trim()) {
@@ -36,10 +54,6 @@ export function AddClientInsuranceModal({ open, onClose, onAdd }: AddClientInsur
       window.alert('Please set a date when Cancellation is selected.');
       return;
     }
-    if (isNewClient && !startedDate.trim()) {
-      window.alert('Please set the start date for a new client.');
-      return;
-    }
     setSubmitting(true);
     try {
       await onAdd({
@@ -48,17 +62,11 @@ export function AddClientInsuranceModal({ open, onClose, onAdd }: AddClientInsur
         status: statusToValue(status),
         expiration_date: cancellationDate.trim() || null,
         last_cancellation_date: null,
-        is_new_client: isNewClient,
-        started_date: isNewClient ? startedDate.trim() : null,
-        new_client_reviewed: false,
-        verification_days: 30,
       });
       setClient('');
       setMc('');
       setStatus('OK');
       setCancellationDate('');
-      setIsNewClient(false);
-      setStartedDate(new Date().toISOString().split('T')[0]);
       onClose();
     } catch (err) {
       window.alert(err instanceof Error ? err.message : String(err));
@@ -74,15 +82,40 @@ export function AddClientInsuranceModal({ open, onClose, onAdd }: AddClientInsur
   return (
     <Modal open={open} onClose={handleClose} title="Add client (insurance)">
       <div className="space-y-4">
-        <div>
+        <div className="relative">
           <label className="block text-[11px] text-muted uppercase tracking-wider mb-1.5">Client</label>
           <input
             type="text"
             value={client}
             onChange={(e) => setClient(e.target.value)}
+            onFocus={() => setShowSuggestions(true)}
+            onBlur={() => setTimeout(() => setShowSuggestions(false), 150)}
             placeholder="Client name"
+            autoComplete="off"
             className="w-full bg-surface border border-border rounded-lg py-2 px-3 text-[13px] text-ink outline-none focus:border-accent"
           />
+          {showSuggestions && suggestions.length > 0 && (
+            <ul className="absolute z-10 mt-1 w-full max-h-36 overflow-auto rounded-lg border border-border bg-panel shadow-lg">
+              {suggestions.map((name) => (
+                <li key={name}>
+                  <button
+                    type="button"
+                    onMouseDown={(e) => e.preventDefault()}
+                    onClick={() => {
+                      setClient(name);
+                      setShowSuggestions(false);
+                    }}
+                    className="w-full text-left px-3 py-2 text-[13px] text-ink hover:bg-accent/10"
+                  >
+                    {name}
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+          {registryClients.length > 0 && (
+            <p className="text-[11px] text-muted2 mt-1">Suggestions from Clients list</p>
+          )}
         </div>
         <div>
           <label className="block text-[11px] text-muted uppercase tracking-wider mb-1.5">MC</label>
@@ -106,33 +139,6 @@ export function AddClientInsuranceModal({ open, onClose, onAdd }: AddClientInsur
             <option value="Cancellation">Cancellation</option>
             <option value="OUT">OUT</option>
           </select>
-        </div>
-        <div className="rounded-lg border border-border bg-surface/50 px-3 py-3 space-y-3">
-          <label className="flex items-center gap-2 cursor-pointer">
-            <input
-              type="checkbox"
-              checked={isNewClient}
-              onChange={(e) => setIsNewClient(e.target.checked)}
-              className="rounded border-border"
-            />
-            <span className="text-[13px] font-medium text-ink">New client</span>
-          </label>
-          {isNewClient && (
-            <div>
-              <label className="block text-[11px] text-muted uppercase tracking-wider mb-1.5">
-                Started with us
-              </label>
-              <input
-                type="date"
-                value={startedDate}
-                onChange={(e) => setStartedDate(e.target.value)}
-                className="w-full bg-surface border border-border rounded-lg py-2 px-3 text-[13px] text-ink outline-none focus:border-accent"
-              />
-              <p className="text-[11px] text-muted2 mt-1.5">
-                After 30 days you will be prompted to review this client. You can extend the period or mark reviewed when done.
-              </p>
-            </div>
-          )}
         </div>
         <div>
           <label className="block text-[11px] text-muted uppercase tracking-wider mb-1.5">

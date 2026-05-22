@@ -1,29 +1,31 @@
 import { useState } from 'react';
 import { CheckBox } from '@/components/CheckBox';
-import type { ClientInsurance } from '@/types';
+import type { Client } from '@/types';
 import {
   getDaysUntilNewClientReview,
   getNewClientReviewDueDate,
+  isClientVerificationAlways,
   isNewClientNeedsReview,
-} from '@/lib/clientInsuranceUtils';
+} from '@/lib/clientUtils';
 
 interface NewClientReviewPanelProps {
-  client: ClientInsurance;
-  onSave: (record: ClientInsurance) => Promise<unknown>;
+  client: Client;
+  onSave: (record: Client) => Promise<unknown>;
 }
 
 /**
- * New-client verification: review checkbox, extend period, or remove new-client status.
+ * New-client verification: review checkbox, extend period, always verified, or remove new-client status.
  */
 export function NewClientReviewPanel({ client, onSave }: NewClientReviewPanelProps) {
   const [extendDays, setExtendDays] = useState('14');
   const [saving, setSaving] = useState(false);
 
+  const alwaysVerified = isClientVerificationAlways(client);
   const dueDate = getNewClientReviewDueDate(client);
   const daysUntil = getDaysUntilNewClientReview(client);
   const needsReview = isNewClientNeedsReview(client);
 
-  const persist = async (record: ClientInsurance) => {
+  const persist = async (record: Client) => {
     setSaving(true);
     try {
       await onSave(record);
@@ -35,6 +37,7 @@ export function NewClientReviewPanel({ client, onSave }: NewClientReviewPanelPro
   };
 
   const handleReviewedToggle = () => {
+    if (alwaysVerified) return;
     void persist({
       ...client,
       new_client_reviewed: !client.new_client_reviewed,
@@ -51,13 +54,22 @@ export function NewClientReviewPanel({ client, onSave }: NewClientReviewPanelPro
       ...client,
       verification_days: (client.verification_days ?? 30) + add,
       new_client_reviewed: false,
+      verification_always: false,
+    });
+  };
+
+  const handleSetAlways = () => {
+    void persist({
+      ...client,
+      verification_always: true,
+      new_client_reviewed: true,
     });
   };
 
   const handleRemoveNewClient = () => {
     if (
       !window.confirm(
-        `Remove new-client tracking for "${client.client}"? Start date and review status will be cleared.`
+        `Remove new-client tracking for "${client.name}"? Start date and review status will be cleared.`
       )
     ) {
       return;
@@ -68,6 +80,7 @@ export function NewClientReviewPanel({ client, onSave }: NewClientReviewPanelPro
       started_date: null,
       new_client_reviewed: false,
       verification_days: 30,
+      verification_always: false,
     });
   };
 
@@ -96,71 +109,96 @@ export function NewClientReviewPanel({ client, onSave }: NewClientReviewPanelPro
       <div className="flex items-start justify-between gap-2">
         <div>
           <p className="text-[11px] uppercase tracking-wider text-muted mb-1">New client</p>
-          <p className="text-[13px] text-ink">
-            Started {startedLabel}
-            <span className="text-muted2">
-              {' · '}
-              Review due {dueLabel}
-              {client.verification_days != null && ` (${client.verification_days} days)`}
-            </span>
-          </p>
-          {needsReview && (
-            <p className="text-[12px] text-accent font-medium mt-1">
-              Review required — verification period ended
-              {daysUntil != null && daysUntil < 0
-                ? ` (${Math.abs(daysUntil)} day${Math.abs(daysUntil) === 1 ? '' : 's'} ago)`
-                : ''}
+          {alwaysVerified ? (
+            <p className="text-[13px] text-green font-medium">
+              Always verified — no review due
+              {!client.started_date?.trim() ? (
+                <span className="text-muted2 font-normal"> (no start date)</span>
+              ) : null}
             </p>
-          )}
-          {!needsReview && !client.new_client_reviewed && daysUntil != null && daysUntil > 0 && (
-            <p className="text-[12px] text-muted2 mt-1">
-              Review in {daysUntil} day{daysUntil === 1 ? '' : 's'}
-            </p>
-          )}
-          {client.new_client_reviewed && (
-            <p className="text-[12px] text-green mt-1">Client reviewed</p>
+          ) : (
+            <>
+              <p className="text-[13px] text-ink">
+                Started {startedLabel}
+                <span className="text-muted2">
+                  {' · '}
+                  Review due {dueLabel}
+                  {client.verification_days != null && ` (${client.verification_days} days)`}
+                </span>
+              </p>
+              {needsReview && (
+                <p className="text-[12px] text-accent font-medium mt-1">
+                  Review required — verification period ended
+                  {daysUntil != null && daysUntil < 0
+                    ? ` (${Math.abs(daysUntil)} day${Math.abs(daysUntil) === 1 ? '' : 's'} ago)`
+                    : ''}
+                </p>
+              )}
+              {!needsReview && !client.new_client_reviewed && daysUntil != null && daysUntil > 0 && (
+                <p className="text-[12px] text-muted2 mt-1">
+                  Review in {daysUntil} day{daysUntil === 1 ? '' : 's'}
+                </p>
+              )}
+              {client.new_client_reviewed && (
+                <p className="text-[12px] text-green mt-1">Client reviewed</p>
+              )}
+            </>
           )}
         </div>
       </div>
 
-      <div className="flex items-center gap-2">
-        <CheckBox
-          checked={client.new_client_reviewed}
-          onToggle={handleReviewedToggle}
-          disabled={saving}
-        />
-        <button
-          type="button"
-          onClick={handleReviewedToggle}
-          disabled={saving}
-          className="text-[13px] text-ink hover:text-accent transition-colors disabled:opacity-50"
-        >
-          Client reviewed
-        </button>
-      </div>
+      {!alwaysVerified && (
+        <div className="flex items-center gap-2">
+          <CheckBox
+            checked={client.new_client_reviewed}
+            onToggle={handleReviewedToggle}
+            disabled={saving}
+          />
+          <button
+            type="button"
+            onClick={handleReviewedToggle}
+            disabled={saving}
+            className="text-[13px] text-ink hover:text-accent transition-colors disabled:opacity-50"
+          >
+            Client reviewed
+          </button>
+        </div>
+      )}
 
       <div className="flex flex-wrap items-end gap-2 pt-1 border-t border-border">
-        <div className="flex-1 min-w-[120px]">
-          <label className="block text-[10px] uppercase tracking-wider text-muted mb-1">
-            Extend verification (days)
-          </label>
-          <input
-            type="number"
-            min={1}
-            step={1}
-            value={extendDays}
-            onChange={(e) => setExtendDays(e.target.value)}
-            className="w-full rounded-lg border border-border bg-surface px-2.5 py-1.5 text-[13px] text-ink"
-          />
-        </div>
-        <button
-          type="button"
-          onClick={handleExtend}
-          disabled={saving}
-          className="py-1.5 px-3 rounded-lg border border-border text-xs font-medium text-muted2 hover:border-accent hover:text-accent disabled:opacity-50"
-        >
-          Extend period
-        </button>
+        {!alwaysVerified && (
+          <>
+            <div className="flex-1 min-w-[120px]">
+              <label className="block text-[10px] uppercase tracking-wider text-muted mb-1">
+                Extend verification (days)
+              </label>
+              <input
+                type="number"
+                min={1}
+                step={1}
+                value={extendDays}
+                onChange={(e) => setExtendDays(e.target.value)}
+                className="w-full rounded-lg border border-border bg-surface px-2.5 py-1.5 text-[13px] text-ink"
+              />
+            </div>
+            <button
+              type="button"
+              onClick={handleExtend}
+              disabled={saving}
+              className="py-1.5 px-3 rounded-lg border border-border text-xs font-medium text-muted2 hover:border-accent hover:text-accent disabled:opacity-50"
+            >
+              Extend period
+            </button>
+            <button
+              type="button"
+              onClick={handleSetAlways}
+              disabled={saving}
+              className="py-1.5 px-3 rounded-lg border border-accent/40 text-accent text-xs font-medium hover:bg-accent/10 disabled:opacity-50"
+            >
+              Set always verified
+            </button>
+          </>
+        )}
         <button
           type="button"
           onClick={handleRemoveNewClient}
