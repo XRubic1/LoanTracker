@@ -1,4 +1,5 @@
 import {
+  analyzeWorkDurationBetweenBatches,
   getWorksheetEntryDisplayName,
   getWorksheetAuthorLabel,
   isWorksheetUnknownClientEntry,
@@ -19,6 +20,9 @@ export interface UserActivitySummary {
   unknownClientCount: number;
   /** Unverified batches + unknown-client batches (owner action queue size). */
   attentionCount: number;
+  timingReviewCount: number;
+  timingSlowCount: number;
+  timingFastCount: number;
 }
 
 export interface UserActivityByUser {
@@ -207,6 +211,14 @@ export function buildUserActivityAnalytics(
   const teamCoverage = buildTeamCoverage(entries, userMap, ownerId, teamMembers);
   const dailyGrid = buildDailyGrid(entries, byUser, gridDates);
 
+  const durationFindings = analyzeWorkDurationBetweenBatches(entries);
+  let timingSlowCount = 0;
+  let timingFastCount = 0;
+  for (const f of durationFindings.values()) {
+    if (f.review === 'slow') timingSlowCount++;
+    else timingFastCount++;
+  }
+
   return {
     summary: {
       totalBatches: entries.length,
@@ -216,7 +228,10 @@ export function buildUserActivityAnalytics(
       verifiedCount,
       groupWorkCount,
       unknownClientCount,
-      attentionCount: unverifiedCount + unknownClientCount,
+      attentionCount: unverifiedCount + unknownClientCount + durationFindings.size,
+      timingReviewCount: durationFindings.size,
+      timingSlowCount,
+      timingFastCount,
     },
     byUser,
     byClient,

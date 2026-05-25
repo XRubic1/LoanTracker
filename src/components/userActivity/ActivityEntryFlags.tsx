@@ -10,6 +10,8 @@ const FLAG_STYLES: Record<
   cancellation: 'bg-alert-warn text-alert-warn-fg border-accent/30',
   new_client: 'bg-amber/15 text-amber border-amber/30',
   group: 'bg-surface border-border text-muted2',
+  timing_slow: 'bg-accent2/15 text-accent2 border-accent2/30',
+  timing_fast: 'bg-yellow/15 text-yellow border-yellow/30',
 };
 
 interface ActivityEntryFlagsProps {

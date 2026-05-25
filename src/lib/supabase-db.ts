@@ -154,6 +154,7 @@ function worksheetEntryFromRow(row: WorksheetEntryRow | null): WorksheetEntry | 
     group_work: Boolean(row.group_work),
     verified: Boolean(row.verified),
     note: row.note ?? null,
+    created_at: row.created_at ?? null,
   };
 }
 

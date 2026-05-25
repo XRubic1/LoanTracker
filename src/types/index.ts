@@ -173,6 +173,8 @@ export interface WorksheetEntry {
   group_work: boolean;
   verified: boolean;
   note: string | null;
+  /** When the batch was saved (used for work-duration checks). */
+  created_at?: string | null;
 }
 
 /** Supabase row: worksheet_entries table (snake_case). */
@@ -187,6 +189,8 @@ export interface WorksheetEntryRow {
   group_work: boolean;
   verified: boolean;
   note: string | null;
+  created_at?: string | null;
+  updated_at?: string | null;
 }
 
 /** Company group linking multiple owner accounts. */
