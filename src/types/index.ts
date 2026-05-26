@@ -208,6 +208,68 @@ export interface OwnerCompanyGroupMember {
   owner_email?: string;
 }
 
+/** Provisioned tenant company (super admin creates; team admin claims). */
+export type CompanyStatus = 'active' | 'suspended';
+
+export interface Company {
+  id: number;
+  name: string;
+  status: CompanyStatus;
+  owner_id: string | null;
+  /** Links to owner_company_groups for shared worksheet clients. */
+  client_share_group_id?: number | null;
+  created_by?: string | null;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export type CompanyInviteRole = 'team_admin' | 'member';
+
+export interface CompanyInvite {
+  id: number;
+  company_id: number;
+  email: string;
+  role: CompanyInviteRole;
+  allowed_pages: PageId[] | null;
+  claimed_at: string | null;
+  claimed_by: string | null;
+  created_at?: string;
+}
+
+/** Another company in the same client-share group. */
+export interface CompanyClientLink {
+  companyId: number;
+  companyName: string;
+  ownerId: string;
+}
+
+/** Super admin list row with aggregates. */
+export interface CompanyAdminRow extends Company {
+  teamAdminEmail: string | null;
+  teamAdminPending: boolean;
+  memberCount: number;
+  loanCount: number;
+  batchCount: number;
+  clientShareGroupId: number | null;
+  /** Other companies whose clients appear on worksheets for this team. */
+  linkedCompanies: CompanyClientLink[];
+}
+
+/** Resolved app role after sign-in. */
+export type UserRole = 'platform_admin' | 'team_admin' | 'team_member' | 'standalone';
+
+export interface CompanyContext {
+  id: number;
+  name: string;
+  status: CompanyStatus;
+}
+
+/** Platform super-admin row (platform_admins table). */
+export interface PlatformAdmin {
+  email: string;
+  created_at?: string;
+}
+
 /** Client insurance: client name, MC number, status (OK, inactive, cancellation, date, etc.). */
 export interface ClientInsurance {
   id: number;

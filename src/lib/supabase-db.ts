@@ -20,9 +20,16 @@ import type {
   WorksheetEntryRow,
   OwnerCompanyGroup,
   OwnerCompanyGroupMember,
+  Company,
+  CompanyAdminRow,
+  CompanyClientLink,
+  CompanyInvite,
+  CompanyStatus,
+  CompanyContext,
+  PlatformAdmin,
 } from '@/types';
 import { AAA_PAYEES, CLIENT_EXPENSE_OPTIONS, type ClientExpenseType, type PageId } from '@/types';
-import { DEFAULT_MEMBER_ALLOWED_PAGES, normalizeAllowedPages } from '@/lib/tabPermissions';
+import { normalizeAllowedPages } from '@/lib/tabPermissions';
 import { getSupabase } from './supabase';
 
 /** True when status indicates cancellation and we have an expiration/cancellation date. */
@@ -290,6 +297,486 @@ export async function lookupOwnerIdByEmail(email: string): Promise<string | null
   const { data, error } = await supabase.rpc('owner_id_by_email', { p_email: email.trim() });
   if (error) throw error;
   return (data as string | null) ?? null;
+}
+
+// --- Platform super-admins ---
+
+export async function fetchPlatformAdmins(): Promise<PlatformAdmin[]> {
+  const supabase = getSupabase();
+  if (!supabase) throw new Error('Supabase not configured');
+  const { data, error } = await supabase
+    .from('platform_admins')
+    .select('email, created_at')
+    .order('email', { ascending: true });
+  if (error) throw error;
+  return (data ?? []) as PlatformAdmin[];
+}
+
+/** Grant super-admin access by email (must already be a platform admin to call). */
+export async function addPlatformAdmin(email: string): Promise<PlatformAdmin> {
+  const supabase = getSupabase();
+  if (!supabase) throw new Error('Supabase not configured');
+  const normalized = email.trim().toLowerCase();
+  if (!normalized.includes('@')) throw new Error('Enter a valid email address.');
+  const { data, error } = await supabase
+    .from('platform_admins')
+    .insert({ email: normalized })
+    .select('email, created_at')
+    .single();
+  if (error) throw error;
+  return data as PlatformAdmin;
+}
+
+/** Revoke super-admin access (cannot remove yourself in UI). */
+export async function removePlatformAdmin(email: string): Promise<void> {
+  const supabase = getSupabase();
+  if (!supabase) throw new Error('Supabase not configured');
+  const { error } = await supabase
+    .from('platform_admins')
+    .delete()
+    .eq('email', email.trim().toLowerCase());
+  if (error) throw error;
+}
+
+// --- Companies (super admin provisioning) ---
+
+function companyFromRow(row: {
+  id: number;
+  name: string;
+  status: string;
+  owner_id: string | null;
+  client_share_group_id?: number | null;
+  created_by?: string | null;
+  created_at?: string;
+  updated_at?: string;
+}): Company {
+  return {
+    id: row.id,
+    name: row.name,
+    status: row.status === 'suspended' ? 'suspended' : 'active',
+    owner_id: row.owner_id,
+    client_share_group_id: row.client_share_group_id ?? null,
+    created_by: row.created_by ?? null,
+    created_at: row.created_at,
+    updated_at: row.updated_at,
+  };
+}
+
+export async function claimCompanyInvites(): Promise<void> {
+  const supabase = getSupabase();
+  if (!supabase) throw new Error('Supabase not configured');
+  const { error } = await supabase.rpc('claim_company_invites');
+  if (error) throw error;
+}
+
+export async function hasPendingInvite(email: string): Promise<boolean> {
+  const supabase = getSupabase();
+  if (!supabase) return false;
+  const { data, error } = await supabase.rpc('has_pending_invite', { p_email: email.trim() });
+  if (error) {
+    console.warn('has_pending_invite:', error.message);
+    return false;
+  }
+  return Boolean(data);
+}
+
+export async function fetchCompanyByOwnerId(ownerId: string): Promise<CompanyContext | null> {
+  const supabase = getSupabase();
+  if (!supabase) throw new Error('Supabase not configured');
+  const { data, error } = await supabase
+    .from('companies')
+    .select('id, name, status')
+    .eq('owner_id', ownerId)
+    .maybeSingle();
+  if (error) throw error;
+  if (!data) return null;
+  return {
+    id: data.id,
+    name: data.name,
+    status: data.status === 'suspended' ? 'suspended' : 'active',
+  };
+}
+
+export async function fetchCompanyForMember(ownerId: string): Promise<CompanyContext | null> {
+  return fetchCompanyByOwnerId(ownerId);
+}
+
+export async function createCompanyWithTeamAdminInvite(
+  name: string,
+  teamAdminEmail: string,
+  createdBy?: string | null
+): Promise<{ company: Company; invite: CompanyInvite }> {
+  const supabase = getSupabase();
+  if (!supabase) throw new Error('Supabase not configured');
+  const email = teamAdminEmail.trim().toLowerCase();
+  const { data: companyRow, error: companyErr } = await supabase
+    .from('companies')
+    .insert({
+      name: name.trim(),
+      status: 'active',
+      created_by: createdBy ?? null,
+    })
+    .select('*')
+    .single();
+  if (companyErr) throw companyErr;
+  const company = companyFromRow(companyRow);
+  const { data: inviteRow, error: inviteErr } = await supabase
+    .from('company_invites')
+    .insert({
+      company_id: company.id,
+      email,
+      role: 'team_admin',
+    })
+    .select('*')
+    .single();
+  if (inviteErr) throw inviteErr;
+  return {
+    company,
+    invite: {
+      id: inviteRow.id,
+      company_id: inviteRow.company_id,
+      email: inviteRow.email,
+      role: 'team_admin',
+      allowed_pages: null,
+      claimed_at: inviteRow.claimed_at,
+      claimed_by: inviteRow.claimed_by,
+      created_at: inviteRow.created_at,
+    },
+  };
+}
+
+export async function updateCompanyStatus(companyId: number, status: CompanyStatus): Promise<Company> {
+  const supabase = getSupabase();
+  if (!supabase) throw new Error('Supabase not configured');
+  const { data, error } = await supabase
+    .from('companies')
+    .update({ status, updated_at: new Date().toISOString() })
+    .eq('id', companyId)
+    .select('*')
+    .single();
+  if (error) throw error;
+  return companyFromRow(data);
+}
+
+export async function fetchCompaniesForAdmin(): Promise<CompanyAdminRow[]> {
+  const supabase = getSupabase();
+  if (!supabase) throw new Error('Supabase not configured');
+  const { data: companies, error } = await supabase
+    .from('companies')
+    .select('*')
+    .order('name', { ascending: true });
+  if (error) throw error;
+  const list = (companies ?? []).map(companyFromRow);
+  if (list.length === 0) return [];
+
+  const companyIds = list.map((c) => c.id);
+  const ownerIds = list.map((c) => c.owner_id).filter((id): id is string => id != null);
+
+  const { data: invites } = await supabase
+    .from('company_invites')
+    .select('*')
+    .in('company_id', companyIds)
+    .eq('role', 'team_admin')
+    .is('claimed_at', null);
+
+  const { data: allInvites } = await supabase
+    .from('company_invites')
+    .select('company_id, email, role, claimed_at')
+    .in('company_id', companyIds)
+    .eq('role', 'team_admin');
+
+  let memberCounts: Record<string, number> = {};
+  if (ownerIds.length > 0) {
+    const { data: members } = await supabase.from('team_members').select('owner_id');
+    for (const m of members ?? []) {
+      if (ownerIds.includes(m.owner_id)) {
+        memberCounts[m.owner_id] = (memberCounts[m.owner_id] ?? 0) + 1;
+      }
+    }
+  }
+
+  let loanCounts: Record<string, number> = {};
+  let batchCounts: Record<string, number> = {};
+  if (ownerIds.length > 0) {
+    const { data: loans } = await supabase.from('loans').select('owner_id');
+    for (const l of loans ?? []) {
+      if (l.owner_id && ownerIds.includes(l.owner_id)) {
+        loanCounts[l.owner_id] = (loanCounts[l.owner_id] ?? 0) + 1;
+      }
+    }
+    const { data: batches } = await supabase.from('worksheet_entries').select('owner_id');
+    for (const b of batches ?? []) {
+      if (b.owner_id && ownerIds.includes(b.owner_id)) {
+        batchCounts[b.owner_id] = (batchCounts[b.owner_id] ?? 0) + 1;
+      }
+    }
+  }
+
+  const companyByOwner = new Map<string, Company>();
+  for (const c of list) {
+    if (c.owner_id) companyByOwner.set(c.owner_id, c);
+  }
+
+  const groupIds = [
+    ...new Set(
+      list.map((c) => c.client_share_group_id).filter((id): id is number => id != null)
+    ),
+  ];
+
+  const membersByGroup = new Map<number, { owner_id: string }[]>();
+  if (groupIds.length > 0) {
+    const { data: groupMembers, error: gmErr } = await supabase
+      .from('owner_company_group_members')
+      .select('group_id, owner_id')
+      .in('group_id', groupIds);
+    if (gmErr) throw gmErr;
+    for (const m of groupMembers ?? []) {
+      const arr = membersByGroup.get(m.group_id) ?? [];
+      arr.push({ owner_id: m.owner_id });
+      membersByGroup.set(m.group_id, arr);
+    }
+  }
+
+  return list.map((c) => {
+    const pendingAdmin = (invites ?? []).find((i) => i.company_id === c.id);
+    const claimedAdmin = (allInvites ?? []).find((i) => i.company_id === c.id && i.claimed_at);
+    const teamAdminEmail =
+      c.owner_id != null
+        ? null
+        : pendingAdmin?.email ?? claimedAdmin?.email ?? null;
+    const oid = c.owner_id ?? '';
+
+    const linkedCompanies: CompanyClientLink[] = [];
+    if (c.client_share_group_id && c.owner_id) {
+      for (const m of membersByGroup.get(c.client_share_group_id) ?? []) {
+        if (m.owner_id === c.owner_id) continue;
+        const other = companyByOwner.get(m.owner_id);
+        linkedCompanies.push({
+          companyId: other?.id ?? 0,
+          companyName: other?.name ?? `Account ${m.owner_id.slice(0, 8)}…`,
+          ownerId: m.owner_id,
+        });
+      }
+    }
+
+    return {
+      ...c,
+      teamAdminEmail,
+      teamAdminPending: c.owner_id == null && pendingAdmin != null,
+      memberCount: oid ? (memberCounts[oid] ?? 0) : 0,
+      loanCount: oid ? (loanCounts[oid] ?? 0) : 0,
+      batchCount: oid ? (batchCounts[oid] ?? 0) : 0,
+      clientShareGroupId: c.client_share_group_id ?? null,
+      linkedCompanies,
+    };
+  });
+}
+
+async function fetchCompanyById(companyId: number): Promise<Company> {
+  const supabase = getSupabase();
+  if (!supabase) throw new Error('Supabase not configured');
+  const { data, error } = await supabase.from('companies').select('*').eq('id', companyId).single();
+  if (error) throw error;
+  return companyFromRow(data);
+}
+
+/**
+ * Link two companies so worksheet/client lists are shared (owner_company_group_members).
+ * Both must have an active team admin (owner_id set).
+ */
+export async function linkCompaniesForClientSharing(
+  companyIdA: number,
+  companyIdB: number
+): Promise<void> {
+  const supabase = getSupabase();
+  if (!supabase) throw new Error('Supabase not configured');
+  if (companyIdA === companyIdB) throw new Error('Choose a different company to link.');
+
+  const [a, b] = await Promise.all([fetchCompanyById(companyIdA), fetchCompanyById(companyIdB)]);
+  if (!a.owner_id) throw new Error(`"${a.name}" has no active team admin yet.`);
+  if (!b.owner_id) throw new Error(`"${b.name}" has no active team admin yet.`);
+
+  if (
+    a.client_share_group_id &&
+    b.client_share_group_id &&
+    a.client_share_group_id !== b.client_share_group_id
+  ) {
+    throw new Error(
+      'One company is already linked to a different group. Unlink it first, then link again.'
+    );
+  }
+
+  let groupId = a.client_share_group_id ?? b.client_share_group_id;
+  if (!groupId) {
+    const group = await createCompanyGroup(`Shared clients: ${a.name} + ${b.name}`);
+    groupId = group.id;
+  }
+
+  await addOwnerToCompanyGroup(groupId, a.owner_id);
+  await addOwnerToCompanyGroup(groupId, b.owner_id);
+
+  const { error } = await supabase
+    .from('companies')
+    .update({ client_share_group_id: groupId, updated_at: new Date().toISOString() })
+    .or(`id.eq.${companyIdA},id.eq.${companyIdB}`);
+  if (error) throw error;
+
+  const { data: members } = await supabase
+    .from('owner_company_group_members')
+    .select('owner_id')
+    .eq('group_id', groupId);
+  const ownerIds = (members ?? []).map((m) => m.owner_id);
+  const { data: related } = await supabase
+    .from('companies')
+    .select('id')
+    .in('owner_id', ownerIds);
+  if (related?.length) {
+    await supabase
+      .from('companies')
+      .update({ client_share_group_id: groupId })
+      .in(
+        'id',
+        related.map((r) => r.id)
+      );
+  }
+}
+
+/** Link any existing account (by email) into a company's client-share group. */
+export async function linkOwnerEmailToCompanyClientSharing(
+  companyId: number,
+  ownerEmail: string
+): Promise<void> {
+  const supabase = getSupabase();
+  if (!supabase) throw new Error('Supabase not configured');
+  const ownerId = await lookupOwnerIdByEmail(ownerEmail);
+  if (!ownerId) throw new Error(`No account found for ${ownerEmail.trim()}.`);
+  const company = await fetchCompanyById(companyId);
+  if (!company.owner_id) throw new Error(`"${company.name}" has no active team admin yet.`);
+
+  let groupId = company.client_share_group_id;
+  if (!groupId) {
+    const group = await createCompanyGroup(`Shared clients: ${company.name}`);
+    groupId = group.id;
+    await addOwnerToCompanyGroup(groupId, company.owner_id);
+    await supabase.from('companies').update({ client_share_group_id: groupId }).eq('id', companyId);
+  }
+
+  const { data: existing } = await supabase
+    .from('owner_company_group_members')
+    .select('group_id')
+    .eq('owner_id', ownerId);
+  const otherGroup = existing?.find((r) => r.group_id !== groupId);
+  if (otherGroup) {
+    throw new Error('That account is already in another client-share group. Unlink it first.');
+  }
+
+  await addOwnerToCompanyGroup(groupId, ownerId);
+
+  const { data: otherCo } = await supabase
+    .from('companies')
+    .select('id')
+    .eq('owner_id', ownerId)
+    .maybeSingle();
+  if (otherCo?.id) {
+    await supabase.from('companies').update({ client_share_group_id: groupId }).eq('id', otherCo.id);
+  }
+}
+
+/** Remove one company from its client-share group (worksheet clients no longer shared). */
+export async function unlinkCompanyClientSharing(companyId: number): Promise<void> {
+  const supabase = getSupabase();
+  if (!supabase) throw new Error('Supabase not configured');
+  const company = await fetchCompanyById(companyId);
+  if (!company.owner_id || !company.client_share_group_id) return;
+
+  await removeOwnerFromCompanyGroup(company.client_share_group_id, company.owner_id);
+  const { error } = await supabase
+    .from('companies')
+    .update({ client_share_group_id: null, updated_at: new Date().toISOString() })
+    .eq('id', companyId);
+  if (error) throw error;
+}
+
+/** Remove a linked owner (by owner id) from the company's share group. */
+export async function unlinkOwnerFromCompanyClientSharing(
+  companyId: number,
+  linkedOwnerId: string
+): Promise<void> {
+  const supabase = getSupabase();
+  if (!supabase) throw new Error('Supabase not configured');
+  const company = await fetchCompanyById(companyId);
+  if (!company.client_share_group_id) return;
+
+  await removeOwnerFromCompanyGroup(company.client_share_group_id, linkedOwnerId);
+
+  const { data: otherCo } = await supabase
+    .from('companies')
+    .select('id')
+    .eq('owner_id', linkedOwnerId)
+    .maybeSingle();
+  if (otherCo?.id) {
+    await supabase.from('companies').update({ client_share_group_id: null }).eq('id', otherCo.id);
+  }
+}
+
+export interface AdminLoanRow {
+  loan: Loan;
+  companyName: string | null;
+  companyId: number | null;
+}
+
+/** All loans visible to platform admin (RLS). */
+export async function fetchAllLoansForAdmin(companyId?: number | null): Promise<AdminLoanRow[]> {
+  const supabase = getSupabase();
+  if (!supabase) throw new Error('Supabase not configured');
+  const { data: companies } = await supabase.from('companies').select('id, name, owner_id');
+  const ownerToCompany = new Map<string, { id: number; name: string }>();
+  for (const c of companies ?? []) {
+    if (c.owner_id) ownerToCompany.set(c.owner_id, { id: c.id, name: c.name });
+  }
+  let query = supabase.from('loans').select('*').order('id', { ascending: false });
+  const { data, error } = await query;
+  if (error) throw error;
+  const rows = (data ?? []) as LoanRow[];
+  return rows
+    .map((row) => {
+      const loan = loanFromRow(row)!;
+      const co = row.owner_id ? ownerToCompany.get(row.owner_id) : undefined;
+      return {
+        loan,
+        companyName: co?.name ?? null,
+        companyId: co?.id ?? null,
+      };
+    })
+    .filter((r) => companyId == null || r.companyId === companyId);
+}
+
+/** All worksheet entries for platform admin activity views. */
+export async function fetchAllWorksheetEntriesForAdmin(
+  companyId?: number | null
+): Promise<WorksheetEntry[]> {
+  const supabase = getSupabase();
+  if (!supabase) throw new Error('Supabase not configured');
+  const { data: companies } = await supabase.from('companies').select('id, owner_id');
+  const ownerIds =
+    companyId != null
+      ? (companies ?? []).filter((c) => c.id === companyId).map((c) => c.owner_id).filter(Boolean)
+      : (companies ?? []).map((c) => c.owner_id).filter(Boolean);
+  const ownerSet = new Set(ownerIds as string[]);
+
+  const { data, error } = await supabase
+    .from('worksheet_entries')
+    .select('*')
+    .order('work_date', { ascending: false });
+  if (error) throw error;
+  return (data ?? [])
+    .filter((row) => {
+      const r = row as WorksheetEntryRow;
+      if (companyId == null) return true;
+      return ownerSet.has(r.owner_id);
+    })
+    .map((row) => worksheetEntryFromRow(row as WorksheetEntryRow)!)
+    .filter(Boolean);
 }
 
 function loanFromRow(row: LoanRow | null): Loan | null {
@@ -647,7 +1134,7 @@ export async function addTeamMember(ownerId: string, email: string): Promise<Tea
     .insert({
       owner_id: ownerId,
       email: email.trim().toLowerCase(),
-      allowed_pages: DEFAULT_MEMBER_ALLOWED_PAGES,
+      allowed_pages: ['loans'],
     })
     .select('*')
     .single();

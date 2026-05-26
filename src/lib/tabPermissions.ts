@@ -24,7 +24,7 @@ export const PAGE_LABELS: Record<PageId, string> = {
   clientInsurance: 'Client Insurance',
   userActivity: 'User Activity',
   users: 'Users',
-  admin: 'Admin',
+  admin: 'Super Admin',
 };
 
 /** Default tabs for newly invited members. */
@@ -64,10 +64,12 @@ export function getDefaultPageForUser(options: {
   isOwner: boolean;
   showAdmin: boolean;
   allowedPages: PageId[] | null;
+  userRole?: 'platform_admin' | 'team_admin' | 'team_member' | 'standalone';
 }): PageId {
+  if (options.showAdmin && options.userRole === 'platform_admin') return 'admin';
   if (options.isOwner) return 'overview';
   const pages = options.allowedPages ?? [];
-  return pages[0] ?? 'overview';
+  return pages[0] ?? 'loans';
 }
 
 /** Filter assignable pages to a valid subset for saving. */

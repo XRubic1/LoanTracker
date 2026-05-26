@@ -35,3 +35,8 @@ export function buildClientInsuranceList(
 export function getInsuranceListItemName(item: ClientInsuranceListItem): string {
   return item.kind === 'insurance' ? item.record.client : item.client.name;
 }
+
+/** Tenant owner for team filtering (linked accounts share insurance read-only). */
+export function getInsuranceListItemOwnerId(item: ClientInsuranceListItem): string | null | undefined {
+  return item.kind === 'insurance' ? item.record.owner_id : item.client.owner_id;
+}

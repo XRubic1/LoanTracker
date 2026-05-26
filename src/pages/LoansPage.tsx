@@ -2,6 +2,13 @@ import { useState } from 'react';
 import type { Loan } from '@/types';
 import { Section } from '@/components/Section';
 import { Badge } from '@/components/Badge';
+import { TeamScopeFilter } from '@/components/TeamScopeFilter';
+import { useLinkedTeams } from '@/hooks/useLinkedTeams';
+import {
+  matchesTeamScope,
+  teamLabelForOwner,
+  type TeamScopeFilterValue,
+} from '@/lib/linkedTeams';
 import { fmt, fmtDate, getLoanRemaining, getNextDueDate, isDueThisWeek, isLoanPastDue, getLoanProviderDisplay } from '@/lib/utils';
 import type { UseDataResult } from '@/hooks/useData';
 import { exportOpenLoansSummaryExcel } from '@/lib/exportLoansExcel';
@@ -14,6 +21,7 @@ interface LoansPageProps
     UseDataResult,
     'loans' | 'markLoanPaid' | 'removeLoan'
   > {
+  effectiveOwnerId: string;
   runWithPasswordProtection: (action: () => void) => void;
   onOpenDetail: (id: number) => void;
   onAddLoan: () => void;
@@ -21,6 +29,7 @@ interface LoansPageProps
 
 export function LoansPage({
   loans,
+  effectiveOwnerId,
   markLoanPaid: _markLoanPaid, // provided but not used in this list view
   removeLoan: _removeLoan,
   runWithPasswordProtection: _runWithPasswordProtection,
@@ -28,10 +37,14 @@ export function LoansPage({
   onAddLoan,
 }: LoansPageProps) {
   const [filter, setFilter] = useState<LoanFilter>('all');
+  const [teamScope, setTeamScope] = useState<TeamScopeFilterValue>('all');
   const [hideClosed, setHideClosed] = useState(true); // start with closed loans hidden
   const [printMenuOpen, setPrintMenuOpen] = useState(false);
+  const { options: teamOptions } = useLinkedTeams(effectiveOwnerId, 'linked-group');
+  const showTeamColumn = teamOptions.filter((o) => o.value !== 'all').length > 1;
 
   let list: Loan[] = [...loans];
+  list = list.filter((l) => matchesTeamScope(l.owner_id, teamScope, effectiveOwnerId));
   if (filter === 'due') list = list.filter((l) => !l.hidden && isDueThisWeek(l));
   if (filter === 'active') list = list.filter((l) => !l.hidden && l.paidCount < l.totalInstallments);
   if (filter === 'hidden') list = list.filter((l) => l.hidden);
@@ -124,8 +137,21 @@ export function LoansPage({
         </div>
       </div>
 
-      <div className="flex items-center justify-between mb-3 gap-3">
-        <div className="filter-group">
+      {showTeamColumn && (
+        <p className="text-[12px] text-muted2 mb-2 max-w-2xl">
+          Linked accounts share loan visibility. Use the team filter to show all linked teams or one
+          team at a time. You can view other teams&apos; loans; edits apply only to your account.
+        </p>
+      )}
+
+      <div className="flex flex-wrap items-end justify-between mb-3 gap-3">
+        <div className="flex flex-wrap items-end gap-3">
+          <TeamScopeFilter
+            value={teamScope}
+            options={teamOptions}
+            onChange={setTeamScope}
+          />
+          <div className="filter-group">
           {(['all', 'due', 'active', 'hidden'] as const).map((f) => (
             <button
               key={f}
@@ -142,6 +168,7 @@ export function LoansPage({
                     : 'Hidden'}
             </button>
           ))}
+          </div>
         </div>
         <button
           type="button"
@@ -157,6 +184,11 @@ export function LoansPage({
         <table className="w-full border-collapse">
           <thead>
             <tr>
+              {showTeamColumn && (
+                <th className="text-[10px] text-label uppercase tracking-widest py-0 pb-1.5 pr-2 text-left border-b border-border whitespace-nowrap">
+                  Team
+                </th>
+              )}
               <th className="text-[10px] text-label uppercase tracking-widest py-0 pb-1.5 pr-2 text-left border-b border-border whitespace-nowrap">
                 Client
               </th>
@@ -189,7 +221,7 @@ export function LoansPage({
           <tbody>
             {list.length === 0 ? (
               <tr>
-                <td colSpan={9} className="text-center py-6 text-muted text-[13px]">
+                <td colSpan={showTeamColumn ? 10 : 9} className="text-center py-6 text-muted text-[13px]">
                   No loans found
                 </td>
               </tr>
@@ -215,8 +247,22 @@ export function LoansPage({
                   const text = l.ref || `${l.client}`;
                   navigator.clipboard.writeText(text).then(() => {}, () => {});
                 };
+                const isOwnTeam = (l.owner_id ?? effectiveOwnerId) === effectiveOwnerId;
                 return (
                   <tr key={l.id} className="row-hover transition-colors">
+                    {showTeamColumn && (
+                      <td className="py-1.5 pr-2 border-b border-divider align-middle">
+                        <span
+                          className={`text-[11px] px-2 py-0.5 rounded-full border ${
+                            isOwnTeam
+                              ? 'border-border text-muted2'
+                              : 'border-accent/30 bg-accent/10 text-accent'
+                          }`}
+                        >
+                          {teamLabelForOwner(l.owner_id, effectiveOwnerId, teamOptions)}
+                        </span>
+                      </td>
+                    )}
                     <td className="py-1.5 pr-2 border-b border-divider align-middle">
                       <div className="font-medium text-ink">{l.client}</div>
                       <div className="text-[11px] text-muted font-mono mt-0.5 flex items-center gap-1.5">

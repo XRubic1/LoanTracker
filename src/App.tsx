@@ -12,14 +12,16 @@ import { ClientInsurancePage } from '@/pages/ClientInsurancePage';
 import { ClientsPage } from '@/pages/ClientsPage';
 import { WorksheetPage } from '@/pages/WorksheetPage';
 import { UserActivityPage } from '@/pages/UserActivityPage';
-import { AdminPage } from '@/pages/AdminPage';
+import { SuperAdminDashboard } from '@/pages/SuperAdminDashboard';
+import { CompanySuspendedBanner } from '@/components/CompanySuspendedBanner';
+import { TeamAdminWelcome } from '@/components/TeamAdminWelcome';
+import { EmptyWorkspace } from '@/components/EmptyWorkspace';
 import { UsersPage } from '@/pages/UsersPage';
 import { AddClientModal } from '@/components/modals/AddClientModal';
 import { EditClientModal } from '@/components/modals/EditClientModal';
 import { ClientDetailModal } from '@/components/modals/ClientDetailModal';
 import { WorksheetEntryModal } from '@/components/modals/WorksheetEntryModal';
 import { ImportClientsModal } from '@/components/modals/ImportClientsModal';
-import { isPlatformAdmin } from '@/lib/platformAdmin';
 import { normalizeClientName } from '@/lib/importClients';
 import { AuthPage } from '@/pages/AuthPage';
 import { LoanDetailModal } from '@/components/modals/LoanDetailModal';
@@ -42,6 +44,7 @@ import {
   setNotificationsHidden,
 } from '@/lib/notificationsBanner';
 import { canAccessPage, getDefaultPageForUser } from '@/lib/tabPermissions';
+import { OnboardingTutorial } from '@/components/OnboardingTutorial';
 
 export default function App() {
   const {
@@ -50,6 +53,8 @@ export default function App() {
     effectiveOwnerId,
     isOwner,
     memberAllowedPages,
+    userRole,
+    isPlatformAdmin: showAdminNav,
     loading: authLoading,
     signOut,
   } = useAuth();
@@ -72,6 +77,7 @@ export default function App() {
   const [addClientInsuranceInitialName, setAddClientInsuranceInitialName] = useState('');
   const [passwordModalOpen, setPasswordModalOpen] = useState(false);
   const [notificationsHidden, setNotificationsHiddenState] = useState(getNotificationsHidden);
+  const [tutorialReplay, setTutorialReplay] = useState(0);
   const pendingPasswordActionRef = useRef<(() => void) | null>(null);
 
   /** Run a destructive action (delete/reverse) only after the user enters the correct password. */
@@ -137,19 +143,35 @@ export default function App() {
     removeWorksheetEntry,
   } = useData(effectiveOwnerId ?? null, user?.id ?? null);
 
-  const showAdminNav = isPlatformAdmin(user?.email);
-
   const tabAccess = useMemo(
-    () => ({ isOwner, showAdmin: showAdminNav, allowedPages: memberAllowedPages }),
-    [isOwner, showAdminNav, memberAllowedPages]
+    () => ({
+      isOwner,
+      showAdmin: showAdminNav,
+      allowedPages: memberAllowedPages,
+      userRole,
+    }),
+    [isOwner, showAdminNav, memberAllowedPages, userRole]
   );
+
+  const initialLandingSet = useRef(false);
 
   useEffect(() => {
     if (!user || authLoading || effectiveOwnerId == null) return;
+    if (!initialLandingSet.current && userRole === 'platform_admin') {
+      setPage('admin');
+      initialLandingSet.current = true;
+      return;
+    }
     if (!canAccessPage(page, tabAccess)) {
       setPage(getDefaultPageForUser(tabAccess));
     }
-  }, [page, tabAccess, user, authLoading, effectiveOwnerId]);
+  }, [page, tabAccess, user, authLoading, effectiveOwnerId, userRole]);
+
+  const showMemberEmptyWorkspace =
+    userRole === 'team_member' &&
+    loans.length === 0 &&
+    (memberAllowedPages?.length ?? 0) <= 2 &&
+    (memberAllowedPages?.includes('loans') ?? false);
 
   const showNotificationsToggle = useMemo(
     () => hasActiveNotifications(loans, clientInsurance, clients),
@@ -447,11 +469,17 @@ export default function App() {
         isOwner={isOwner}
         showAdmin={showAdminNav}
         memberAllowedPages={memberAllowedPages}
+        onReplayTour={() => setTutorialReplay((n) => n + 1)}
+      />
+      <OnboardingTutorial
+        page={page}
+        onNavigate={setPage}
+        replayToken={tutorialReplay}
       />
       {!notificationsHidden && (
         <AppNotifications loans={loans} clientInsurance={clientInsurance} clients={clients} />
       )}
-      <main className="main flex-1 min-h-0 overflow-y-auto py-4 px-6">
+      <main className="main flex-1 min-h-0 overflow-y-auto py-4 px-6" data-tour="main-content">
         {configMissing && (
           <div className="mb-3 py-2 px-3 rounded-lg text-xs flex items-center justify-between gap-2 bg-alert-warn border border-red/30 text-alert-warn-fg">
             <span>
@@ -478,6 +506,11 @@ export default function App() {
           </div>
         )}
 
+        <CompanySuspendedBanner />
+        {isOwner && userRole === 'team_admin' && (
+          <TeamAdminWelcome onGoToUsers={() => setPage('users')} />
+        )}
+
         {page === 'overview' && (
           <OverviewPage
             loans={loans}
@@ -489,16 +522,20 @@ export default function App() {
             onOpenCloseDeduction={setOverviewCloseDeductionReserveId}
           />
         )}
-        {page === 'loans' && (
-          <LoansPage
-            loans={loans}
-            markLoanPaid={markLoanPaid}
-            removeLoan={removeLoan}
-            runWithPasswordProtection={runWithPasswordProtection}
-            onOpenDetail={setLoanDetailId}
-            onAddLoan={() => setAddLoanOpen(true)}
-          />
-        )}
+        {page === 'loans' &&
+          (showMemberEmptyWorkspace ? (
+            <EmptyWorkspace onAction={() => setAddLoanOpen(true)} />
+          ) : (
+            <LoansPage
+              loans={loans}
+              effectiveOwnerId={effectiveOwnerId}
+              markLoanPaid={markLoanPaid}
+              removeLoan={removeLoan}
+              runWithPasswordProtection={runWithPasswordProtection}
+              onOpenDetail={setLoanDetailId}
+              onAddLoan={() => setAddLoanOpen(true)}
+            />
+          ))}
         {page === 'reserves' && (
           <ReservesPage
             reserves={reserves}
@@ -532,6 +569,7 @@ export default function App() {
         {page === 'clientInsurance' && (
           <ClientInsurancePage
             clientInsurance={clientInsurance}
+            effectiveOwnerId={effectiveOwnerId}
             clients={clients}
             insuranceVerification={insuranceVerification}
             updateInsuranceVerification={updateInsuranceVerification}
@@ -554,6 +592,7 @@ export default function App() {
         {page === 'clients' && (
           <ClientsPage
             clients={clients}
+            effectiveOwnerId={effectiveOwnerId}
             onAddClient={() => setAddClientOpen(true)}
             onImportClients={() => setImportClientsOpen(true)}
             onViewClient={setClientDetailId}
@@ -569,7 +608,7 @@ export default function App() {
             ownerId={effectiveOwnerId}
           />
         )}
-        {page === 'admin' && showAdminNav && <AdminPage />}
+        {page === 'admin' && showAdminNav && <SuperAdminDashboard />}
         {page === 'users' && <UsersPage />}
       </main>
 

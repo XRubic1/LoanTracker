@@ -13,8 +13,12 @@
    - Run `supabase/migrations/002_auth_multi_user.sql` (adds `owner_id`, `team_members`, and RLS for multi-user).
    - Run `supabase/migrations/003_fix_team_members_rls.sql` (fixes “permission denied for table users” by using JWT email instead of reading `auth.users`).
    - Run `supabase/migrations/004_installment_notes.sql` (adds per-installment notes: `payment_notes` on loans, `deduction_notes` on reserves).
-   - Run migrations `005` through `019` in order (includes Worksheet, Clients, company linking, and new-client field migration off insurance).
+   - Run migrations `005` through `023` in order (includes Worksheet, Clients, company linking, and new-client field migration off insurance).
+   - Run `supabase/migrations/024_companies_super_admin.sql` (provisioned companies, invites, super-admin global read).
+   - Run `supabase/migrations/025_platform_admins_manage.sql` (super admins can grant/revoke other super admins from the app).
+   - Run `supabase/migrations/026_company_client_sharing.sql` (link companies for shared worksheet clients).
    - After `018`, seed platform admin: `INSERT INTO public.platform_admins (email) VALUES ('your@email.com');`
+   - Optional: under **Authentication → Providers**, disable public sign-ups so only invited emails can register (the app also blocks sign-up without a pending invite).
 
 ### 2. Configure the app
 
@@ -23,7 +27,14 @@
 3. Set in `.env`:
    - `VITE_SUPABASE_URL` — Project URL
    - `VITE_SUPABASE_ANON_KEY` — anon public key
-   - `VITE_PLATFORM_ADMIN_EMAILS` — optional comma-separated emails that see the **Admin** tab (company linking). Must also exist in `platform_admins` table for writes.
+   - `VITE_PLATFORM_ADMIN_EMAILS` — optional comma-separated emails that see the **Super Admin** tab. Must also exist in `platform_admins` table for writes.
+
+## Super Admin & companies
+
+- **Super Admin** tab (platform admins only): create companies, invite team admins by email, **link accounts** on the Companies tab so teams share clients on Worksheet, suspend companies, view all loans and worksheet activity, and manage legacy client-list groups.
+- In **local dev** (`npm run dev`), an extra **Super admins** tab lets existing super admins add/remove emails in `platform_admins` (first admin still needs a one-time SQL seed).
+- **Team admin**: signs up with the invited email, claims the company, then uses **Users** to invite members (default: Loans tab only; expand access per user).
+- **Team members**: configurable tabs; loans-first empty workspace when only Loans is enabled.
 
 Do not commit `.env` (with real keys) to version control.
 

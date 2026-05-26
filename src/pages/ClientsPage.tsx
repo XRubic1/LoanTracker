@@ -1,5 +1,8 @@
 import { useState } from 'react';
 import { Section } from '@/components/Section';
+import { TeamScopeFilter } from '@/components/TeamScopeFilter';
+import { useLinkedTeams } from '@/hooks/useLinkedTeams';
+import { matchesTeamScope, teamLabelForOwner, type TeamScopeFilterValue } from '@/lib/linkedTeams';
 import {
   getNewClientsNeedingReview,
   getVerificationPeriodLabel,
@@ -11,6 +14,7 @@ import {
 import type { UseDataResult } from '@/hooks/useData';
 
 interface ClientsPageProps extends Pick<UseDataResult, 'clients'> {
+  effectiveOwnerId: string;
   onAddClient: () => void;
   onImportClients: () => void;
   onViewClient: (id: number) => void;
@@ -20,6 +24,7 @@ interface ClientsPageProps extends Pick<UseDataResult, 'clients'> {
 
 export function ClientsPage({
   clients,
+  effectiveOwnerId,
   onAddClient,
   onImportClients,
   onViewClient,
@@ -31,6 +36,9 @@ export function ClientsPage({
   const [statusFilter, setStatusFilter] = useState<
     'all' | 'needs_review' | 'new_client' | 'always_verified'
   >('all');
+  const [teamScope, setTeamScope] = useState<TeamScopeFilterValue>('all');
+  const { options: teamOptions } = useLinkedTeams(effectiveOwnerId, 'client-pool');
+  const showTeamColumn = teamOptions.filter((o) => o.value !== 'all').length > 1;
 
   const newClientsNeedingReview = getNewClientsNeedingReview(clients);
   const normalizedSearch = searchQuery.trim().toLowerCase();
@@ -48,6 +56,7 @@ export function ClientsPage({
   };
 
   const list = clients
+    .filter((c) => matchesTeamScope(c.owner_id, teamScope, effectiveOwnerId))
     .filter((c) => {
       if (statusFilter === 'needs_review') return isNewClientNeedsReview(c);
       if (statusFilter === 'new_client') return isNewClientInVerificationPeriod(c);
@@ -84,7 +93,13 @@ export function ClientsPage({
         </div>
       </div>
 
-      <div className="flex flex-wrap gap-3 mb-4">
+      <p className="text-[12px] text-muted2 mb-3 max-w-2xl">
+        Client lists are shared across all companies created by your administrator. Filter by team
+        to focus on one account.
+      </p>
+
+      <div className="flex flex-wrap gap-3 mb-4 items-end">
+        <TeamScopeFilter value={teamScope} options={teamOptions} onChange={setTeamScope} />
         <input
           type="search"
           placeholder="Search clients…"
@@ -109,6 +124,7 @@ export function ClientsPage({
           <table className="data-table w-full min-w-[640px]">
             <thead>
               <tr>
+                {showTeamColumn && <th>Team</th>}
                 <th>Client</th>
                 <th className="text-center">Expenses</th>
                 <th>Warning</th>
@@ -120,8 +136,22 @@ export function ClientsPage({
               {list.map((c) => {
                 const needsReview = isNewClientNeedsReview(c);
                 const periodLabel = getVerificationPeriodLabel(c);
+                const isOwnTeam = (c.owner_id ?? effectiveOwnerId) === effectiveOwnerId;
                 return (
                   <tr key={c.id} className={needsReview ? 'bg-accent/5' : undefined}>
+                    {showTeamColumn && (
+                      <td>
+                        <span
+                          className={`text-[11px] px-2 py-0.5 rounded-full border ${
+                            isOwnTeam
+                              ? 'border-border text-muted2'
+                              : 'border-accent/30 bg-accent/10 text-accent'
+                          }`}
+                        >
+                          {teamLabelForOwner(c.owner_id, effectiveOwnerId, teamOptions)}
+                        </span>
+                      </td>
+                    )}
                     <td className="font-medium text-ink">{c.name}</td>
                     <td className="text-muted2 text-center">{c.expenses ?? '—'}</td>
                     <td className={c.warning_note?.trim() ? 'text-accent text-[12px] max-w-[200px] truncate' : 'text-muted2'}>

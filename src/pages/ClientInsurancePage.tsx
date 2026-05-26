@@ -4,8 +4,17 @@ import { Modal } from '@/components/Modal';
 import {
   buildClientInsuranceList,
   getInsuranceListItemName,
+  getInsuranceListItemOwnerId,
   type ClientInsuranceListItem,
 } from '@/lib/clientInsuranceList';
+import { TeamScopeFilter } from '@/components/TeamScopeFilter';
+import { useLinkedTeams } from '@/hooks/useLinkedTeams';
+import {
+  matchesTeamScope,
+  teamLabelForOwner,
+  type TeamScopeFilterValue,
+  type TeamScopeOption,
+} from '@/lib/linkedTeams';
 import {
   getClientInsuranceStatusLabel,
   isClientInsuranceCancellationSoon,
@@ -22,6 +31,7 @@ interface ClientInsurancePageProps extends Pick<
   | 'insuranceVerification'
   | 'updateInsuranceVerification'
 > {
+  effectiveOwnerId: string;
   clients: Client[];
   onAddInsurance: () => void;
   onAddInsuranceForClient: (clientName: string) => void;
@@ -30,6 +40,7 @@ interface ClientInsurancePageProps extends Pick<
 
 export function ClientInsurancePage({
   clientInsurance,
+  effectiveOwnerId,
   clients,
   insuranceVerification,
   updateInsuranceVerification,
@@ -46,6 +57,9 @@ export function ClientInsurancePage({
   const [recordDate, setRecordDate] = useState(() => new Date().toISOString().split('T')[0]);
   const [recordCheckedBy, setRecordCheckedBy] = useState('');
   const [savingVerification, setSavingVerification] = useState(false);
+  const [teamScope, setTeamScope] = useState<TeamScopeFilterValue>('all');
+  const { options: teamOptions } = useLinkedTeams(effectiveOwnerId, 'linked-group');
+  const showTeamColumn = teamOptions.filter((o) => o.value !== 'all').length > 1;
 
   /** Maps record status to filter dropdown value. */
   type StatusFilterValue = 'all' | 'ok' | 'inactive' | 'out' | 'cancellation';
@@ -80,6 +94,9 @@ export function ClientInsurancePage({
 
   const normalizedSearch = searchQuery.trim().toLowerCase();
   const list = mergedList
+    .filter((item) =>
+      matchesTeamScope(getInsuranceListItemOwnerId(item), teamScope, effectiveOwnerId)
+    )
     .filter((item) => {
       if (item.kind === 'registry') {
         if (statusFilter !== 'all' && statusFilter !== 'no_insurance') return false;
@@ -185,8 +202,14 @@ export function ClientInsurancePage({
         </div>
       </div>
 
-      <div className="mb-3 grid grid-cols-1 gap-2 sm:grid-cols-[minmax(0,1fr)_220px]">
-        <div className="relative">
+      <p className="text-[12px] text-muted2 mb-3 max-w-2xl">
+        When accounts are linked on the Super Admin dashboard, insurance records from linked teams
+        appear here. Filter by team to focus on one account.
+      </p>
+
+      <div className="mb-3 flex flex-wrap items-end gap-3">
+        <TeamScopeFilter value={teamScope} options={teamOptions} onChange={setTeamScope} />
+        <div className="relative flex-1 min-w-[200px]">
           <input
             type="text"
             value={searchQuery}
@@ -198,7 +221,7 @@ export function ClientInsurancePage({
         <select
           value={statusFilter}
           onChange={(e) => setStatusFilter(e.target.value as typeof statusFilter)}
-          className="select-field w-full text-[13px] py-2 px-3"
+          className="select-field w-full sm:w-[220px] text-[13px] py-2 px-3"
           aria-label="Filter by status"
         >
           <option value="all">All statuses</option>
@@ -214,6 +237,11 @@ export function ClientInsurancePage({
         <table className="w-full border-collapse">
           <thead>
             <tr>
+              {showTeamColumn && (
+                <th className="text-[10px] text-label uppercase tracking-widest py-0 pb-1.5 pr-2 text-left border-b border-border">
+                  Team
+                </th>
+              )}
               <th className="text-[10px] text-label uppercase tracking-widest py-0 pb-1.5 pr-2 text-left border-b border-border">
                 Client
               </th>
@@ -229,7 +257,7 @@ export function ClientInsurancePage({
           <tbody>
             {list.length === 0 ? (
               <tr>
-                <td colSpan={4} className="text-center py-6 text-muted text-[13px]">
+                <td colSpan={showTeamColumn ? 5 : 4} className="text-center py-6 text-muted text-[13px]">
                   {mergedList.length === 0
                     ? 'No clients yet. Add clients on the Clients tab or add insurance here.'
                     : 'No clients to show. Turn off "Hide OUT clients" or change filters.'}
@@ -240,6 +268,9 @@ export function ClientInsurancePage({
                 <InsuranceTableRow
                   key={item.kind === 'insurance' ? `ins-${item.record.id}` : `reg-${item.client.id}`}
                   item={item}
+                  effectiveOwnerId={effectiveOwnerId}
+                  teamOptions={teamOptions}
+                  showTeamColumn={showTeamColumn}
                   searchQuery={searchQuery}
                   onSearchQuery={setSearchQuery}
                   onStatusFilter={setStatusFilter}
@@ -304,8 +335,36 @@ export function ClientInsurancePage({
   );
 }
 
+function TeamBadgeCell({
+  ownerId,
+  effectiveOwnerId,
+  teamOptions,
+}: {
+  ownerId: string | null | undefined;
+  effectiveOwnerId: string;
+  teamOptions: TeamScopeOption[];
+}) {
+  const isOwnTeam = (ownerId ?? effectiveOwnerId) === effectiveOwnerId;
+  return (
+    <td className="py-1.5 pr-2 border-b border-divider align-middle">
+      <span
+        className={`text-[11px] px-2 py-0.5 rounded-full border ${
+          isOwnTeam
+            ? 'border-border text-muted2'
+            : 'border-accent/30 bg-accent/10 text-accent'
+        }`}
+      >
+        {teamLabelForOwner(ownerId, effectiveOwnerId, teamOptions)}
+      </span>
+    </td>
+  );
+}
+
 function InsuranceTableRow({
   item,
+  effectiveOwnerId,
+  teamOptions,
+  showTeamColumn,
   searchQuery,
   onSearchQuery,
   onStatusFilter,
@@ -314,6 +373,9 @@ function InsuranceTableRow({
   onAddInsuranceForClient,
 }: {
   item: ClientInsuranceListItem;
+  effectiveOwnerId: string;
+  teamOptions: TeamScopeOption[];
+  showTeamColumn: boolean;
   searchQuery: string;
   onSearchQuery: (q: string) => void;
   onStatusFilter: React.Dispatch<
@@ -330,8 +392,16 @@ function InsuranceTableRow({
         searchQuery.trim().toLowerCase() === name.toLowerCase() ? '' : name
       );
     };
+    const ownerId = item.client.owner_id;
     return (
       <tr className="row-hover transition-colors bg-surface/30">
+        {showTeamColumn && (
+          <TeamBadgeCell
+            ownerId={ownerId}
+            effectiveOwnerId={effectiveOwnerId}
+            teamOptions={teamOptions}
+          />
+        )}
         <td className="py-1.5 pr-2 border-b border-divider align-middle">
           <button
             type="button"
@@ -380,6 +450,13 @@ function InsuranceTableRow({
 
   return (
     <tr className="row-hover transition-colors">
+      {showTeamColumn && (
+        <TeamBadgeCell
+          ownerId={c.owner_id}
+          effectiveOwnerId={effectiveOwnerId}
+          teamOptions={teamOptions}
+        />
+      )}
       <td className="py-1.5 pr-2 border-b border-divider align-middle">
         <button
           type="button"

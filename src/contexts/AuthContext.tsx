@@ -7,9 +7,14 @@ import {
   type ReactNode,
 } from 'react';
 import type { User, Session } from '@supabase/supabase-js';
-import type { PageId } from '@/types';
+import type { PageId, UserRole, CompanyContext } from '@/types';
 import { getSupabase } from '@/lib/supabase';
-import { fetchMyTeamMembership } from '@/lib/supabase-db';
+import {
+  claimCompanyInvites,
+  fetchCompanyByOwnerId,
+  fetchMyTeamMembership,
+} from '@/lib/supabase-db';
+import { resolveIsPlatformAdmin } from '@/lib/platformAdmin';
 import { DEFAULT_MEMBER_ALLOWED_PAGES, normalizeAllowedPages } from '@/lib/tabPermissions';
 
 interface AuthContextValue {
@@ -17,17 +22,20 @@ interface AuthContextValue {
   session: Session | null;
   effectiveOwnerId: string | null;
   isOwner: boolean;
-  /** Tab ids the signed-in member may access; null when user is the account owner. */
   memberAllowedPages: PageId[] | null;
+  userRole: UserRole;
+  company: CompanyContext | null;
+  isPlatformAdmin: boolean;
   loading: boolean;
   signIn: (email: string, password: string) => Promise<{ error: Error | null }>;
   signUp: (email: string, password: string) => Promise<{ error: Error | null }>;
   signOut: () => Promise<void>;
+  refreshProfile: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
 
-/** Claim any pending invite: set member_id for rows where email matches and member_id is null */
+/** Claim pending team_members invites by email. */
 async function claimInvite(supabase: NonNullable<ReturnType<typeof getSupabase>>, userId: string, email: string) {
   const { error } = await supabase
     .from('team_members')
@@ -37,7 +45,7 @@ async function claimInvite(supabase: NonNullable<ReturnType<typeof getSupabase>>
   if (error) console.warn('Claim invite:', error.message);
 }
 
-/** Resolve effective owner: if user is a member, return owner_id; else return user id */
+/** Resolve effective owner: team member → owner_id; else own user id. */
 async function resolveEffectiveOwnerId(
   supabase: NonNullable<ReturnType<typeof getSupabase>>,
   userId: string
@@ -51,20 +59,58 @@ async function resolveEffectiveOwnerId(
   return data?.owner_id ?? userId;
 }
 
+async function resolveUserRole(
+  uid: string,
+  effectiveOwnerId: string,
+  isPlatformAdminFlag: boolean
+): Promise<{ role: UserRole; company: CompanyContext | null }> {
+  if (isPlatformAdminFlag) {
+    const ownCompany = await fetchCompanyByOwnerId(uid);
+    if (ownCompany) return { role: 'team_admin', company: ownCompany };
+    return { role: 'platform_admin', company: null };
+  }
+  const ownCompany = await fetchCompanyByOwnerId(uid);
+  if (ownCompany && uid === effectiveOwnerId) {
+    return { role: 'team_admin', company: ownCompany };
+  }
+  if (uid !== effectiveOwnerId) {
+    const company = await fetchCompanyByOwnerId(effectiveOwnerId);
+    return { role: 'team_member', company };
+  }
+  if (ownCompany) {
+    return { role: 'team_admin', company: ownCompany };
+  }
+  return { role: 'standalone', company: null };
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [effectiveOwnerId, setEffectiveOwnerId] = useState<string | null>(null);
   const [memberAllowedPages, setMemberAllowedPages] = useState<PageId[] | null>(null);
+  const [userRole, setUserRole] = useState<UserRole>('standalone');
+  const [company, setCompany] = useState<CompanyContext | null>(null);
+  const [isPlatformAdmin, setIsPlatformAdmin] = useState(false);
   const [loading, setLoading] = useState(true);
 
   const supabase = getSupabase();
 
-  const refreshEffectiveOwner = useCallback(
-    async (uid: string) => {
+  const refreshProfile = useCallback(
+    async (uid: string, email: string) => {
       if (!supabase) return;
+      await claimInvite(supabase, uid, email);
+      try {
+        await claimCompanyInvites();
+      } catch (err) {
+        console.warn('Claim company invites:', err);
+      }
       const ownerId = await resolveEffectiveOwnerId(supabase, uid);
       setEffectiveOwnerId(ownerId);
+      const platformAdmin = await resolveIsPlatformAdmin(email);
+      setIsPlatformAdmin(platformAdmin);
+      const { role, company: co } = await resolveUserRole(uid, ownerId, platformAdmin);
+      setUserRole(role);
+      setCompany(co);
       if (ownerId === uid) {
         setMemberAllowedPages(null);
       } else {
@@ -77,7 +123,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           );
         } catch (err) {
           console.warn('Load tab permissions:', err);
-          setMemberAllowedPages([...DEFAULT_MEMBER_ALLOWED_PAGES]);
+          setMemberAllowedPages(['loans']);
         }
       }
     },
@@ -95,11 +141,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setUser(session?.user ?? null);
       try {
         if (session?.user) {
-          await claimInvite(supabase, session.user.id, session.user.email ?? '');
-          await refreshEffectiveOwner(session.user.id);
+          await refreshProfile(session.user.id, session.user.email ?? '');
         } else {
           setEffectiveOwnerId(null);
           setMemberAllowedPages(null);
+          setUserRole('standalone');
+          setCompany(null);
+          setIsPlatformAdmin(false);
         }
       } finally {
         setLoading(false);
@@ -112,7 +160,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setAuthState(session);
     });
 
-    // Initial session: resolve once, with timeout so we never hang forever
     const timeoutMs = 10_000;
     const getSessionPromise = supabase.auth.getSession();
     const timeoutPromise = new Promise<{ data: { session: Session | null } }>((resolve) =>
@@ -127,11 +174,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setUser(null);
         setEffectiveOwnerId(null);
         setMemberAllowedPages(null);
+        setUserRole('standalone');
+        setCompany(null);
+        setIsPlatformAdmin(false);
         setLoading(false);
       });
 
     return () => subscription.unsubscribe();
-  }, [supabase, refreshEffectiveOwner]);
+  }, [supabase, refreshProfile]);
 
   const signIn = useCallback(
     async (email: string, password: string) => {
@@ -157,7 +207,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setSession(null);
     setEffectiveOwnerId(null);
     setMemberAllowedPages(null);
+    setUserRole('standalone');
+    setCompany(null);
+    setIsPlatformAdmin(false);
   }, [supabase]);
+
+  const refreshProfilePublic = useCallback(async () => {
+    if (!user) return;
+    await refreshProfile(user.id, user.email ?? '');
+  }, [user, refreshProfile]);
 
   const isOwner = user != null && effectiveOwnerId === user.id;
 
@@ -167,10 +225,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     effectiveOwnerId,
     isOwner,
     memberAllowedPages,
+    userRole,
+    company,
+    isPlatformAdmin,
     loading,
     signIn,
     signUp,
     signOut,
+    refreshProfile: refreshProfilePublic,
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

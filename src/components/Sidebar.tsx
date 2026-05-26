@@ -3,11 +3,14 @@ import { canAccessPage } from '@/lib/tabPermissions';
 import { BrandLogo, BrandWordmark } from '@/components/BrandLogo';
 import { NotificationsToggle } from '@/components/NotificationsToggle';
 import { ThemeToggle } from '@/components/ThemeToggle';
+import { ReplayTourButton } from '@/components/OnboardingTutorial';
+import { ONBOARDING_TUTORIAL_ENABLED } from '@/lib/onboardingTutorial';
 
 interface SidebarProps {
   page: PageId;
   onPage: (page: PageId) => void;
   onSignOut?: () => void;
+  onReplayTour?: () => void;
   weekRange?: string;
   showNotificationsToggle?: boolean;
   notificationsHidden?: boolean;
@@ -126,7 +129,7 @@ const navItems: { id: PageId; label: string; icon: React.ReactNode; ownerOnly?: 
   },
   {
     id: 'admin',
-    label: 'Admin',
+    label: 'Super Admin',
     adminOnly: true,
     icon: (
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
@@ -141,6 +144,7 @@ export function Sidebar({
   page,
   onPage,
   onSignOut,
+  onReplayTour,
   weekRange,
   showNotificationsToggle,
   notificationsHidden = false,
@@ -170,6 +174,7 @@ export function Sidebar({
           <button
             key={id}
             type="button"
+            data-tour={`nav-${id}`}
             onClick={() => onPage(id)}
             className={`h-full flex items-center gap-[5px] px-[14px] text-[12px] whitespace-nowrap transition-colors border-b-2 ${
               page === id
@@ -186,7 +191,10 @@ export function Sidebar({
       </div>
 
       {/* Right side: theme, week range, sign out */}
-      <div className="flex items-center gap-3 flex-shrink-0">
+      <div className="flex items-center gap-3 flex-shrink-0" data-tour="topbar-tools">
+        {ONBOARDING_TUTORIAL_ENABLED && onReplayTour && (
+          <ReplayTourButton onReplay={onReplayTour} />
+        )}
         {showNotificationsToggle && onToggleNotificationsHidden && (
           <NotificationsToggle
             hidden={notificationsHidden}
