@@ -352,9 +352,7 @@ function WorksheetTable({
 
                 <td className="align-middle py-2 max-w-[280px]">
 
-                  {client &&
-                  alerts &&
-                  (hasWorksheetClientAlerts(alerts) || alerts.requiresFullVerification) ? (
+                  {client && alerts && hasWorksheetClientAlerts(alerts) ? (
 
                     <WorksheetClientAlerts
 

@@ -73,6 +73,26 @@ export interface WorksheetClientAlertInfo {
   warningNote: string | null;
   cancellationMessage: string | null;
   requiresFullVerification: boolean;
+  /** Shown when insurance requires verified batches (independent of client warning_note). */
+  fullVerificationMessage: string | null;
+}
+
+function looseClientNameKey(name: string): string {
+  return normalizeClientName(name).replace(/[^a-z0-9]/g, '');
+}
+
+/** Match insurance row by client display name (exact, then loose punctuation). */
+export function findInsuranceForClientName(
+  name: string,
+  insuranceList: ClientInsurance[]
+): ClientInsurance | null {
+  const trimmed = name.trim();
+  if (!trimmed) return null;
+  const key = normalizeClientName(trimmed);
+  const exact = insuranceList.find((ci) => normalizeClientName(ci.client) === key);
+  if (exact) return exact;
+  const loose = looseClientNameKey(trimmed);
+  return insuranceList.find((ci) => looseClientNameKey(ci.client) === loose) ?? null;
 }
 
 /** Match registry client to an insurance row by normalized name. */
@@ -80,8 +100,7 @@ export function findInsuranceForClient(
   client: Client,
   insuranceList: ClientInsurance[]
 ): ClientInsurance | null {
-  const key = normalizeClientName(client.name);
-  return insuranceList.find((ci) => normalizeClientName(ci.client) === key) ?? null;
+  return findInsuranceForClientName(client.name, insuranceList);
 }
 
 /** Alerts to show when logging worksheet work for a client. */
@@ -90,17 +109,22 @@ export function getWorksheetClientAlerts(
   insurance: ClientInsurance | null
 ): WorksheetClientAlertInfo {
   const warningNote = client.warning_note?.trim() || null;
-  const cancellationMessage = insurance ? getInsuranceCancellationVerifyMessage(insurance) : null;
   const requiresFullVerification = insurance ? requiresInsuranceFullVerification(insurance) : false;
-  return { warningNote, cancellationMessage, requiresFullVerification };
+  const cancellationMessage = insurance ? getInsuranceCancellationVerifyMessage(insurance) : null;
+  const fullVerificationMessage = requiresFullVerification
+    ? cancellationMessage ??
+      'Mark this batch as fully verified due to insurance cancellation.'
+    : null;
+  return {
+    warningNote,
+    cancellationMessage,
+    requiresFullVerification,
+    fullVerificationMessage,
+  };
 }
 
 export function hasWorksheetClientAlerts(alerts: WorksheetClientAlertInfo): boolean {
-  return !!(
-    alerts.warningNote ||
-    alerts.cancellationMessage ||
-    alerts.requiresFullVerification
-  );
+  return !!(alerts.warningNote || alerts.fullVerificationMessage);
 }
 
 export type WorksheetEntryFlagType =
@@ -182,8 +206,12 @@ export function getWorksheetEntryFlags(
   if (alerts.warningNote) {
     flags.push({ type: 'warning', label: 'Warning', title: alerts.warningNote });
   }
-  if (alerts.cancellationMessage && entry.verified) {
-    flags.push({ type: 'cancellation', label: 'Insurance', title: alerts.cancellationMessage });
+  if (alerts.fullVerificationMessage && entry.verified) {
+    flags.push({
+      type: 'cancellation',
+      label: 'Insurance',
+      title: alerts.fullVerificationMessage,
+    });
   }
   if (isNewClientNeedsReview(client)) {
     flags.push({ type: 'new_client', label: 'New client', title: 'New-client review overdue' });

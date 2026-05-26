@@ -1,7 +1,6 @@
 import type { Client, ClientInsurance } from '@/types';
 import {
   getWorksheetClientAlerts,
-  hasWorksheetClientAlerts,
   type WorksheetClientAlertInfo,
 } from '@/lib/worksheetUtils';
 
@@ -38,7 +37,9 @@ export function WorksheetClientAlerts({
   alerts: alertsProp,
 }: WorksheetClientAlertsProps) {
   const alerts = alertsProp ?? getWorksheetClientAlerts(client, insurance);
-  if (!hasWorksheetClientAlerts(alerts)) return null;
+  const showWarning = Boolean(alerts.warningNote);
+  const showFullVerification = Boolean(alerts.fullVerificationMessage);
+  if (!showWarning && !showFullVerification) return null;
 
   if (variant === 'compact') {
     return (
@@ -51,13 +52,12 @@ export function WorksheetClientAlerts({
             {alerts.warningNote}
           </p>
         )}
-        {(alerts.cancellationMessage || alerts.requiresFullVerification) && (
+        {showFullVerification && (
           <p
             className="text-[11px] font-medium text-alert-warn-fg bg-alert-warn border border-red/30 rounded px-2 py-1 leading-snug"
-            title={alerts.cancellationMessage ?? 'Mark this batch as verified due to insurance cancellation.'}
+            title={alerts.fullVerificationMessage ?? undefined}
           >
-            {alerts.cancellationMessage ??
-              'Insurance cancellation — mark this batch as fully verified.'}
+            {alerts.fullVerificationMessage}
           </p>
         )}
       </div>
@@ -80,7 +80,7 @@ export function WorksheetClientAlerts({
           </div>
         </div>
       )}
-      {(alerts.cancellationMessage || alerts.requiresFullVerification) && (
+      {showFullVerification && (
         <div
           role="alert"
           className="flex gap-3 rounded-lg border-2 border-accent/50 bg-accent/10 px-3 py-3 shadow-sm"
@@ -88,12 +88,9 @@ export function WorksheetClientAlerts({
           <WarningIcon className="w-5 h-5 flex-shrink-0 text-accent mt-0.5" />
           <div className="min-w-0">
             <p className="text-[10px] font-semibold uppercase tracking-wider text-accent mb-1">
-              Insurance cancellation
+              Full verification required
             </p>
-            <p className="text-[13px] font-medium text-ink leading-snug">
-              {alerts.cancellationMessage ??
-                'Mark this batch as fully verified due to insurance cancellation.'}
-            </p>
+            <p className="text-[13px] font-medium text-ink leading-snug">{alerts.fullVerificationMessage}</p>
           </div>
         </div>
       )}

@@ -51,11 +51,67 @@ export function isClientInsuranceInactiveOrOut(c: ClientInsurance): boolean {
   return s === 'inactive' || s === 'out';
 }
 
+/** Parse a date string to local YYYY-MM-DD for day-diff math. */
+function parseDateToDateOnly(value: string): string | null {
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+  if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) return trimmed;
+  const d = new Date(trimmed);
+  if (isNaN(d.getTime())) return null;
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+/**
+ * Best-effort cancellation date from expiration_date, last_cancellation_date, or status text.
+ */
+export function resolveInsuranceCancellationDate(c: ClientInsurance): string | null {
+  if (c.expiration_date?.trim()) {
+    const parsed = parseDateToDateOnly(c.expiration_date);
+    if (parsed) return parsed;
+  }
+  if (c.last_cancellation_date?.trim()) {
+    const parsed = parseDateToDateOnly(c.last_cancellation_date);
+    if (parsed) return parsed;
+  }
+  const status = (c.status ?? '').trim();
+  const lower = status.toLowerCase();
+  if (
+    lower.includes('cancellation') ||
+    lower.includes('cancelled') ||
+    lower.includes('canceled')
+  ) {
+    const tail = status.replace(/^cancellation\s*/i, '').trim();
+    if (tail && tail.toLowerCase() !== 'cancellation') {
+      const parsed = parseDateToDateOnly(tail);
+      if (parsed) return parsed;
+    }
+  }
+  if (status && !['ok', 'inactive', 'out'].includes(lower)) {
+    const parsed = parseDateToDateOnly(status);
+    if (parsed) return parsed;
+  }
+  return null;
+}
+
+function statusImpliesCancellation(c: ClientInsurance): boolean {
+  const s = (c.status ?? '').trim().toLowerCase();
+  if (!s || s === 'ok') return false;
+  if (s === 'inactive' || s === 'out') return false;
+  if (
+    s.startsWith('cancellation') ||
+    s.includes('cancellation') ||
+    s.includes('cancelled') ||
+    s.includes('canceled')
+  ) {
+    return true;
+  }
+  return resolveInsuranceCancellationDate(c) != null;
+}
+
 /** True if status is cancellation AND has a date (for Overview warning + popup). */
 export function isClientInsuranceCancellationWithDate(c: ClientInsurance): boolean {
-  const s = (c.status ?? '').trim().toLowerCase();
-  if (!s.startsWith('cancellation') && !s.includes('cancellation')) return false;
-  return !!(c.expiration_date && c.expiration_date.trim());
+  if (!statusImpliesCancellation(c)) return false;
+  return resolveInsuranceCancellationDate(c) != null;
 }
 
 /**
@@ -65,12 +121,12 @@ export function isClientInsuranceCancellationWithDate(c: ClientInsurance): boole
  * - negative means already passed
  */
 export function getDaysUntilCancellation(c: ClientInsurance): number | null {
-  if (!isClientInsuranceCancellationWithDate(c) || !c.expiration_date) return null;
-  const target = new Date(c.expiration_date);
-  if (isNaN(target.getTime())) return null;
+  const dateOnly = resolveInsuranceCancellationDate(c);
+  if (!dateOnly) return null;
+  const [y, m, d] = dateOnly.split('-').map(Number);
   const now = new Date();
   const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
-  const startOfTarget = new Date(target.getFullYear(), target.getMonth(), target.getDate()).getTime();
+  const startOfTarget = new Date(y, m - 1, d).getTime();
   return Math.round((startOfTarget - startOfToday) / (1000 * 60 * 60 * 24));
 }
 
@@ -100,8 +156,9 @@ export function requiresInsuranceFullVerification(
 export function getInsuranceCancellationVerifyMessage(c: ClientInsurance): string | null {
   if (!requiresInsuranceFullVerification(c)) return null;
   const daysUntil = getDaysUntilCancellation(c);
-  const dateLabel = c.expiration_date
-    ? new Date(c.expiration_date).toLocaleDateString('en-US', {
+  const cancelDate = resolveInsuranceCancellationDate(c);
+  const dateLabel = cancelDate
+    ? new Date(cancelDate + 'T12:00:00').toLocaleDateString('en-US', {
         month: 'short',
         day: 'numeric',
         year: 'numeric',

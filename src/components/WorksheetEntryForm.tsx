@@ -3,6 +3,7 @@ import { WorksheetClientAlerts } from '@/components/WorksheetClientAlerts';
 import { WorksheetUnknownClientNotice } from '@/components/WorksheetUnknownClientNotice';
 import {
   findInsuranceForClient,
+  findInsuranceForClientName,
   findRegistryClientByName,
   getWorksheetClientAlerts,
   resolveWorksheetClientInput,
@@ -76,17 +77,35 @@ export function WorksheetEntryForm({
     return findRegistryClientByName(clientSearch, clients);
   }, [clients, clientId, clientSearch]);
 
-  const selectedInsurance = useMemo(
-    () => (selectedClient ? findInsuranceForClient(selectedClient, clientInsurance) : null),
-    [selectedClient, clientInsurance]
-  );
+  const selectedInsurance = useMemo(() => {
+    if (selectedClient) {
+      return (
+        findInsuranceForClient(selectedClient, clientInsurance) ??
+        findInsuranceForClientName(clientSearch, clientInsurance)
+      );
+    }
+    return findInsuranceForClientName(clientSearch, clientInsurance);
+  }, [selectedClient, clientSearch, clientInsurance]);
+
+  const alertClient = useMemo((): Client | null => {
+    if (selectedClient) return selectedClient;
+    if (!selectedInsurance) return null;
+    return {
+      id: 0,
+      name: selectedInsurance.client,
+      expenses: null,
+      warning_note: null,
+      is_new_client: false,
+      started_date: null,
+      new_client_reviewed: false,
+      verification_days: 30,
+      verification_always: false,
+    };
+  }, [selectedClient, selectedInsurance]);
 
   const clientAlerts = useMemo(
-    () =>
-      selectedClient
-        ? getWorksheetClientAlerts(selectedClient, selectedInsurance)
-        : null,
-    [selectedClient, selectedInsurance]
+    () => (alertClient ? getWorksheetClientAlerts(alertClient, selectedInsurance) : null),
+    [alertClient, selectedInsurance]
   );
 
   const suggestions = useMemo(() => {
@@ -284,8 +303,12 @@ export function WorksheetEntryForm({
           </div>
         </div>
         {showUnknownNotice && <WorksheetUnknownClientNotice />}
-        {selectedClient && (
-          <WorksheetClientAlerts client={selectedClient} insurance={selectedInsurance} />
+        {alertClient && (
+          <WorksheetClientAlerts
+            client={alertClient}
+            insurance={selectedInsurance}
+            alerts={clientAlerts ?? undefined}
+          />
         )}
         <div>
           <label className={labelClass}>Note</label>
@@ -348,8 +371,12 @@ export function WorksheetEntryForm({
         )}
       </div>
       {showUnknownNotice && <WorksheetUnknownClientNotice />}
-      {selectedClient && (
-        <WorksheetClientAlerts client={selectedClient} insurance={selectedInsurance} />
+      {alertClient && (
+        <WorksheetClientAlerts
+          client={alertClient}
+          insurance={selectedInsurance}
+          alerts={clientAlerts ?? undefined}
+        />
       )}
       {selectedClient && (
         <p className="text-[12px] text-muted2">
