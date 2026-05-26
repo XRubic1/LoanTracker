@@ -39,7 +39,8 @@ export function WorksheetClientAlerts({
   const alerts = alertsProp ?? getWorksheetClientAlerts(client, insurance);
   const showWarning = Boolean(alerts.warningNote);
   const showFullVerification = Boolean(alerts.fullVerificationMessage);
-  if (!showWarning && !showFullVerification) return null;
+  const showAlwaysVerify = Boolean(alerts.alwaysVerifyMessage);
+  if (!showWarning && !showFullVerification && !showAlwaysVerify) return null;
 
   if (variant === 'compact') {
     return (
@@ -58,6 +59,11 @@ export function WorksheetClientAlerts({
             title={alerts.fullVerificationMessage ?? undefined}
           >
             {alerts.fullVerificationMessage}
+          </p>
+        )}
+        {showAlwaysVerify && (
+          <p className="text-[11px] font-semibold text-accent bg-accent/10 border border-accent/30 rounded px-2 py-1 leading-snug">
+            Full Verification
           </p>
         )}
       </div>
@@ -92,6 +98,15 @@ export function WorksheetClientAlerts({
             </p>
             <p className="text-[13px] font-medium text-ink leading-snug">{alerts.fullVerificationMessage}</p>
           </div>
+        </div>
+      )}
+      {showAlwaysVerify && (
+        <div
+          role="alert"
+          className="flex gap-3 rounded-lg border-2 border-accent/40 bg-accent/5 px-3 py-3 shadow-sm"
+        >
+          <WarningIcon className="w-5 h-5 flex-shrink-0 text-accent mt-0.5" />
+          <p className="text-[14px] font-semibold text-ink leading-snug">Full Verification</p>
         </div>
       )}
     </div>

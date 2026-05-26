@@ -1,5 +1,8 @@
 import type { Client, ClientInsurance, TeamMember, WorksheetEntry } from '@/types';
-import { isNewClientNeedsReview } from '@/lib/clientUtils';
+import {
+  getClientAlwaysVerifyWorksheetMessage,
+  isNewClientNeedsReview,
+} from '@/lib/clientUtils';
 import {
   analyzeWorkDurationBetweenBatches,
   formatWorkDurationIssue,
@@ -75,6 +78,10 @@ export interface WorksheetClientAlertInfo {
   requiresFullVerification: boolean;
   /** Shown when insurance requires verified batches (independent of client warning_note). */
   fullVerificationMessage: string | null;
+  /** Clients tab: verification period "always". */
+  alwaysVerifyMessage: string | null;
+  /** Batch should be marked Verified (insurance cancellation or always-verify client). */
+  requiresWorksheetVerified: boolean;
 }
 
 function looseClientNameKey(name: string): string {
@@ -115,16 +122,20 @@ export function getWorksheetClientAlerts(
     ? cancellationMessage ??
       'Mark this batch as fully verified due to insurance cancellation.'
     : null;
+  const alwaysVerifyMessage = getClientAlwaysVerifyWorksheetMessage(client);
+  const requiresWorksheetVerified = requiresFullVerification || Boolean(alwaysVerifyMessage);
   return {
     warningNote,
     cancellationMessage,
     requiresFullVerification,
     fullVerificationMessage,
+    alwaysVerifyMessage,
+    requiresWorksheetVerified,
   };
 }
 
 export function hasWorksheetClientAlerts(alerts: WorksheetClientAlertInfo): boolean {
-  return !!(alerts.warningNote || alerts.fullVerificationMessage);
+  return !!(alerts.warningNote || alerts.fullVerificationMessage || alerts.alwaysVerifyMessage);
 }
 
 export type WorksheetEntryFlagType =
@@ -199,8 +210,18 @@ export function getWorksheetEntryFlags(
   if (!entry.verified) {
     flags.push({
       type: 'unverified',
-      label: alerts.requiresFullVerification ? 'Must verify' : 'Unverified',
-      title: alerts.requiresFullVerification ? alerts.cancellationMessage ?? undefined : undefined,
+      label: alerts.requiresWorksheetVerified ? 'Must verify' : 'Unverified',
+      title:
+        alerts.fullVerificationMessage ??
+        alerts.alwaysVerifyMessage ??
+        undefined,
+    });
+  }
+  if (entry.verified && alerts.alwaysVerifyMessage) {
+    flags.push({
+      type: 'new_client',
+      label: 'Full Verification',
+      title: alerts.alwaysVerifyMessage,
     });
   }
   if (alerts.warningNote) {
@@ -292,6 +313,13 @@ export function getWorksheetIssues(
         entryId: e.id,
         type: 'insurance_cancellation',
         message: `${client.name}: insurance cancellation — must be fully verified`,
+      });
+    }
+    if (alerts.alwaysVerifyMessage && !e.verified && !alerts.requiresFullVerification) {
+      issues.push({
+        entryId: e.id,
+        type: 'unverified',
+        message: `${client.name}: ${alerts.alwaysVerifyMessage}`,
       });
     }
     if (client.warning_note?.trim()) {

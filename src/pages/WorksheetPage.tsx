@@ -308,7 +308,7 @@ function WorksheetTable({
               !e.verified ||
               overdue ||
               (alerts && hasWorksheetClientAlerts(alerts)) ||
-              (alerts?.requiresFullVerification && !e.verified);
+              (alerts?.requiresWorksheetVerified && !e.verified);
 
             return (
               <tr key={e.id} className={highlight ? 'bg-accent/5' : undefined}>
@@ -334,7 +334,7 @@ function WorksheetTable({
 
                       ? 'text-green'
 
-                      : alerts?.requiresFullVerification
+                      : alerts?.requiresWorksheetVerified
 
                         ? 'text-red font-semibold'
 

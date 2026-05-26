@@ -183,9 +183,9 @@ export function WorksheetEntryForm({
       window.alert('Enter a valid number of invoices.');
       return;
     }
-    if (clientAlerts?.requiresFullVerification && !verified) {
+    if (clientAlerts?.requiresWorksheetVerified && !verified) {
       const proceed = window.confirm(
-        `${clientAlerts.cancellationMessage ?? 'Insurance cancellation is approaching.'}\n\nContinue without marking Verified?`
+        `${clientAlerts.fullVerificationMessage ?? clientAlerts.alwaysVerifyMessage ?? 'This batch should be marked Verified.'}\n\nContinue without marking Verified?`
       );
       if (!proceed) return;
     }
@@ -283,7 +283,7 @@ export function WorksheetEntryForm({
             </label>
             <label
               className={`flex items-center gap-2 text-[13px] ${
-                clientAlerts?.requiresFullVerification && !verified
+                clientAlerts?.requiresWorksheetVerified && !verified
                   ? 'text-red font-semibold'
                   : 'text-ink'
               }`}
@@ -402,7 +402,7 @@ export function WorksheetEntryForm({
         </label>
         <label
           className={`flex items-center gap-2 text-[13px] ${
-            clientAlerts?.requiresFullVerification && !verified ? 'text-red font-semibold' : ''
+            clientAlerts?.requiresWorksheetVerified && !verified ? 'text-red font-semibold' : ''
           }`}
         >
           <input type="checkbox" checked={verified} onChange={(e) => setVerified(e.target.checked)} />

@@ -123,3 +123,9 @@ export function formatVerificationPeriodInput(c: Client): string {
   if (isClientVerificationAlways(c)) return 'always';
   return String(c.verification_days ?? DEFAULT_VERIFICATION_DAYS);
 }
+
+/** Worksheet label when client verification period is "always". */
+export function getClientAlwaysVerifyWorksheetMessage(c: Client): string | null {
+  if (!isClientVerificationAlways(c)) return null;
+  return 'Full Verification';
+}
