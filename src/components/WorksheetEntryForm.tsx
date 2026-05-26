@@ -68,10 +68,13 @@ export function WorksheetEntryForm({
     }
   }, [entry, clients]);
 
-  const selectedClient = useMemo(
-    () => clients.find((c) => c.id === clientId) ?? null,
-    [clients, clientId]
-  );
+  /** Resolve client from dropdown id or exact name match (so alerts show when name is fully typed). */
+  const selectedClient = useMemo(() => {
+    if (clientId !== '') {
+      return clients.find((c) => c.id === clientId) ?? null;
+    }
+    return findRegistryClientByName(clientSearch, clients);
+  }, [clients, clientId, clientSearch]);
 
   const selectedInsurance = useMemo(
     () => (selectedClient ? findInsuranceForClient(selectedClient, clientInsurance) : null),
@@ -96,6 +99,18 @@ export function WorksheetEntryForm({
     () => findRegistryClientByName(clientSearch, clients),
     [clientSearch, clients]
   );
+
+  // Keep client_id in sync when the full registry name is entered (not only on pick/Tab).
+  useEffect(() => {
+    if (entry) return;
+    if (registryMatch && clientId !== registryMatch.id) {
+      setClientId(registryMatch.id);
+    }
+    if (!registryMatch && clientId !== '') {
+      const stillMatches = clients.some((c) => c.id === clientId);
+      if (!stillMatches) setClientId('');
+    }
+  }, [entry, registryMatch, clientId, clients]);
 
   const showUnknownNotice = Boolean(clientSearch.trim()) && !registryMatch;
 

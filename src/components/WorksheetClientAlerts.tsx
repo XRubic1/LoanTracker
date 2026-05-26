@@ -51,12 +51,13 @@ export function WorksheetClientAlerts({
             {alerts.warningNote}
           </p>
         )}
-        {alerts.cancellationMessage && (
+        {(alerts.cancellationMessage || alerts.requiresFullVerification) && (
           <p
             className="text-[11px] font-medium text-alert-warn-fg bg-alert-warn border border-red/30 rounded px-2 py-1 leading-snug"
-            title={alerts.cancellationMessage}
+            title={alerts.cancellationMessage ?? 'Mark this batch as verified due to insurance cancellation.'}
           >
-            {alerts.cancellationMessage}
+            {alerts.cancellationMessage ??
+              'Insurance cancellation — mark this batch as fully verified.'}
           </p>
         )}
       </div>
@@ -79,7 +80,7 @@ export function WorksheetClientAlerts({
           </div>
         </div>
       )}
-      {alerts.cancellationMessage && (
+      {(alerts.cancellationMessage || alerts.requiresFullVerification) && (
         <div
           role="alert"
           className="flex gap-3 rounded-lg border-2 border-accent/50 bg-accent/10 px-3 py-3 shadow-sm"
@@ -89,7 +90,10 @@ export function WorksheetClientAlerts({
             <p className="text-[10px] font-semibold uppercase tracking-wider text-accent mb-1">
               Insurance cancellation
             </p>
-            <p className="text-[13px] font-medium text-ink leading-snug">{alerts.cancellationMessage}</p>
+            <p className="text-[13px] font-medium text-ink leading-snug">
+              {alerts.cancellationMessage ??
+                'Mark this batch as fully verified due to insurance cancellation.'}
+            </p>
           </div>
         </div>
       )}

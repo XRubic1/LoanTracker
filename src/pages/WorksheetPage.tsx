@@ -12,6 +12,7 @@ import { isNewClientNeedsReview } from '@/lib/clientUtils';
 
 import {
   findInsuranceForClient,
+  findRegistryClientByName,
   getWorksheetClientAlerts,
   getWorksheetEntryDisplayName,
   hasWorksheetClientAlerts,
@@ -192,6 +193,8 @@ export function WorksheetPage({
 
           entries={myEntries}
 
+          clients={clients}
+
           clientsById={clientsById}
 
           clientInsurance={clientInsurance}
@@ -218,6 +221,8 @@ function WorksheetTable({
 
   entries,
 
+  clients,
+
   clientsById,
 
   clientInsurance,
@@ -231,6 +236,8 @@ function WorksheetTable({
 }: {
 
   entries: WorksheetEntry[];
+
+  clients: Client[];
 
   clientsById: Map<number, Client>;
 
@@ -289,7 +296,9 @@ function WorksheetTable({
           {entries.map((e) => {
 
             const unknown = isWorksheetUnknownClientEntry(e);
-            const client = e.client_id != null ? clientsById.get(e.client_id) : undefined;
+            const client =
+              (e.client_id != null ? clientsById.get(e.client_id) : undefined) ??
+              (e.client_name ? findRegistryClientByName(e.client_name, clients) : undefined);
             const displayName = getWorksheetEntryDisplayName(e, clientsById);
             const insurance = client ? findInsuranceForClient(client, clientInsurance) : null;
             const alerts = client ? getWorksheetClientAlerts(client, insurance) : null;
@@ -343,7 +352,9 @@ function WorksheetTable({
 
                 <td className="align-middle py-2 max-w-[280px]">
 
-                  {client && alerts && hasWorksheetClientAlerts(alerts) ? (
+                  {client &&
+                  alerts &&
+                  (hasWorksheetClientAlerts(alerts) || alerts.requiresFullVerification) ? (
 
                     <WorksheetClientAlerts
 

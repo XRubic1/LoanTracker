@@ -96,7 +96,11 @@ export function getWorksheetClientAlerts(
 }
 
 export function hasWorksheetClientAlerts(alerts: WorksheetClientAlertInfo): boolean {
-  return !!(alerts.warningNote || alerts.cancellationMessage);
+  return !!(
+    alerts.warningNote ||
+    alerts.cancellationMessage ||
+    alerts.requiresFullVerification
+  );
 }
 
 export type WorksheetEntryFlagType =
