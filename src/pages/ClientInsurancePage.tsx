@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Section } from '@/components/Section';
 import { Modal } from '@/components/Modal';
 import {
@@ -57,9 +57,17 @@ export function ClientInsurancePage({
   const [recordDate, setRecordDate] = useState(() => new Date().toISOString().split('T')[0]);
   const [recordCheckedBy, setRecordCheckedBy] = useState('');
   const [savingVerification, setSavingVerification] = useState(false);
-  const [teamScope, setTeamScope] = useState<TeamScopeFilterValue>('all');
+  const [teamScope, setTeamScope] = useState<TeamScopeFilterValue>(effectiveOwnerId);
   const { options: teamOptions } = useLinkedTeams(effectiveOwnerId, 'linked-group');
   const showTeamColumn = teamOptions.filter((o) => o.value !== 'all').length > 1;
+
+  useEffect(() => {
+    if (!teamOptions.length) return;
+    const hasSelection = teamOptions.some((o) => o.value === teamScope);
+    if (hasSelection) return;
+    const selfOption = teamOptions.find((o) => o.ownerId === effectiveOwnerId);
+    setTeamScope(selfOption?.value ?? teamOptions[0].value);
+  }, [teamOptions, teamScope, effectiveOwnerId]);
 
   /** Maps record status to filter dropdown value. */
   type StatusFilterValue = 'all' | 'ok' | 'inactive' | 'out' | 'cancellation';

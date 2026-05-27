@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import type { Loan } from '@/types';
 import { Section } from '@/components/Section';
 import { Badge } from '@/components/Badge';
@@ -36,10 +36,18 @@ export function LoansPage({
   onAddLoan,
 }: LoansPageProps) {
   const [filter, setFilter] = useState<LoanFilter>('all');
-  const [teamScope, setTeamScope] = useState<TeamScopeFilterValue>('all');
+  const [teamScope, setTeamScope] = useState<TeamScopeFilterValue>(effectiveOwnerId);
   const [hideClosed, setHideClosed] = useState(true); // start with closed loans hidden
   const [printMenuOpen, setPrintMenuOpen] = useState(false);
   const { options: teamOptions } = useLinkedTeams(effectiveOwnerId, 'linked-group');
+
+  useEffect(() => {
+    if (!teamOptions.length) return;
+    const hasSelection = teamOptions.some((o) => o.value === teamScope);
+    if (hasSelection) return;
+    const selfOption = teamOptions.find((o) => o.ownerId === effectiveOwnerId);
+    setTeamScope(selfOption?.value ?? teamOptions[0].value);
+  }, [teamOptions, teamScope, effectiveOwnerId]);
 
   let list: Loan[] = [...loans];
   list = list.filter((l) => matchesTeamScope(l.owner_id, teamScope, effectiveOwnerId));
