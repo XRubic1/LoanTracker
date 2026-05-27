@@ -1,8 +1,8 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Section } from '@/components/Section';
 import { TeamScopeFilter } from '@/components/TeamScopeFilter';
 import { useLinkedTeams } from '@/hooks/useLinkedTeams';
-import { matchesTeamScope, teamLabelForOwner, type TeamScopeFilterValue } from '@/lib/linkedTeams';
+import { matchesTeamScope, type TeamScopeFilterValue } from '@/lib/linkedTeams';
 import {
   getNewClientsNeedingReview,
   getVerificationPeriodLabel,
@@ -36,9 +36,16 @@ export function ClientsPage({
   const [statusFilter, setStatusFilter] = useState<
     'all' | 'needs_review' | 'new_client' | 'always_verified'
   >('all');
-  const [teamScope, setTeamScope] = useState<TeamScopeFilterValue>('all');
+  const [teamScope, setTeamScope] = useState<TeamScopeFilterValue>(effectiveOwnerId);
   const { options: teamOptions } = useLinkedTeams(effectiveOwnerId, 'linked-group');
-  const showTeamColumn = teamOptions.filter((o) => o.value !== 'all').length > 1;
+
+  useEffect(() => {
+    if (!teamOptions.length) return;
+    const hasSelection = teamOptions.some((o) => o.value === teamScope);
+    if (hasSelection) return;
+    const selfOption = teamOptions.find((o) => o.ownerId === effectiveOwnerId);
+    setTeamScope(selfOption?.value ?? teamOptions[0].value);
+  }, [teamOptions, teamScope, effectiveOwnerId]);
 
   const newClientsNeedingReview = getNewClientsNeedingReview(clients);
   const normalizedSearch = searchQuery.trim().toLowerCase();
@@ -119,7 +126,6 @@ export function ClientsPage({
           <table className="data-table w-full min-w-[640px]">
             <thead>
               <tr>
-                {showTeamColumn && <th>Team</th>}
                 <th>Client</th>
                 <th className="text-center">Expenses</th>
                 <th>Warning</th>
@@ -131,22 +137,8 @@ export function ClientsPage({
               {list.map((c) => {
                 const needsReview = isNewClientNeedsReview(c);
                 const periodLabel = getVerificationPeriodLabel(c);
-                const isOwnTeam = (c.owner_id ?? effectiveOwnerId) === effectiveOwnerId;
                 return (
                   <tr key={c.id} className={needsReview ? 'bg-accent/5' : undefined}>
-                    {showTeamColumn && (
-                      <td>
-                        <span
-                          className={`text-[11px] px-2 py-0.5 rounded-full border ${
-                            isOwnTeam
-                              ? 'border-border text-muted2'
-                              : 'border-accent/30 bg-accent/10 text-accent'
-                          }`}
-                        >
-                          {teamLabelForOwner(c.owner_id, effectiveOwnerId, teamOptions)}
-                        </span>
-                      </td>
-                    )}
                     <td className="font-medium text-ink">{c.name}</td>
                     <td className="text-muted2 text-center">{c.expenses ?? '—'}</td>
                     <td className={c.warning_note?.trim() ? 'text-accent text-[12px] max-w-[200px] truncate' : 'text-muted2'}>

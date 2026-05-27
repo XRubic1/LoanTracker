@@ -56,7 +56,7 @@ export async function fetchLinkedGroupTeamOptions(
 ): Promise<TeamScopeOption[]> {
   const supabase = getSupabase();
   if (!supabase) {
-    return [{ value: 'all', label: 'All teams' }, { value: effectiveOwnerId, label: 'My team', ownerId: effectiveOwnerId, isSelf: true }];
+    return [{ value: effectiveOwnerId, label: 'My team (you)', ownerId: effectiveOwnerId, isSelf: true }];
   }
 
   const { data: myCompany } = await supabase
@@ -68,7 +68,6 @@ export async function fetchLinkedGroupTeamOptions(
   const groupId = myCompany?.client_share_group_id;
   if (!groupId) {
     return [
-      { value: 'all', label: 'All teams' },
       {
         value: effectiveOwnerId,
         label: (myCompany?.name ?? 'My team') + ' (you)',
@@ -95,8 +94,14 @@ export async function fetchLinkedGroupTeamOptions(
     if (c.owner_id) nameByOwner.set(c.owner_id, c.name);
   }
 
-  const options: TeamScopeOption[] = [{ value: 'all', label: 'All teams' }];
-  for (const oid of ownerIds) {
+  const sortedOwnerIds = ownerIds.sort((a, b) => {
+    if (a === effectiveOwnerId) return -1;
+    if (b === effectiveOwnerId) return 1;
+    return (nameByOwner.get(a) ?? a).localeCompare(nameByOwner.get(b) ?? b);
+  });
+
+  const options: TeamScopeOption[] = [];
+  for (const oid of sortedOwnerIds) {
     const isSelf = oid === effectiveOwnerId;
     const label = nameByOwner.get(oid) ?? 'Team ' + oid.slice(0, 8);
     options.push({
