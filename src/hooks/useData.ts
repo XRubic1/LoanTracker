@@ -20,6 +20,8 @@ import {
   insertAaaPayment,
   updateAaaPayment,
   fetchClients,
+  fetchWorksheetClientRegistry,
+  fetchWorksheetInsuranceLookup,
   insertClient,
   updateClient,
   deleteClientById,
@@ -34,8 +36,12 @@ export interface UseDataResult {
   reserves: Reserve[];
   aaaPayments: AaaPayment[];
   clients: Client[];
+  /** Global client registry for worksheet (all provisioned teams). */
+  worksheetClients: Client[];
   worksheetEntries: WorksheetEntry[];
   clientInsurance: ClientInsurance[];
+  /** Insurance lookup for worksheet alerts across all provisioned teams. */
+  worksheetClientInsurance: ClientInsurance[];
   insuranceVerification: InsuranceVerification | null;
   loading: boolean;
   error: string | null;
@@ -76,8 +82,10 @@ export function useData(ownerId: string | null, userId: string | null = null): U
   const [reserves, setReserves] = useState<Reserve[]>([]);
   const [aaaPayments, setAaaPayments] = useState<AaaPayment[]>([]);
   const [clients, setClients] = useState<Client[]>([]);
+  const [worksheetClients, setWorksheetClients] = useState<Client[]>([]);
   const [worksheetEntries, setWorksheetEntries] = useState<WorksheetEntry[]>([]);
   const [clientInsurance, setClientInsurance] = useState<ClientInsurance[]>([]);
+  const [worksheetClientInsurance, setWorksheetClientInsurance] = useState<ClientInsurance[]>([]);
   const [insuranceVerification, setInsuranceVerification] = useState<InsuranceVerification | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -119,6 +127,20 @@ export function useData(ownerId: string | null, userId: string | null = null): U
         setClients(clientsData);
       } catch {
         setClients([]);
+      }
+      try {
+        const worksheetClientsData = await fetchWorksheetClientRegistry();
+        setWorksheetClients(worksheetClientsData);
+      } catch (err) {
+        console.warn('fetch_worksheet_client_registry failed:', err);
+        setWorksheetClients([]);
+      }
+      try {
+        const worksheetInsuranceData = await fetchWorksheetInsuranceLookup();
+        setWorksheetClientInsurance(worksheetInsuranceData);
+      } catch (err) {
+        console.warn('fetch_worksheet_insurance_lookup failed:', err);
+        setWorksheetClientInsurance([]);
       }
       try {
         const worksheetData = await fetchWorksheetEntries();
@@ -409,8 +431,10 @@ export function useData(ownerId: string | null, userId: string | null = null): U
     reserves,
     aaaPayments,
     clients,
+    worksheetClients,
     worksheetEntries,
     clientInsurance,
+    worksheetClientInsurance,
     insuranceVerification,
     loading,
     error,

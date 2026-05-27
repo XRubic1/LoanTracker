@@ -134,6 +134,8 @@ export default function App() {
     addAaaPayment,
     updateAaaPaymentById,
     clients,
+    worksheetClients,
+    worksheetClientInsurance,
     worksheetEntries,
     addClient,
     updateClientById,
@@ -355,13 +357,32 @@ export default function App() {
 
   /** Single update: save note and mark next deduction (avoids note being overwritten). */
   const handleImportClients = useCallback(
-    async (batch: { toAdd: Omit<Client, 'id'>[]; toUpdate: Client[]; toDelete: Client[] }) => {
+    async (batch: {
+      toAdd: Omit<Client, 'id'>[];
+      toUpdate: Client[];
+      toDelete: Client[];
+      toAddInsurance: Array<{ client: string; mc: string }>;
+    }) => {
       const errors: string[] = [];
       for (const client of batch.toUpdate) {
         await updateClientById(client.id, client);
       }
       for (const payload of batch.toAdd) {
         await addClient(payload);
+      }
+      for (const ins of batch.toAddInsurance) {
+        const exists = clientInsurance.some(
+          (ci) => normalizeClientName(ci.client) === normalizeClientName(ins.client)
+        );
+        if (!exists) {
+          await addClientInsurance({
+            client: ins.client.trim(),
+            mc: ins.mc.trim(),
+            status: 'OK',
+            expiration_date: null,
+            last_cancellation_date: null,
+          });
+        }
       }
       for (const client of batch.toDelete) {
         try {
@@ -377,7 +398,7 @@ export default function App() {
         );
       }
     },
-    [addClient, updateClientById, removeClient]
+    [addClient, updateClientById, removeClient, addClientInsurance, clientInsurance]
   );
 
   const handleAddClientInsurance = useCallback(
@@ -581,8 +602,8 @@ export default function App() {
         {page === 'worksheet' && user && (
           <WorksheetPage
             worksheetEntries={worksheetEntries}
-            clients={clients}
-            clientInsurance={clientInsurance}
+            clients={worksheetClients}
+            clientInsurance={worksheetClientInsurance}
             currentUserId={user.id}
             addWorksheetEntry={addWorksheetEntry}
             removeWorksheetEntry={removeWorksheetEntry}
@@ -668,6 +689,7 @@ export default function App() {
         open={importClientsOpen}
         onClose={() => setImportClientsOpen(false)}
         clients={clients}
+        clientInsurance={clientInsurance}
         onImport={handleImportClients}
       />
       <AddClientInsuranceModal
@@ -741,8 +763,8 @@ export default function App() {
       <WorksheetEntryModal
         open={worksheetEntryId != null}
         entry={editingWorksheetEntry}
-        clients={clients}
-        clientInsurance={clientInsurance}
+        clients={worksheetClients}
+        clientInsurance={worksheetClientInsurance}
         onClose={() => setWorksheetEntryId(null)}
         onSave={async (payload) => {
           if ('id' in payload && typeof payload.id === 'number') {

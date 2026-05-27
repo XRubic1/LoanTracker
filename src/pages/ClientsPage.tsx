@@ -37,7 +37,7 @@ export function ClientsPage({
     'all' | 'needs_review' | 'new_client' | 'always_verified'
   >('all');
   const [teamScope, setTeamScope] = useState<TeamScopeFilterValue>('all');
-  const { options: teamOptions } = useLinkedTeams(effectiveOwnerId, 'client-pool');
+  const { options: teamOptions } = useLinkedTeams(effectiveOwnerId, 'linked-group');
   const showTeamColumn = teamOptions.filter((o) => o.value !== 'all').length > 1;
 
   const newClientsNeedingReview = getNewClientsNeedingReview(clients);
@@ -92,11 +92,6 @@ export function ClientsPage({
           </button>
         </div>
       </div>
-
-      <p className="text-[12px] text-muted2 mb-3 max-w-2xl">
-        Client lists are shared across all companies created by your administrator. Filter by team
-        to focus on one account.
-      </p>
 
       <div className="flex flex-wrap gap-3 mb-4 items-end">
         <TeamScopeFilter value={teamScope} options={teamOptions} onChange={setTeamScope} />

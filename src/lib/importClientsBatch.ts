@@ -1,26 +1,41 @@
 import { normalizeClientName } from '@/lib/importClients';
 import type { ClientImportPreviewRow } from '@/lib/importClientsExcel';
-import type { Client } from '@/types';
+import type { Client, ClientInsurance } from '@/types';
 
 export interface ClientImportBatch {
   toAdd: Omit<Client, 'id'>[];
   toUpdate: Client[];
   toDelete: Client[];
+  toAddInsurance: Array<{ client: string; mc: string }>;
 }
 
 /** Build add/update/delete lists from preview rows and import options. */
 export function buildClientImportBatch(
   preview: ClientImportPreviewRow[],
   existingClients: Client[],
+  existingInsurance: ClientInsurance[],
   options: { overrideExisting: boolean; deleteNotInFile: boolean }
 ): ClientImportBatch {
   const clientsById = new Map(existingClients.map((c) => [c.id, c]));
+  const insuranceClientNames = new Set(
+    existingInsurance.map((ci) => normalizeClientName(ci.client))
+  );
 
   const toAdd: Omit<Client, 'id'>[] = [];
   const toUpdate: Client[] = [];
+  const toAddInsurance: Array<{ client: string; mc: string }> = [];
+  const insuranceQueuedNames = new Set<string>();
 
   for (const row of preview) {
     if (row.status === 'invalid') continue;
+    const mc = row.mc?.trim();
+    if (mc) {
+      const clientKey = normalizeClientName(row.payload.name);
+      if (!insuranceClientNames.has(clientKey) && !insuranceQueuedNames.has(clientKey)) {
+        toAddInsurance.push({ client: row.payload.name.trim(), mc });
+        insuranceQueuedNames.add(clientKey);
+      }
+    }
     if (row.status === 'new') {
       toAdd.push(row.payload);
       continue;
@@ -51,5 +66,5 @@ export function buildClientImportBatch(
       ? existingClients.filter((c) => !namesInFile.has(normalizeClientName(c.name)))
       : [];
 
-  return { toAdd, toUpdate, toDelete };
+  return { toAdd, toUpdate, toDelete, toAddInsurance };
 }

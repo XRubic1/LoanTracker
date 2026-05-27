@@ -6,22 +6,30 @@ import {
   parseClientsExcelFile,
   type ClientImportPreviewRow,
 } from '@/lib/importClientsExcel';
-import type { Client } from '@/types';
+import type { Client, ClientInsurance } from '@/types';
 
 export interface ClientImportResult {
   toAdd: Omit<Client, 'id'>[];
   toUpdate: Client[];
   toDelete: Client[];
+  toAddInsurance: Array<{ client: string; mc: string }>;
 }
 
 interface ImportClientsModalProps {
   open: boolean;
   onClose: () => void;
   clients: Client[];
+  clientInsurance: ClientInsurance[];
   onImport: (batch: ClientImportResult) => Promise<void>;
 }
 
-export function ImportClientsModal({ open, onClose, clients, onImport }: ImportClientsModalProps) {
+export function ImportClientsModal({
+  open,
+  onClose,
+  clients,
+  clientInsurance,
+  onImport,
+}: ImportClientsModalProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [preview, setPreview] = useState<ClientImportPreviewRow[]>([]);
   const [parseErrors, setParseErrors] = useState<string[]>([]);
@@ -31,11 +39,17 @@ export function ImportClientsModal({ open, onClose, clients, onImport }: ImportC
   const [overrideExisting, setOverrideExisting] = useState(false);
   const [deleteNotInFile, setDeleteNotInFile] = useState(false);
 
-  const batch = buildClientImportBatch(preview, clients, { overrideExisting, deleteNotInFile });
+  const batch = buildClientImportBatch(preview, clients, clientInsurance, {
+    overrideExisting,
+    deleteNotInFile,
+  });
   const duplicateCount = preview.filter((r) => r.status === 'duplicate').length;
   const invalidCount = preview.filter((r) => r.status === 'invalid').length;
   const canImport =
-    batch.toAdd.length > 0 || batch.toUpdate.length > 0 || batch.toDelete.length > 0;
+    batch.toAdd.length > 0 ||
+    batch.toUpdate.length > 0 ||
+    batch.toDelete.length > 0 ||
+    batch.toAddInsurance.length > 0;
 
   const reset = () => {
     setPreview([]);
@@ -121,6 +135,7 @@ export function ImportClientsModal({ open, onClose, clients, onImport }: ImportC
     batch.toAdd.length > 0 && `${batch.toAdd.length} new`,
     batch.toUpdate.length > 0 && `${batch.toUpdate.length} update`,
     batch.toDelete.length > 0 && `${batch.toDelete.length} delete`,
+    batch.toAddInsurance.length > 0 && `${batch.toAddInsurance.length} insurance`,
   ]
     .filter(Boolean)
     .join(' · ');
@@ -130,7 +145,7 @@ export function ImportClientsModal({ open, onClose, clients, onImport }: ImportC
       <p className="text-[13px] text-muted2 mb-4">
         Upload an Excel file (.xlsx, .xls) with client details. Download the template for the correct
         columns: Client Name, Expenses (Wire or ACH), Warning Note, New Client, Started Date, Client
-        Reviewed, Verification Days (number or &quot;always&quot;).
+        Reviewed, Verification Days (number or &quot;always&quot;), MC.
       </p>
 
       <div className="flex flex-wrap gap-2 mb-4">
@@ -221,6 +236,7 @@ export function ImportClientsModal({ open, onClose, clients, onImport }: ImportC
                   <th className="py-2 px-2">Expenses</th>
                   <th className="py-2 px-2">Warning</th>
                   <th className="py-2 px-2">New</th>
+                  <th className="py-2 px-2">MC</th>
                   <th className="py-2 px-2">Status</th>
                 </tr>
               </thead>
@@ -247,6 +263,7 @@ export function ImportClientsModal({ open, onClose, clients, onImport }: ImportC
                     <td className="py-1.5 px-2">
                       {row.payload.is_new_client ? 'YES' : 'NO'}
                     </td>
+                    <td className="py-1.5 px-2">{row.mc ?? '—'}</td>
                     <td className="py-1.5 px-2">
                       {row.status === 'new' && <span className="text-green">New</span>}
                       {row.status === 'override' && (

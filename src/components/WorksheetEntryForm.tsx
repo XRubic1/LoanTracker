@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { WorksheetClientAlerts } from '@/components/WorksheetClientAlerts';
 import { WorksheetUnknownClientNotice } from '@/components/WorksheetUnknownClientNotice';
+import { useWorksheetClientSuggestions } from '@/hooks/useWorksheetClientSuggestions';
 import {
   findInsuranceForClient,
   findInsuranceForClientName,
@@ -69,13 +70,23 @@ export function WorksheetEntryForm({
     }
   }, [entry, clients]);
 
+  const { suggestions, searching } = useWorksheetClientSuggestions(clientSearch, clients);
+
+  /** Merged pool: local registry + latest server search hits (cross-team). */
+  const registryPool = useMemo(() => {
+    const byId = new Map<number, Client>();
+    for (const c of clients) byId.set(c.id, c);
+    for (const c of suggestions) byId.set(c.id, c);
+    return [...byId.values()];
+  }, [clients, suggestions]);
+
   /** Resolve client from dropdown id or exact name match (so alerts show when name is fully typed). */
   const selectedClient = useMemo(() => {
     if (clientId !== '') {
-      return clients.find((c) => c.id === clientId) ?? null;
+      return registryPool.find((c) => c.id === clientId) ?? null;
     }
-    return findRegistryClientByName(clientSearch, clients);
-  }, [clients, clientId, clientSearch]);
+    return findRegistryClientByName(clientSearch, registryPool);
+  }, [registryPool, clientId, clientSearch]);
 
   const selectedInsurance = useMemo(() => {
     if (selectedClient) {
@@ -108,15 +119,9 @@ export function WorksheetEntryForm({
     [alertClient, selectedInsurance]
   );
 
-  const suggestions = useMemo(() => {
-    const q = clientSearch.trim().toLowerCase();
-    if (!q) return clients.slice(0, 12);
-    return clients.filter((c) => c.name.toLowerCase().includes(q)).slice(0, 12);
-  }, [clients, clientSearch]);
-
   const registryMatch = useMemo(
-    () => findRegistryClientByName(clientSearch, clients),
-    [clientSearch, clients]
+    () => findRegistryClientByName(clientSearch, registryPool),
+    [clientSearch, registryPool]
   );
 
   // Keep client_id in sync when the full registry name is entered (not only on pick/Tab).
@@ -126,10 +131,10 @@ export function WorksheetEntryForm({
       setClientId(registryMatch.id);
     }
     if (!registryMatch && clientId !== '') {
-      const stillMatches = clients.some((c) => c.id === clientId);
+      const stillMatches = registryPool.some((c) => c.id === clientId);
       if (!stillMatches) setClientId('');
     }
-  }, [entry, registryMatch, clientId, clients]);
+  }, [entry, registryMatch, clientId, registryPool]);
 
   const showUnknownNotice = Boolean(clientSearch.trim()) && !registryMatch;
 
@@ -138,7 +143,8 @@ export function WorksheetEntryForm({
     setClientSearch(c.name);
   };
 
-  const showSuggestions = Boolean(clientSearch.trim()) && suggestions.length > 0;
+  const showSuggestions =
+    Boolean(clientSearch.trim()) && (searching || suggestions.length > 0);
 
   /** Tab selects the first matching registry client (or exact name match). */
   const handleClientKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
@@ -162,7 +168,7 @@ export function WorksheetEntryForm({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const resolved = resolveWorksheetClientInput(clientSearch, clients);
+    const resolved = resolveWorksheetClientInput(clientSearch, registryPool);
     if (!resolved.client_id && !resolved.client_name) {
       window.alert('Enter a client name.');
       return;
@@ -251,6 +257,9 @@ export function WorksheetEntryForm({
             />
             {showSuggestions && !registryMatch && (
               <ul className="absolute z-10 mt-1 w-full max-h-40 overflow-auto rounded-lg border border-border bg-panel shadow-lg">
+                {searching && (
+                  <li className="px-3 py-2 text-[12px] text-muted2">Searching…</li>
+                )}
                 {suggestions.map((c) => (
                   <li key={c.id}>
                     <button
@@ -356,6 +365,9 @@ export function WorksheetEntryForm({
         />
         {showSuggestions && !registryMatch && (
           <ul className="absolute z-10 mt-1 w-full max-h-40 overflow-auto rounded-lg border border-border bg-panel shadow-lg">
+            {searching && (
+              <li className="px-3 py-2 text-[12px] text-muted2">Searching…</li>
+            )}
             {suggestions.map((c) => (
               <li key={c.id}>
                 <button

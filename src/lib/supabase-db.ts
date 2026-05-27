@@ -121,6 +121,27 @@ export async function fetchClients(): Promise<Client[]> {
   return (data as ClientRow[] || []).map((row) => clientFromRow(row)!);
 }
 
+/** Global client registry for worksheet search, warnings, and expenses (all provisioned teams). */
+export async function fetchWorksheetClientRegistry(): Promise<Client[]> {
+  const supabase = getSupabase();
+  if (!supabase) throw new Error('Supabase not configured');
+  const { data, error } = await supabase.rpc('fetch_worksheet_client_registry');
+  if (error) throw error;
+  return (data as ClientRow[] || []).map((row) => clientFromRow(row)!);
+}
+
+/** Server-side worksheet client search (all teams). */
+export async function searchWorksheetClients(query: string, limit = 20): Promise<Client[]> {
+  const supabase = getSupabase();
+  if (!supabase) throw new Error('Supabase not configured');
+  const { data, error } = await supabase.rpc('search_worksheet_clients', {
+    p_query: query.trim(),
+    p_limit: limit,
+  });
+  if (error) throw error;
+  return (data as ClientRow[] || []).map((row) => clientFromRow(row)!);
+}
+
 export async function insertClient(payload: Omit<Client, 'id'>, ownerId?: string | null): Promise<Client> {
   const supabase = getSupabase();
   if (!supabase) throw new Error('Supabase not configured');
@@ -275,7 +296,17 @@ export async function deleteCompanyGroup(groupId: number): Promise<void> {
 export async function addOwnerToCompanyGroup(groupId: number, ownerId: string): Promise<void> {
   const supabase = getSupabase();
   if (!supabase) throw new Error('Supabase not configured');
-  const { error } = await supabase.from('owner_company_group_members').insert({ group_id: groupId, owner_id: ownerId });
+  const { data: existing, error: existsErr } = await supabase
+    .from('owner_company_group_members')
+    .select('group_id')
+    .eq('group_id', groupId)
+    .eq('owner_id', ownerId)
+    .maybeSingle();
+  if (existsErr) throw existsErr;
+  if (existing) return;
+  const { error } = await supabase
+    .from('owner_company_group_members')
+    .insert({ group_id: groupId, owner_id: ownerId });
   if (error) throw error;
 }
 
@@ -288,6 +319,53 @@ export async function removeOwnerFromCompanyGroup(groupId: number, ownerId: stri
     .eq('group_id', groupId)
     .eq('owner_id', ownerId);
   if (error) throw error;
+}
+
+/** Ensure company group ids reflect actual members after unlink operations. */
+async function normalizeClientShareGroupAfterUnlink(groupId: number): Promise<void> {
+  const supabase = getSupabase();
+  if (!supabase) throw new Error('Supabase not configured');
+
+  const { data: members, error: memErr } = await supabase
+    .from('owner_company_group_members')
+    .select('owner_id')
+    .eq('group_id', groupId);
+  if (memErr) throw memErr;
+
+  const ownerIds = [...new Set((members ?? []).map((m) => m.owner_id))];
+  if (ownerIds.length >= 2) {
+    // Keep valid group links for all member companies.
+    const { data: memberCompanies } = await supabase
+      .from('companies')
+      .select('id')
+      .in('owner_id', ownerIds);
+    if ((memberCompanies ?? []).length > 0) {
+      await supabase
+        .from('companies')
+        .update({ client_share_group_id: groupId, updated_at: new Date().toISOString() })
+        .in(
+          'id',
+          (memberCompanies ?? []).map((c) => c.id)
+        );
+    }
+    return;
+  }
+
+  // 0 or 1 member left: no real "shared" group remains; clear group references and memberships.
+  const { data: linkedCompanies } = await supabase
+    .from('companies')
+    .select('id')
+    .eq('client_share_group_id', groupId);
+  if ((linkedCompanies ?? []).length > 0) {
+    await supabase
+      .from('companies')
+      .update({ client_share_group_id: null, updated_at: new Date().toISOString() })
+      .in(
+        'id',
+        (linkedCompanies ?? []).map((c) => c.id)
+      );
+  }
+  await supabase.from('owner_company_group_members').delete().eq('group_id', groupId);
 }
 
 /** Look up owner_id by account email (auth.users). */
@@ -665,9 +743,13 @@ export async function linkOwnerEmailToCompanyClientSharing(
     .from('owner_company_group_members')
     .select('group_id')
     .eq('owner_id', ownerId);
-  const otherGroup = existing?.find((r) => r.group_id !== groupId);
-  if (otherGroup) {
-    throw new Error('That account is already in another client-share group. Unlink it first.');
+  const otherGroups = (existing ?? []).filter((r) => r.group_id !== groupId);
+  if (otherGroups.length > 0) {
+    // Self-heal stale memberships from prior unlink cycles.
+    for (const g of otherGroups) {
+      await removeOwnerFromCompanyGroup(g.group_id, ownerId);
+      await normalizeClientShareGroupAfterUnlink(g.group_id);
+    }
   }
 
   await addOwnerToCompanyGroup(groupId, ownerId);
@@ -695,6 +777,7 @@ export async function unlinkCompanyClientSharing(companyId: number): Promise<voi
     .update({ client_share_group_id: null, updated_at: new Date().toISOString() })
     .eq('id', companyId);
   if (error) throw error;
+  await normalizeClientShareGroupAfterUnlink(company.client_share_group_id);
 }
 
 /** Remove a linked owner (by owner id) from the company's share group. */
@@ -715,8 +798,12 @@ export async function unlinkOwnerFromCompanyClientSharing(
     .eq('owner_id', linkedOwnerId)
     .maybeSingle();
   if (otherCo?.id) {
-    await supabase.from('companies').update({ client_share_group_id: null }).eq('id', otherCo.id);
+    await supabase
+      .from('companies')
+      .update({ client_share_group_id: null, updated_at: new Date().toISOString() })
+      .eq('id', otherCo.id);
   }
+  await normalizeClientShareGroupAfterUnlink(company.client_share_group_id);
 }
 
 export interface AdminLoanRow {
@@ -950,6 +1037,15 @@ export async function fetchClientInsurance(): Promise<ClientInsurance[]> {
     .from('client_insurance')
     .select('*')
     .order('client', { ascending: true });
+  if (error) throw error;
+  return (data as ClientInsuranceRow[] || []).map((row) => clientInsuranceFromRow(row)!);
+}
+
+/** Insurance lookup for worksheet alerts across all provisioned teams. */
+export async function fetchWorksheetInsuranceLookup(): Promise<ClientInsurance[]> {
+  const supabase = getSupabase();
+  if (!supabase) throw new Error('Supabase not configured');
+  const { data, error } = await supabase.rpc('fetch_worksheet_insurance_lookup');
   if (error) throw error;
   return (data as ClientInsuranceRow[] || []).map((row) => clientInsuranceFromRow(row)!);
 }

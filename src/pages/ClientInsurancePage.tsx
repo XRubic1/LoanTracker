@@ -202,11 +202,6 @@ export function ClientInsurancePage({
         </div>
       </div>
 
-      <p className="text-[12px] text-muted2 mb-3 max-w-2xl">
-        When accounts are linked on the Super Admin dashboard, insurance records from linked teams
-        appear here. Filter by team to focus on one account.
-      </p>
-
       <div className="mb-3 flex flex-wrap items-end gap-3">
         <TeamScopeFilter value={teamScope} options={teamOptions} onChange={setTeamScope} />
         <div className="relative flex-1 min-w-[200px]">
