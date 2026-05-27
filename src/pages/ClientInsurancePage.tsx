@@ -11,9 +11,7 @@ import { TeamScopeFilter } from '@/components/TeamScopeFilter';
 import { useLinkedTeams } from '@/hooks/useLinkedTeams';
 import {
   matchesTeamScope,
-  teamLabelForOwner,
   type TeamScopeFilterValue,
-  type TeamScopeOption,
 } from '@/lib/linkedTeams';
 import {
   getClientInsuranceStatusLabel,
@@ -59,7 +57,6 @@ export function ClientInsurancePage({
   const [savingVerification, setSavingVerification] = useState(false);
   const [teamScope, setTeamScope] = useState<TeamScopeFilterValue>(effectiveOwnerId);
   const { options: teamOptions } = useLinkedTeams(effectiveOwnerId, 'linked-group');
-  const showTeamColumn = teamOptions.filter((o) => o.value !== 'all').length > 1;
 
   useEffect(() => {
     if (!teamOptions.length) return;
@@ -240,11 +237,6 @@ export function ClientInsurancePage({
         <table className="w-full border-collapse">
           <thead>
             <tr>
-              {showTeamColumn && (
-                <th className="text-[10px] text-label uppercase tracking-widest py-0 pb-1.5 pr-2 text-left border-b border-border">
-                  Team
-                </th>
-              )}
               <th className="text-[10px] text-label uppercase tracking-widest py-0 pb-1.5 pr-2 text-left border-b border-border">
                 Client
               </th>
@@ -260,7 +252,7 @@ export function ClientInsurancePage({
           <tbody>
             {list.length === 0 ? (
               <tr>
-                <td colSpan={showTeamColumn ? 5 : 4} className="text-center py-6 text-muted text-[13px]">
+                <td colSpan={4} className="text-center py-6 text-muted text-[13px]">
                   {mergedList.length === 0
                     ? 'No clients yet. Add clients on the Clients tab or add insurance here.'
                     : 'No clients to show. Turn off "Hide OUT clients" or change filters.'}
@@ -271,9 +263,6 @@ export function ClientInsurancePage({
                 <InsuranceTableRow
                   key={item.kind === 'insurance' ? `ins-${item.record.id}` : `reg-${item.client.id}`}
                   item={item}
-                  effectiveOwnerId={effectiveOwnerId}
-                  teamOptions={teamOptions}
-                  showTeamColumn={showTeamColumn}
                   searchQuery={searchQuery}
                   onSearchQuery={setSearchQuery}
                   onStatusFilter={setStatusFilter}
@@ -338,36 +327,8 @@ export function ClientInsurancePage({
   );
 }
 
-function TeamBadgeCell({
-  ownerId,
-  effectiveOwnerId,
-  teamOptions,
-}: {
-  ownerId: string | null | undefined;
-  effectiveOwnerId: string;
-  teamOptions: TeamScopeOption[];
-}) {
-  const isOwnTeam = (ownerId ?? effectiveOwnerId) === effectiveOwnerId;
-  return (
-    <td className="py-1.5 pr-2 border-b border-divider align-middle">
-      <span
-        className={`text-[11px] px-2 py-0.5 rounded-full border ${
-          isOwnTeam
-            ? 'border-border text-muted2'
-            : 'border-accent/30 bg-accent/10 text-accent'
-        }`}
-      >
-        {teamLabelForOwner(ownerId, effectiveOwnerId, teamOptions)}
-      </span>
-    </td>
-  );
-}
-
 function InsuranceTableRow({
   item,
-  effectiveOwnerId,
-  teamOptions,
-  showTeamColumn,
   searchQuery,
   onSearchQuery,
   onStatusFilter,
@@ -376,9 +337,6 @@ function InsuranceTableRow({
   onAddInsuranceForClient,
 }: {
   item: ClientInsuranceListItem;
-  effectiveOwnerId: string;
-  teamOptions: TeamScopeOption[];
-  showTeamColumn: boolean;
   searchQuery: string;
   onSearchQuery: (q: string) => void;
   onStatusFilter: React.Dispatch<
@@ -395,16 +353,8 @@ function InsuranceTableRow({
         searchQuery.trim().toLowerCase() === name.toLowerCase() ? '' : name
       );
     };
-    const ownerId = item.client.owner_id;
     return (
       <tr className="row-hover transition-colors bg-surface/30">
-        {showTeamColumn && (
-          <TeamBadgeCell
-            ownerId={ownerId}
-            effectiveOwnerId={effectiveOwnerId}
-            teamOptions={teamOptions}
-          />
-        )}
         <td className="py-1.5 pr-2 border-b border-divider align-middle">
           <button
             type="button"
@@ -453,13 +403,6 @@ function InsuranceTableRow({
 
   return (
     <tr className="row-hover transition-colors">
-      {showTeamColumn && (
-        <TeamBadgeCell
-          ownerId={c.owner_id}
-          effectiveOwnerId={effectiveOwnerId}
-          teamOptions={teamOptions}
-        />
-      )}
       <td className="py-1.5 pr-2 border-b border-divider align-middle">
         <button
           type="button"
