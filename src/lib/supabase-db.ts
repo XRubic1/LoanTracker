@@ -46,6 +46,7 @@ function clientInsuranceFromRow(row: ClientInsuranceRow | null): ClientInsurance
     owner_id: row.owner_id ?? undefined,
     client: row.client,
     mc: row.mc,
+    dot: row.dot?.trim() ?? '',
     status: row.status ?? 'OK',
     expiration_date: row.expiration_date ?? null,
     last_cancellation_date: row.last_cancellation_date ?? null,
@@ -60,6 +61,7 @@ function clientInsuranceToRow(
     owner_id: ownerId ?? record.owner_id ?? null,
     client: record.client,
     mc: record.mc,
+    dot: record.dot?.trim() ?? '',
     status: record.status ?? 'OK',
     expiration_date: record.expiration_date ?? null,
     last_cancellation_date: isCancellationWithDate(record.status ?? '', record.expiration_date ?? null)

@@ -12,6 +12,20 @@ export function fmtDate(d: string | Date | null | undefined): string {
   return dt.toLocaleDateString('en-GB', { day: '2-digit', month: 'short' });
 }
 
+/** Date + time for activity logs (e.g. worksheet batch saved at). */
+export function fmtDateTime(d: string | Date | null | undefined): string {
+  if (!d) return '—';
+  const dt = new Date(d);
+  if (Number.isNaN(dt.getTime())) return '—';
+  return dt.toLocaleString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+  });
+}
+
 /** Display label for loan provider (TruFunding or custom name when Other). */
 export function getLoanProviderDisplay(loan: Loan): string {
   if (loan.providerType === 'Other' && loan.providerName?.trim()) return loan.providerName.trim();

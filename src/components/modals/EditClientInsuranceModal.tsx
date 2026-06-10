@@ -37,12 +37,14 @@ export function EditClientInsuranceModal({
   onSave,
 }: EditClientInsuranceModalProps) {
   const [option, setOption] = useState<StatusOption>('OK');
+  const [dot, setDot] = useState('');
   const [cancellationDate, setCancellationDate] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
     if (clientInsurance) {
       setOption(parseStatusOption(clientInsurance.status));
+      setDot(clientInsurance.dot ?? '');
       setCancellationDate(clientInsurance.expiration_date ?? '');
     }
   }, [clientInsurance]);
@@ -58,6 +60,7 @@ export function EditClientInsuranceModal({
       const status = buildStatus(option);
       await onSave(clientInsurance.id, {
         ...clientInsurance,
+        dot: dot.trim(),
         status,
         expiration_date: cancellationDate.trim() || null,
       });
@@ -85,6 +88,17 @@ export function EditClientInsuranceModal({
         <div className="flex justify-between items-center py-1.5 border-b border-border text-[13px]">
           <span className="text-muted2">MC</span>
           <span className="font-mono">{clientInsurance.mc}</span>
+        </div>
+
+        <div>
+          <label className="block text-[11px] text-muted uppercase tracking-wider mb-1.5">DOT</label>
+          <input
+            type="text"
+            value={dot}
+            onChange={(e) => setDot(e.target.value)}
+            placeholder="DOT number"
+            className="w-full bg-surface border border-border rounded-lg py-2 px-3 text-[13px] text-ink outline-none focus:border-accent font-mono"
+          />
         </div>
 
         <div>

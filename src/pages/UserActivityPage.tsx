@@ -5,7 +5,7 @@ import { WorkPaceCell } from '@/components/userActivity/WorkPaceCell';
 import { WorkPaceReviewPanel, type WorkPaceReviewRow } from '@/components/userActivity/WorkPaceReviewPanel';
 import { fetchTeamMembers } from '@/lib/supabase-db';
 import { exportWorksheetActivityExcel } from '@/lib/exportWorksheetExcel';
-import { getPriorWeekBoundsDateOnly, getWeekBoundsDateOnly } from '@/lib/utils';
+import { fmtDateTime, getPriorWeekBoundsDateOnly, getWeekBoundsDateOnly } from '@/lib/utils';
 import { UserActivityOverview } from '@/components/userActivity/UserActivityOverview';
 import { buildUserActivityAnalytics } from '@/lib/userActivityStats';
 import {
@@ -59,7 +59,12 @@ export function UserActivityPage({
       worksheetEntries
         .filter((e) => e.work_date >= dateFrom && e.work_date <= dateTo)
         .filter((e) => userFilter === 'all' || e.created_by === userFilter)
-        .sort((a, b) => b.work_date.localeCompare(a.work_date) || b.id - a.id),
+        .sort((a, b) => {
+          const aTime = a.created_at ? new Date(a.created_at).getTime() : 0;
+          const bTime = b.created_at ? new Date(b.created_at).getTime() : 0;
+          if (bTime !== aTime) return bTime - aTime;
+          return b.work_date.localeCompare(a.work_date) || b.id - a.id;
+        }),
     [worksheetEntries, dateFrom, dateTo, userFilter]
   );
 
@@ -352,7 +357,7 @@ export function UserActivityPage({
           <table className="w-full min-w-[760px] border-collapse text-[13px]">
             <thead>
               <tr className="border-b border-border bg-surface/40 text-[10px] uppercase tracking-wider text-label">
-                <th className="text-left font-normal px-4 py-2.5 w-[100px]">Date</th>
+                <th className="text-left font-normal px-4 py-2.5 w-[150px]">Timestamp</th>
                 <th className="text-left font-normal px-4 py-2.5 w-[130px]">User</th>
                 <th className="text-left font-normal px-4 py-2.5">Client</th>
                 <th className="text-right font-normal px-4 py-2.5 w-14">Inv.</th>
@@ -426,7 +431,12 @@ function ActivityRow({
             : ''
       }`}
     >
-      <td className="px-4 py-3 text-[12px] text-muted2 tabular-nums whitespace-nowrap">{entry.work_date}</td>
+      <td
+        className="px-4 py-3 text-[12px] text-muted2 tabular-nums whitespace-nowrap"
+        title={entry.created_at ?? undefined}
+      >
+        {fmtDateTime(entry.created_at)}
+      </td>
       <td className="px-4 py-3 text-[12px] text-muted2 truncate max-w-[130px]" title={author}>
         {author}
       </td>

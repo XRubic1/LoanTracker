@@ -378,6 +378,7 @@ export default function App() {
           await addClientInsurance({
             client: ins.client.trim(),
             mc: ins.mc.trim(),
+            dot: '',
             status: 'OK',
             expiration_date: null,
             last_cancellation_date: null,

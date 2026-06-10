@@ -126,6 +126,7 @@ export function ClientInsurancePage({
       if (item.kind === 'insurance') {
         return (
           item.record.mc.toLowerCase().includes(normalizedSearch) ||
+          item.record.dot.toLowerCase().includes(normalizedSearch) ||
           getClientInsuranceStatusLabel(item.record).toLowerCase().includes(normalizedSearch)
         );
       }
@@ -214,7 +215,7 @@ export function ClientInsurancePage({
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Search by client, MC, or status"
+            placeholder="Search by client, MC, DOT, or status"
             className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-[13px] text-ink placeholder:text-muted2"
           />
         </div>
@@ -244,6 +245,9 @@ export function ClientInsurancePage({
                 MC
               </th>
               <th className="text-[10px] text-label uppercase tracking-widest py-0 pb-1.5 pr-2 text-left border-b border-border">
+                DOT
+              </th>
+              <th className="text-[10px] text-label uppercase tracking-widest py-0 pb-1.5 pr-2 text-left border-b border-border">
                 Status
               </th>
               <th className="text-[10px] text-label uppercase tracking-widest py-0 pb-1.5 pr-2 text-left border-b border-border w-16" />
@@ -252,7 +256,7 @@ export function ClientInsurancePage({
           <tbody>
             {list.length === 0 ? (
               <tr>
-                <td colSpan={4} className="text-center py-6 text-muted text-[13px]">
+                <td colSpan={5} className="text-center py-6 text-muted text-[13px]">
                   {mergedList.length === 0
                     ? 'No clients yet. Add clients on the Clients tab or add insurance here.'
                     : 'No clients to show. Turn off "Hide OUT clients" or change filters.'}
@@ -366,6 +370,7 @@ function InsuranceTableRow({
           <span className="ml-1.5 text-[10px] text-muted2 uppercase tracking-wide">Clients</span>
         </td>
         <td className="py-1.5 pr-2 border-b border-divider align-middle text-muted2 text-[13px]">—</td>
+        <td className="py-1.5 pr-2 border-b border-divider align-middle text-muted2 text-[13px]">—</td>
         <td className="py-1.5 pr-2 border-b border-divider align-middle text-muted2 text-[12px] italic">
           No insurance record
         </td>
@@ -390,6 +395,10 @@ function InsuranceTableRow({
   const statusFilterValue = getFilterValueFromRecord(c.status);
   const copyMc = () => {
     navigator.clipboard.writeText(c.mc).then(() => {}, () => {});
+  };
+  const copyDot = () => {
+    if (!c.dot.trim()) return;
+    navigator.clipboard.writeText(c.dot).then(() => {}, () => {});
   };
   const applyClientFilter = () => {
     onSearchQuery(
@@ -434,6 +443,32 @@ function InsuranceTableRow({
           </button>
           {c.mc}
         </div>
+      </td>
+      <td className="py-1.5 pr-2 border-b border-divider align-middle">
+        {c.dot.trim() ? (
+          <div className="flex items-center gap-1.5 font-mono text-[13px]">
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                copyDot();
+              }}
+              className="p-0.5 rounded text-muted2 hover:text-accent hover:bg-accent/10"
+              title="Copy DOT"
+              aria-label="Copy DOT"
+            >
+              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path
+                  strokeWidth={2}
+                  d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"
+                />
+              </svg>
+            </button>
+            {c.dot}
+          </div>
+        ) : (
+          <span className="text-muted2 text-[13px]">—</span>
+        )}
       </td>
       <td className="py-1.5 pr-2 border-b border-divider align-middle">
         <button

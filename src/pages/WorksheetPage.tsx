@@ -6,7 +6,7 @@ import { WorksheetClientAlerts } from '@/components/WorksheetClientAlerts';
 
 import { WorksheetEntryForm } from '@/components/WorksheetEntryForm';
 
-import { getWeekBoundsDateOnly } from '@/lib/utils';
+import { fmtDateTime, getWeekBoundsDateOnly } from '@/lib/utils';
 
 import { isNewClientNeedsReview } from '@/lib/clientUtils';
 
@@ -83,7 +83,12 @@ export function WorksheetPage({
 
         .filter((e) => e.work_date >= dateFrom && e.work_date <= dateTo)
 
-        .sort((a, b) => b.work_date.localeCompare(a.work_date) || b.id - a.id),
+        .sort((a, b) => {
+          const aTime = a.created_at ? new Date(a.created_at).getTime() : 0;
+          const bTime = b.created_at ? new Date(b.created_at).getTime() : 0;
+          if (bTime !== aTime) return bTime - aTime;
+          return b.work_date.localeCompare(a.work_date) || b.id - a.id;
+        }),
 
     [worksheetEntries, currentUserId, dateFrom, dateTo]
 
@@ -269,7 +274,7 @@ function WorksheetTable({
 
           <tr>
 
-            <th>Date</th>
+            <th>Timestamp</th>
 
             <th>Client</th>
 
@@ -312,7 +317,9 @@ function WorksheetTable({
 
             return (
               <tr key={e.id} className={highlight ? 'bg-accent/5' : undefined}>
-                <td>{e.work_date}</td>
+                <td className="text-[12px] text-muted2 tabular-nums whitespace-nowrap">
+                  {fmtDateTime(e.created_at)}
+                </td>
                 <td className="font-medium text-ink">
                   {displayName}
                   {unknown && (

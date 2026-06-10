@@ -1,3 +1,4 @@
+import { fmtDateTime } from '@/lib/utils';
 import type { WorksheetEntry } from '@/types';
 
 type ExportRow = Record<string, string | number | boolean>;
@@ -18,6 +19,7 @@ export async function exportWorksheetActivityExcel(
   const XLSX = await import('xlsx');
   const sheetData: ExportRow[] = rows.map((r) => ({
     Date: r.entry.work_date,
+    Timestamp: fmtDateTime(r.entry.created_at),
     Client: r.clientName,
     'On Client List': r.entry.client_id != null ? 'YES' : 'NO',
     Invoices: r.entry.invoice_count,

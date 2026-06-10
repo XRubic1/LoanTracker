@@ -65,6 +65,10 @@ export function ClientInsuranceDetailModal({
           <span className="font-mono">{clientInsurance.mc}</span>
         </div>
         <div className="flex justify-between items-center py-1.5 border-b border-border text-[13px]">
+          <span className="text-muted2">DOT</span>
+          <span className="font-mono">{clientInsurance.dot?.trim() || '—'}</span>
+        </div>
+        <div className="flex justify-between items-center py-1.5 border-b border-border text-[13px]">
           <span className="text-muted2">Status</span>
           <span
             className={`font-medium ${

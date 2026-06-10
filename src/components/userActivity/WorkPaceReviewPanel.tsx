@@ -1,5 +1,6 @@
 import type { WorkDurationFinding } from '@/lib/worksheetTiming';
 import { WORK_DURATION_MARGIN_MINUTES, WORK_MINUTES_PER_INVOICE } from '@/lib/worksheetTiming';
+import { fmtDateTime } from '@/lib/utils';
 import type { WorksheetEntry } from '@/types';
 
 export interface WorkPaceReviewRow {
@@ -56,6 +57,7 @@ export function WorkPaceReviewPanel({ rows, onSelectEntry }: WorkPaceReviewPanel
               <th className="text-left font-normal px-4 py-2.5">User</th>
               <th className="text-left font-normal px-4 py-2.5">Client</th>
               <th className="text-left font-normal px-4 py-2.5 w-24">Date</th>
+              <th className="text-left font-normal px-4 py-2.5 w-[140px]">Timestamp</th>
               <th className="text-right font-normal px-4 py-2.5 w-20">Gap</th>
               <th className="text-right font-normal px-4 py-2.5 w-28">Limit</th>
               <th className="text-center font-normal px-4 py-2.5 w-20">Flag</th>
@@ -76,6 +78,9 @@ export function WorkPaceReviewPanel({ rows, onSelectEntry }: WorkPaceReviewPanel
                   {clientName}
                 </td>
                 <td className="px-4 py-2.5 text-muted2 tabular-nums text-[12px]">{entry.work_date}</td>
+                <td className="px-4 py-2.5 text-muted2 tabular-nums text-[12px] whitespace-nowrap">
+                  {fmtDateTime(entry.created_at)}
+                </td>
                 <td className="px-4 py-2.5 text-right tabular-nums font-semibold text-ink">
                   {finding.gapMinutes} min
                 </td>

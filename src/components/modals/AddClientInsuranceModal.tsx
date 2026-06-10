@@ -30,6 +30,7 @@ export function AddClientInsuranceModal({
   const [client, setClient] = useState('');
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [mc, setMc] = useState('');
+  const [dot, setDot] = useState('');
   const [status, setStatus] = useState<StatusOption>('OK');
   const [cancellationDate, setCancellationDate] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -59,12 +60,14 @@ export function AddClientInsuranceModal({
       await onAdd({
         client: client.trim(),
         mc: mc.trim(),
+        dot: dot.trim(),
         status: statusToValue(status),
         expiration_date: cancellationDate.trim() || null,
         last_cancellation_date: null,
       });
       setClient('');
       setMc('');
+      setDot('');
       setStatus('OK');
       setCancellationDate('');
       onClose();
@@ -124,6 +127,16 @@ export function AddClientInsuranceModal({
             value={mc}
             onChange={(e) => setMc(e.target.value)}
             placeholder="MC number"
+            className="w-full bg-surface border border-border rounded-lg py-2 px-3 text-[13px] text-ink outline-none focus:border-accent"
+          />
+        </div>
+        <div>
+          <label className="block text-[11px] text-muted uppercase tracking-wider mb-1.5">DOT</label>
+          <input
+            type="text"
+            value={dot}
+            onChange={(e) => setDot(e.target.value)}
+            placeholder="DOT number"
             className="w-full bg-surface border border-border rounded-lg py-2 px-3 text-[13px] text-ink outline-none focus:border-accent"
           />
         </div>

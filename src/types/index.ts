@@ -270,12 +270,13 @@ export interface PlatformAdmin {
   created_at?: string;
 }
 
-/** Client insurance: client name, MC number, status (OK, inactive, cancellation, date, etc.). */
+/** Client insurance: client name, MC/DOT numbers, status (OK, inactive, cancellation, date, etc.). */
 export interface ClientInsurance {
   id: number;
   owner_id?: string | null;
   client: string;
   mc: string;
+  dot: string;
   /** Display status: OK, inactive, cancellation 02/20, insurance cancelled, or date like 05/26/2026. */
   status: string;
   /** Optional expiration date (when status is or was a date). */
@@ -290,6 +291,7 @@ export interface ClientInsuranceRow {
   owner_id: string | null;
   client: string;
   mc: string;
+  dot?: string | null;
   status: string;
   expiration_date: string | null;
   last_cancellation_date?: string | null;
