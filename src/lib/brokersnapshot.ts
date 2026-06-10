@@ -321,7 +321,6 @@ export function detectCancellationSuggestion(
 ): DetectedCancellation | null {
   if (!data) return null;
 
-  const today = todayDateOnly();
   const suggestedDot =
     data.dot_number && !(record.dot ?? '').trim() ? String(data.dot_number) : undefined;
 
@@ -350,27 +349,6 @@ export function detectCancellationSuggestion(
     };
   }
 
-  // Lapsed: no active insurance but BIPD still required (coverage already gone)
-  const active = data.ActiveInsurances ?? [];
-  const bipdReq = data.InsuranceRequired?.bipd_req ?? 0;
-  const statusOk = (record.status ?? '').trim().toLowerCase() === 'ok';
-
-  if (active.length === 0 && bipdReq > 0 && statusOk && !pending) {
-    if (!alreadyMatchesCancellation(record, today)) {
-      return {
-        suggested_cancellation_date: today,
-        suggested_dot: suggestedDot,
-        reason: 'lapsed',
-        source_data: {
-          reason: 'lapsed',
-          insight: 'No active insurance on file but BIPD is required.',
-          bipd_req: bipdReq,
-          active_policy_count: 0,
-          dot_number: data.dot_number,
-        },
-      };
-    }
-  }
-
+  // Lapsed coverage is not auto-suggested — it stamped today's date on mass approve.
   return null;
 }

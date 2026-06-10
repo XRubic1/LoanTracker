@@ -1,10 +1,13 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   approveAllCancellationSuggestions,
+  BROKERSNAPSHOT_BULK_ERROR_DATE,
   clearBrokerSnapshotMonitoringData,
+  countBulkCancellationReverts,
   fetchBrokerSnapshotApiLogs,
   fetchBrokerSnapshotSyncRuns,
   fetchPendingCancellationSuggestions,
+  revertBulkIncorrectCancellations,
   triggerBrokerSnapshotSync,
 } from '@/lib/supabase-db';
 import { isBrokerSnapshotSyncClient } from '@/lib/brokersnapshot';
@@ -64,9 +67,15 @@ export function ApiMonitoringPage({
   const [syncing, setSyncing] = useState(false);
   const [approvingAll, setApprovingAll] = useState(false);
   const [clearing, setClearing] = useState(false);
+  const [reverting, setReverting] = useState(false);
   const [selectedClientIds, setSelectedClientIds] = useState<Set<number>>(new Set());
   const [showClientPicker, setShowClientPicker] = useState(false);
   const [activeTab, setActiveTab] = useState<MainTab>('pending');
+
+  const bulkRevertCount = useMemo(
+    () => countBulkCancellationReverts(clientInsurance, effectiveOwnerId),
+    [clientInsurance, effectiveOwnerId]
+  );
 
   const syncableClients = useMemo(
     () =>
@@ -81,9 +90,32 @@ export function ApiMonitoringPage({
     [lastRunLogs, effectiveOwnerId]
   );
 
+  const isAlreadyInInsurance = useCallback(
+    (log: BrokerSnapshotApiLog) => {
+      const date = pendingDateFromLog(log);
+      return clientInsurance.some(
+        (c) =>
+          c.id === log.client_insurance_id &&
+          (c.status ?? '').toLowerCase().includes('cancellation') &&
+          c.expiration_date === date
+      );
+    },
+    [clientInsurance]
+  );
+
   const pendingLogs = useMemo(
-    () => ownerLogs.filter((log) => log.cancellation_detected),
-    [ownerLogs]
+    () => ownerLogs.filter((log) => log.cancellation_detected && !isAlreadyInInsurance(log)),
+    [ownerLogs, isAlreadyInInsurance]
+  );
+
+  const approvableSuggestions = useMemo(
+    () =>
+      pendingSuggestions.filter(
+        (s) =>
+          s.source_data?.reason !== 'lapsed' &&
+          s.source_data?.already_in_insurance !== true
+      ),
+    [pendingSuggestions]
   );
 
   const loadData = useCallback(async () => {
@@ -147,20 +179,26 @@ export function ApiMonitoringPage({
   }, [runSync, selectedClientIds, showClientPicker, syncableClients.length]);
 
   const handleApproveAll = useCallback(async () => {
-    if (pendingLogs.length === 0 && pendingSuggestions.length === 0) return;
-    const count = Math.max(pendingLogs.length, pendingSuggestions.length);
-    if (!window.confirm(`Approve all ${count} pending cancellation(s) and update Client Insurance?`)) {
+    if (pendingLogs.length === 0 && approvableSuggestions.length === 0) return;
+    const count = pendingLogs.length + approvableSuggestions.length;
+    if (
+      !window.confirm(
+        `Approve ${count} FMCSA pending cancellation(s) and update Client Insurance? (Skips clients already recorded.)`
+      )
+    ) {
       return;
     }
     setApprovingAll(true);
     try {
-      const { approved, failed } = await approveAllCancellationSuggestions(
+      const { approved, failed, skipped } = await approveAllCancellationSuggestions(
         effectiveOwnerId,
         userId,
         pendingLogs
       );
-      if (failed > 0) {
-        window.alert(`Approved ${approved}. ${failed} could not be approved.`);
+      if (failed > 0 || skipped > 0) {
+        window.alert(
+          `Approved ${approved}.${failed > 0 ? ` ${failed} failed.` : ''}${skipped > 0 ? ` ${skipped} skipped (already recorded or lapsed).` : ''}`
+        );
       }
       await loadData();
       onRefreshInsurance?.();
@@ -174,9 +212,35 @@ export function ApiMonitoringPage({
     loadData,
     onRefreshInsurance,
     pendingLogs,
-    pendingSuggestions.length,
+    approvableSuggestions.length,
     userId,
   ]);
+
+  const handleRevertBulkErrors = useCallback(async () => {
+    if (bulkRevertCount === 0) return;
+    const displayDate = new Date(BROKERSNAPSHOT_BULK_ERROR_DATE + 'T12:00:00').toLocaleDateString(
+      'en-US',
+      { month: 'short', day: 'numeric', year: 'numeric' }
+    );
+    if (
+      !window.confirm(
+        `Revert ${bulkRevertCount} client(s) wrongly set to Cancellation ${displayDate}? They will be set back to OK. Real cancellations on other dates are not changed.`
+      )
+    ) {
+      return;
+    }
+    setReverting(true);
+    try {
+      const { reverted_count } = await revertBulkIncorrectCancellations(effectiveOwnerId);
+      window.alert(`Reverted ${reverted_count} client(s) to OK.`);
+      await loadData();
+      onRefreshInsurance?.();
+    } catch (err) {
+      window.alert(err instanceof Error ? err.message : String(err));
+    } finally {
+      setReverting(false);
+    }
+  }, [bulkRevertCount, effectiveOwnerId, loadData, onRefreshInsurance]);
 
   const handleClearData = useCallback(async () => {
     if (
@@ -212,7 +276,7 @@ export function ApiMonitoringPage({
       ? `Sync selected (${selectedClientIds.size})`
       : `Sync all (${syncableClients.length})`;
 
-  const canApprove = pendingLogs.length > 0 || pendingSuggestions.length > 0;
+  const canApprove = pendingLogs.length > 0 || approvableSuggestions.length > 0;
 
   return (
     <div className="flex flex-col h-[calc(100vh-5rem)] overflow-hidden -my-4">
@@ -224,11 +288,21 @@ export function ApiMonitoringPage({
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
+          {bulkRevertCount > 0 && (
+            <button
+              type="button"
+              className="btn btn-secondary text-xs border-amber-500/40 text-amber-700 dark:text-amber-400"
+              onClick={() => void handleRevertBulkErrors()}
+              disabled={reverting || syncing || approvingAll || clearing}
+            >
+              {reverting ? 'Reverting…' : `Revert bulk errors (${bulkRevertCount})`}
+            </button>
+          )}
           <button
             type="button"
             className="btn btn-secondary text-xs"
             onClick={() => void handleClearData()}
-            disabled={clearing || syncing || approvingAll}
+            disabled={clearing || syncing || approvingAll || reverting}
           >
             {clearing ? 'Clearing…' : 'Clear data'}
           </button>
@@ -236,7 +310,7 @@ export function ApiMonitoringPage({
             type="button"
             className="btn btn-secondary text-xs"
             onClick={() => setShowClientPicker((v) => !v)}
-            disabled={syncing}
+            disabled={syncing || reverting}
           >
             {showClientPicker ? 'Hide picker' : 'Pick clients'}
           </button>
@@ -244,7 +318,7 @@ export function ApiMonitoringPage({
             type="button"
             className="btn btn-primary text-xs active:scale-[0.98] transition-transform"
             onClick={() => void handleRunSync()}
-            disabled={syncing || syncableClients.length === 0}
+            disabled={syncing || syncableClients.length === 0 || reverting}
           >
             {syncLabel}
           </button>
@@ -329,12 +403,6 @@ export function ApiMonitoringPage({
                 <ul className="divide-y divide-border/60">
                   {pendingLogs.map((log) => {
                     const date = pendingDateFromLog(log);
-                    const alreadyInInsurance = clientInsurance.some(
-                      (c) =>
-                        c.id === log.client_insurance_id &&
-                        (c.status ?? '').toLowerCase().includes('cancellation') &&
-                        c.expiration_date === date
-                    );
                     return (
                       <li
                         key={log.id}
@@ -350,15 +418,9 @@ export function ApiMonitoringPage({
                             effective
                           </div>
                         </div>
-                        {alreadyInInsurance ? (
-                          <span className="text-[10px] uppercase tracking-wide text-emerald-600 bg-emerald-500/10 px-2 py-0.5 rounded">
-                            In system
-                          </span>
-                        ) : (
-                          <span className="text-[10px] uppercase tracking-wide text-amber-700 bg-amber-500/10 px-2 py-0.5 rounded">
-                            New
-                          </span>
-                        )}
+                        <span className="text-[10px] uppercase tracking-wide text-amber-700 bg-amber-500/10 px-2 py-0.5 rounded">
+                          New
+                        </span>
                       </li>
                     );
                   })}

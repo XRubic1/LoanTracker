@@ -1592,15 +1592,29 @@ export async function applyPendingCancellation(
   }
 }
 
-/** Approve all pending cancellations from last sync logs (and any open suggestions). */
+/** True when a suggestion/log should not be bulk-approved. */
+function isApprovablePendingCancellation(
+  reason: unknown,
+  alreadyInInsurance: unknown
+): boolean {
+  if (alreadyInInsurance === true) return false;
+  if (reason === 'lapsed') return false;
+  return reason === 'pending' || reason == null;
+}
+
+/** Approve FMCSA pending cancellations only (skips lapsed / already-recorded). */
 export async function approveAllCancellationSuggestions(
   ownerId: string,
   userId: string,
   pendingLogs: BrokerSnapshotApiLog[] = []
-): Promise<{ approved: number; failed: number }> {
+): Promise<{ approved: number; failed: number; skipped: number }> {
+  const supabase = getSupabase();
+  if (!supabase) throw new Error('Supabase not configured');
+
   const seen = new Set<number>();
   let approved = 0;
   let failed = 0;
+  let skipped = 0;
 
   for (const log of pendingLogs) {
     if (!log.cancellation_detected || !log.client_insurance_id) continue;
@@ -1611,6 +1625,21 @@ export async function approveAllCancellationSuggestions(
         ? log.response_summary.pending_cancellation_date
         : null);
     if (!date || seen.has(log.client_insurance_id)) continue;
+
+    const { data: insuranceRow } = await supabase
+      .from('client_insurance')
+      .select('status, expiration_date')
+      .eq('id', log.client_insurance_id)
+      .maybeSingle();
+    const status = (insuranceRow?.status ?? '').toLowerCase();
+    const exp = insuranceRow?.expiration_date ?? null;
+    const alreadyRecorded =
+      status.includes('cancellation') && exp === date;
+    if (!isApprovablePendingCancellation('pending', alreadyRecorded)) {
+      skipped++;
+      continue;
+    }
+
     seen.add(log.client_insurance_id);
     try {
       await applyPendingCancellation(log.client_insurance_id, date, userId, log.dot);
@@ -1623,6 +1652,12 @@ export async function approveAllCancellationSuggestions(
   const pending = await fetchPendingCancellationSuggestions(ownerId);
   for (const suggestion of pending) {
     if (seen.has(suggestion.client_insurance_id)) continue;
+    const reason = suggestion.source_data?.reason;
+    const alreadyInInsurance = suggestion.source_data?.already_in_insurance;
+    if (!isApprovablePendingCancellation(reason, alreadyInInsurance)) {
+      skipped++;
+      continue;
+    }
     seen.add(suggestion.client_insurance_id);
     try {
       await approveCancellationSuggestion(suggestion.id, userId);
@@ -1632,7 +1667,43 @@ export async function approveAllCancellationSuggestions(
     }
   }
 
-  return { approved, failed };
+  return { approved, failed, skipped };
+}
+
+/** Date used for mistaken bulk "lapsed" approvals (Approve all on sync day). */
+export const BROKERSNAPSHOT_BULK_ERROR_DATE = '2026-06-10';
+
+/** Count client_insurance rows that match a bulk-error cancellation date. */
+export function countBulkCancellationReverts(
+  clientInsurance: ClientInsurance[],
+  ownerId: string,
+  cancellationDate: string = BROKERSNAPSHOT_BULK_ERROR_DATE
+): number {
+  return clientInsurance.filter(
+    (c) =>
+      (c.owner_id ?? ownerId) === ownerId &&
+      (c.status ?? '').toLowerCase().includes('cancellation') &&
+      c.expiration_date === cancellationDate
+  ).length;
+}
+
+/** Revert mistaken bulk cancellations for one date (status → OK, clear expiration). */
+export async function revertBulkIncorrectCancellations(
+  ownerId: string,
+  cancellationDate: string = BROKERSNAPSHOT_BULK_ERROR_DATE
+): Promise<{ reverted_count: number; cancellation_date: string }> {
+  const supabase = getSupabase();
+  if (!supabase) throw new Error('Supabase not configured');
+  const { data, error } = await supabase.rpc('revert_brokersnapshot_bulk_cancellations', {
+    p_owner_id: ownerId,
+    p_cancellation_date: cancellationDate,
+  });
+  if (error) throw error;
+  const result = (data ?? {}) as { reverted_count?: number; cancellation_date?: string };
+  return {
+    reverted_count: result.reverted_count ?? 0,
+    cancellation_date: result.cancellation_date ?? cancellationDate,
+  };
 }
 
 /** Clear BrokerSnapshot monitoring data for one owner team. */
