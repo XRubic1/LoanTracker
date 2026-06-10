@@ -143,6 +143,7 @@ export default function App() {
     addWorksheetEntry,
     updateWorksheetEntryById,
     removeWorksheetEntry,
+    clearWorksheetActivityInRange,
   } = useData(effectiveOwnerId ?? null, user?.id ?? null);
 
   const tabAccess = useMemo(
@@ -361,7 +362,7 @@ export default function App() {
       toAdd: Omit<Client, 'id'>[];
       toUpdate: Client[];
       toDelete: Client[];
-      toAddInsurance: Array<{ client: string; mc: string }>;
+      toAddInsurance: Array<{ client: string; mc: string; dot: string }>;
     }) => {
       const errors: string[] = [];
       for (const client of batch.toUpdate) {
@@ -378,7 +379,7 @@ export default function App() {
           await addClientInsurance({
             client: ins.client.trim(),
             mc: ins.mc.trim(),
-            dot: '',
+            dot: ins.dot.trim(),
             status: 'OK',
             expiration_date: null,
             last_cancellation_date: null,
@@ -628,6 +629,7 @@ export default function App() {
             clients={clients}
             clientInsurance={clientInsurance}
             ownerId={effectiveOwnerId}
+            clearWorksheetActivityInRange={clearWorksheetActivityInRange}
           />
         )}
         {page === 'admin' && showAdminNav && <SuperAdminDashboard />}

@@ -29,6 +29,7 @@ import {
   insertWorksheetEntry,
   updateWorksheetEntry,
   deleteWorksheetEntryById,
+  deleteWorksheetEntriesInRange,
 } from '@/lib/supabase-db';
 
 export interface UseDataResult {
@@ -75,6 +76,11 @@ export interface UseDataResult {
   ) => Promise<WorksheetEntry>;
   updateWorksheetEntryById: (id: number, entry: WorksheetEntry) => Promise<WorksheetEntry>;
   removeWorksheetEntry: (id: number) => Promise<void>;
+  clearWorksheetActivityInRange: (
+    dateFrom: string,
+    dateTo: string,
+    createdBy?: string
+  ) => Promise<void>;
 }
 
 export function useData(ownerId: string | null, userId: string | null = null): UseDataResult {
@@ -426,6 +432,20 @@ export function useData(ownerId: string | null, userId: string | null = null): U
     setWorksheetEntries((prev) => prev.filter((e) => e.id !== id));
   }, []);
 
+  const clearWorksheetActivityInRange = useCallback(
+    async (dateFrom: string, dateTo: string, createdBy?: string) => {
+      await deleteWorksheetEntriesInRange(dateFrom, dateTo, createdBy);
+      setWorksheetEntries((prev) =>
+        prev.filter((e) => {
+          if (e.work_date < dateFrom || e.work_date > dateTo) return true;
+          if (createdBy && e.created_by !== createdBy) return true;
+          return false;
+        })
+      );
+    },
+    []
+  );
+
   return {
     loans,
     reserves,
@@ -464,5 +484,6 @@ export function useData(ownerId: string | null, userId: string | null = null): U
     addWorksheetEntry,
     updateWorksheetEntryById,
     removeWorksheetEntry,
+    clearWorksheetActivityInRange,
   };
 }

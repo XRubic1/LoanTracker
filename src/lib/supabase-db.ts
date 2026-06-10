@@ -259,6 +259,26 @@ export async function deleteWorksheetEntryById(id: number): Promise<void> {
   if (error) throw error;
 }
 
+/** Delete worksheet batches in a work_date range (RLS-scoped to tenant). */
+export async function deleteWorksheetEntriesInRange(
+  dateFrom: string,
+  dateTo: string,
+  createdBy?: string
+): Promise<void> {
+  const supabase = getSupabase();
+  if (!supabase) throw new Error('Supabase not configured');
+  let query = supabase
+    .from('worksheet_entries')
+    .delete()
+    .gte('work_date', dateFrom)
+    .lte('work_date', dateTo);
+  if (createdBy) {
+    query = query.eq('created_by', createdBy);
+  }
+  const { error } = await query;
+  if (error) throw error;
+}
+
 // --- Company groups (platform admin) ---
 
 export async function fetchCompanyGroups(): Promise<OwnerCompanyGroup[]> {

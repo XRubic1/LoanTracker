@@ -9,6 +9,8 @@ export interface ClientImportPreviewRow {
   payload: Omit<Client, 'id'>;
   /** Optional MC value from template (column H). */
   mc: string | null;
+  /** Optional DOT value from template (column I). */
+  dot: string | null;
   status: 'new' | 'duplicate' | 'override' | 'invalid';
   /** Set when status is duplicate or override. */
   existingClientId?: number;
@@ -30,6 +32,7 @@ export const CLIENT_IMPORT_HEADERS = [
   'Client Reviewed',
   'Verification Days',
   'MC',
+  'DOT',
 ] as const;
 
 const HEADER_ALIASES: Record<string, string[]> = {
@@ -41,6 +44,7 @@ const HEADER_ALIASES: Record<string, string[]> = {
   new_client_reviewed: ['client reviewed', 'reviewed', 'new client reviewed', 'verified'],
   verification_days: ['verification days', 'verification_days', 'days'],
   mc: ['mc', 'm.c.', 'm c'],
+  dot: ['dot', 'usdot', 'us dot', 'd.o.t.'],
 };
 
 function pad2(n: number): string {
@@ -161,6 +165,7 @@ export async function parseClientsExcelFile(
         rowNumber,
         payload: emptyPayload(nameRaw),
         mc: null,
+        dot: null,
         status: 'invalid',
         message: 'Duplicate name in file',
       });
@@ -175,6 +180,7 @@ export async function parseClientsExcelFile(
         rowNumber,
         payload: emptyPayload(nameRaw),
         mc: null,
+        dot: null,
         status: 'invalid',
         message: 'Expenses must be Wire or ACH',
       });
@@ -208,6 +214,7 @@ export async function parseClientsExcelFile(
           rowNumber,
           payload: emptyPayload(nameRaw),
           mc: null,
+          dot: null,
           status: 'invalid',
           message: 'Verification Days must be a positive number or "always"',
         });
@@ -233,6 +240,8 @@ export async function parseClientsExcelFile(
     };
     const mcRaw = String(cell(row, headerMap.mc) ?? '').trim();
     const mc = mcRaw ? mcRaw : null;
+    const dotRaw = String(cell(row, headerMap.dot) ?? '').trim();
+    const dot = dotRaw ? dotRaw : null;
 
     const existingClient = existingByName.get(key);
     if (existingClient) {
@@ -241,6 +250,7 @@ export async function parseClientsExcelFile(
           rowNumber,
           payload,
           mc,
+          dot,
           status: 'override',
           existingClientId: existingClient.id,
           message: 'Will update existing client',
@@ -250,13 +260,14 @@ export async function parseClientsExcelFile(
           rowNumber,
           payload,
           mc,
+          dot,
           status: 'duplicate',
           existingClientId: existingClient.id,
           message: 'Already in Clients list',
         });
       }
     } else {
-      rows.push({ rowNumber, payload, mc, status: 'new' });
+      rows.push({ rowNumber, payload, mc, dot, status: 'new' });
     }
   }
 
@@ -285,9 +296,9 @@ export async function downloadClientsImportTemplate(): Promise<void> {
   const XLSX = await import('xlsx');
   const example: string[][] = [
     [...CLIENT_IMPORT_HEADERS],
-    ['Acme Transport', 'Wire', 'Call before billing', 'YES', '2026-01-15', 'NO', '30', 'MC-123456'],
-    ['Beta Logistics', 'ACH', '', 'NO', '', '', '', ''],
-    ['Trusted Partner', 'Wire', '', 'YES', '2026-01-01', 'YES', 'always', 'MC-777'],
+    ['Acme Transport', 'Wire', 'Call before billing', 'YES', '2026-01-15', 'NO', '30', 'MC-123456', 'DOT-987654'],
+    ['Beta Logistics', 'ACH', '', 'NO', '', '', '', '', ''],
+    ['Trusted Partner', 'Wire', '', 'YES', '2026-01-01', 'YES', 'always', 'MC-777', 'DOT-111222'],
   ];
   const worksheet = XLSX.utils.aoa_to_sheet(example);
   worksheet['!cols'] = CLIENT_IMPORT_HEADERS.map((h) => ({

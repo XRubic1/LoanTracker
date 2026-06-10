@@ -20,7 +20,7 @@ import type { UseDataResult } from '@/hooks/useData';
 import type { Client, ClientInsurance, TeamMember, WorksheetEntry } from '@/types';
 
 interface UserActivityPageProps
-  extends Pick<UseDataResult, 'worksheetEntries' | 'clients' | 'clientInsurance'> {
+  extends Pick<UseDataResult, 'worksheetEntries' | 'clients' | 'clientInsurance' | 'clearWorksheetActivityInRange'> {
   ownerId: string;
 }
 
@@ -37,6 +37,7 @@ export function UserActivityPage({
   clients,
   clientInsurance,
   ownerId,
+  clearWorksheetActivityInRange,
 }: UserActivityPageProps) {
   const week = getWeekBoundsDateOnly();
   const [dateFrom, setDateFrom] = useState(week.start);
@@ -46,6 +47,7 @@ export function UserActivityPage({
   const [issuesExpanded, setIssuesExpanded] = useState(false);
   const [teamMembers, setTeamMembers] = useState<TeamMember[]>([]);
   const [exporting, setExporting] = useState(false);
+  const [clearing, setClearing] = useState(false);
   const [highlightEntryId, setHighlightEntryId] = useState<number | null>(null);
 
   useEffect(() => {
@@ -146,6 +148,40 @@ export function UserActivityPage({
     }
   }, [filtered, clientsById, ownerId, teamMembers]);
 
+  const handleClearActivity = useCallback(async () => {
+    if (filtered.length === 0) return;
+    const userLabel =
+      userFilter === 'all'
+        ? 'all users'
+        : authorOptions.find((o) => o.id === userFilter)?.label ?? 'selected user';
+    const ok = window.confirm(
+      `Permanently delete ${filtered.length} worksheet batch${filtered.length !== 1 ? 'es' : ''} ` +
+        `from ${dateFrom} to ${dateTo} (${userLabel})?\n\nThis cannot be undone.`
+    );
+    if (!ok) return;
+    setClearing(true);
+    try {
+      await clearWorksheetActivityInRange(
+        dateFrom,
+        dateTo,
+        userFilter === 'all' ? undefined : userFilter
+      );
+      setHighlightEntryId(null);
+      setViewMode('all');
+    } catch (err) {
+      window.alert(err instanceof Error ? err.message : String(err));
+    } finally {
+      setClearing(false);
+    }
+  }, [
+    filtered.length,
+    userFilter,
+    authorOptions,
+    dateFrom,
+    dateTo,
+    clearWorksheetActivityInRange,
+  ]);
+
   const issuePills: { label: string; key: string }[] = [
     { label: `${issueSummary.get('unverified') ?? 0} unverified`, key: 'unverified' },
     { label: `${issueSummary.get('unknown_client') ?? 0} not on list`, key: 'unknown_client' },
@@ -161,14 +197,24 @@ export function UserActivityPage({
       {/* ── Page header ── */}
       <div className="page-header">
         <h1 className="page-title">User Activity</h1>
-        <button
-          type="button"
-          onClick={() => void handleExport()}
-          disabled={exporting || filtered.length === 0}
-          className="btn-primary disabled:opacity-50"
-        >
-          {exporting ? 'Exporting…' : 'Export Excel'}
-        </button>
+        <div className="flex flex-wrap gap-2 justify-end">
+          <button
+            type="button"
+            onClick={() => void handleClearActivity()}
+            disabled={clearing || filtered.length === 0}
+            className="inline-flex items-center gap-1.5 py-1.5 px-3.5 rounded-lg border border-red/40 text-xs font-medium text-red bg-transparent transition-all hover:bg-red/10 disabled:opacity-50"
+          >
+            {clearing ? 'Clearing…' : 'Clear activity in range'}
+          </button>
+          <button
+            type="button"
+            onClick={() => void handleExport()}
+            disabled={exporting || filtered.length === 0}
+            className="btn-primary disabled:opacity-50"
+          >
+            {exporting ? 'Exporting…' : 'Export Excel'}
+          </button>
+        </div>
       </div>
 
       {/* ── Filter toolbar ── */}

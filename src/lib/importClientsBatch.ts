@@ -6,7 +6,7 @@ export interface ClientImportBatch {
   toAdd: Omit<Client, 'id'>[];
   toUpdate: Client[];
   toDelete: Client[];
-  toAddInsurance: Array<{ client: string; mc: string }>;
+  toAddInsurance: Array<{ client: string; mc: string; dot: string }>;
 }
 
 /** Build add/update/delete lists from preview rows and import options. */
@@ -23,16 +23,17 @@ export function buildClientImportBatch(
 
   const toAdd: Omit<Client, 'id'>[] = [];
   const toUpdate: Client[] = [];
-  const toAddInsurance: Array<{ client: string; mc: string }> = [];
+  const toAddInsurance: Array<{ client: string; mc: string; dot: string }> = [];
   const insuranceQueuedNames = new Set<string>();
 
   for (const row of preview) {
     if (row.status === 'invalid') continue;
-    const mc = row.mc?.trim();
-    if (mc) {
+    const mc = row.mc?.trim() ?? '';
+    const dot = row.dot?.trim() ?? '';
+    if (mc || dot) {
       const clientKey = normalizeClientName(row.payload.name);
       if (!insuranceClientNames.has(clientKey) && !insuranceQueuedNames.has(clientKey)) {
-        toAddInsurance.push({ client: row.payload.name.trim(), mc });
+        toAddInsurance.push({ client: row.payload.name.trim(), mc, dot });
         insuranceQueuedNames.add(clientKey);
       }
     }

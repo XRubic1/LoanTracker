@@ -6,13 +6,14 @@ import {
   parseClientsExcelFile,
   type ClientImportPreviewRow,
 } from '@/lib/importClientsExcel';
+import { printClientsList } from '@/lib/printClientsList';
 import type { Client, ClientInsurance } from '@/types';
 
 export interface ClientImportResult {
   toAdd: Omit<Client, 'id'>[];
   toUpdate: Client[];
   toDelete: Client[];
-  toAddInsurance: Array<{ client: string; mc: string }>;
+  toAddInsurance: Array<{ client: string; mc: string; dot: string }>;
 }
 
 interface ImportClientsModalProps {
@@ -145,7 +146,7 @@ export function ImportClientsModal({
       <p className="text-[13px] text-muted2 mb-4">
         Upload an Excel file (.xlsx, .xls) with client details. Download the template for the correct
         columns: Client Name, Expenses (Wire or ACH), Warning Note, New Client, Started Date, Client
-        Reviewed, Verification Days (number or &quot;always&quot;), MC.
+        Reviewed, Verification Days (number or &quot;always&quot;), MC, DOT.
       </p>
 
       <div className="flex flex-wrap gap-2 mb-4">
@@ -155,6 +156,22 @@ export function ImportClientsModal({
           className="py-2 px-3 rounded-lg border border-border text-xs font-medium text-muted2 hover:border-accent hover:text-accent"
         >
           Download template
+        </button>
+        <button
+          type="button"
+          onClick={() => printClientsList(clients, clientInsurance)}
+          disabled={clients.length === 0 && clientInsurance.length === 0}
+          className="inline-flex items-center gap-1.5 py-2 px-3 rounded-lg border border-border text-xs font-medium text-muted2 hover:border-accent hover:text-accent disabled:opacity-50"
+        >
+          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+            <path
+              strokeWidth={1.6}
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"
+            />
+          </svg>
+          Print client list
         </button>
         <label className="py-2 px-3 rounded-lg border border-accent/50 bg-accent/5 text-xs font-medium text-accent cursor-pointer hover:bg-accent/10">
           Choose Excel file
@@ -237,6 +254,7 @@ export function ImportClientsModal({
                   <th className="py-2 px-2">Warning</th>
                   <th className="py-2 px-2">New</th>
                   <th className="py-2 px-2">MC</th>
+                  <th className="py-2 px-2">DOT</th>
                   <th className="py-2 px-2">Status</th>
                 </tr>
               </thead>
@@ -264,6 +282,7 @@ export function ImportClientsModal({
                       {row.payload.is_new_client ? 'YES' : 'NO'}
                     </td>
                     <td className="py-1.5 px-2">{row.mc ?? '—'}</td>
+                    <td className="py-1.5 px-2">{row.dot ?? '—'}</td>
                     <td className="py-1.5 px-2">
                       {row.status === 'new' && <span className="text-green">New</span>}
                       {row.status === 'override' && (
