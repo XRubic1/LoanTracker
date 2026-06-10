@@ -38,6 +38,21 @@
 
 Do not commit `.env` (with real keys) to version control.
 
+### BrokerSnapshot API (insurance monitoring)
+
+1. Run migration `supabase/migrations/034_brokersnapshot_monitoring.sql`.
+2. Deploy the edge function:
+   ```bash
+   supabase functions deploy brokersnapshot-sync
+   ```
+3. In **Supabase Dashboard → Edge Functions → Secrets**, set:
+   - `BROKERSNAPSHOT_API_TOKEN` — your BrokerSnapshot API bearer token (never put this in `.env` or frontend code)
+   - `CRON_SECRET` — optional shared secret for scheduled invocations
+4. Schedule daily sync (6:00 AM UTC recommended):
+   - **Dashboard → Edge Functions → brokersnapshot-sync → Schedules**, or
+   - Use `pg_cron` + `net.http_post` to call the function URL with header `x-cron-secret: <CRON_SECRET>`
+5. Grant team members the **API** tab via **Users → Tab access** to view logs and approve cancellation suggestions.
+
 ### 3. Install and run
 
 ```bash

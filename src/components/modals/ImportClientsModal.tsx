@@ -6,6 +6,7 @@ import {
   parseClientsExcelFile,
   type ClientImportPreviewRow,
 } from '@/lib/importClientsExcel';
+import { exportClientsListExcel } from '@/lib/clientsListReport';
 import { printClientsList } from '@/lib/printClientsList';
 import type { Client, ClientInsurance } from '@/types';
 
@@ -39,6 +40,7 @@ export function ImportClientsModal({
   const [importing, setImporting] = useState(false);
   const [overrideExisting, setOverrideExisting] = useState(false);
   const [deleteNotInFile, setDeleteNotInFile] = useState(false);
+  const [exportingList, setExportingList] = useState(false);
 
   const batch = buildClientImportBatch(preview, clients, clientInsurance, {
     overrideExisting,
@@ -132,6 +134,17 @@ export function ImportClientsModal({
     }
   };
 
+  const handleExportClientList = async () => {
+    setExportingList(true);
+    try {
+      await exportClientsListExcel(clients, clientInsurance);
+    } catch (err) {
+      window.alert(err instanceof Error ? err.message : String(err));
+    } finally {
+      setExportingList(false);
+    }
+  };
+
   const importSummary = [
     batch.toAdd.length > 0 && `${batch.toAdd.length} new`,
     batch.toUpdate.length > 0 && `${batch.toUpdate.length} update`,
@@ -156,6 +169,14 @@ export function ImportClientsModal({
           className="py-2 px-3 rounded-lg border border-border text-xs font-medium text-muted2 hover:border-accent hover:text-accent"
         >
           Download template
+        </button>
+        <button
+          type="button"
+          onClick={() => void handleExportClientList()}
+          disabled={exportingList || (clients.length === 0 && clientInsurance.length === 0)}
+          className="inline-flex items-center gap-1.5 py-2 px-3 rounded-lg border border-border text-xs font-medium text-muted2 hover:border-accent hover:text-accent disabled:opacity-50"
+        >
+          {exportingList ? 'Exporting…' : 'Export client list'}
         </button>
         <button
           type="button"

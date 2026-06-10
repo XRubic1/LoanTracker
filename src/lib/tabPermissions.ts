@@ -10,6 +10,7 @@ export const ASSIGNABLE_PAGE_IDS: PageId[] = [
   'aaaPayments',
   'clients',
   'clientInsurance',
+  'api',
 ];
 
 /** Human-readable labels for nav / permissions UI. */
@@ -22,6 +23,7 @@ export const PAGE_LABELS: Record<PageId, string> = {
   worksheet: 'Worksheet',
   clients: 'Clients',
   clientInsurance: 'Client Insurance',
+  api: 'API',
   userActivity: 'User Activity',
   users: 'Users',
   admin: 'Super Admin',

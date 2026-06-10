@@ -12,6 +12,7 @@ import { ClientInsurancePage } from '@/pages/ClientInsurancePage';
 import { ClientsPage } from '@/pages/ClientsPage';
 import { WorksheetPage } from '@/pages/WorksheetPage';
 import { UserActivityPage } from '@/pages/UserActivityPage';
+import { ApiMonitoringPage } from '@/pages/ApiMonitoringPage';
 import { SuperAdminDashboard } from '@/pages/SuperAdminDashboard';
 import { CompanySuspendedBanner } from '@/components/CompanySuspendedBanner';
 import { TeamAdminWelcome } from '@/components/TeamAdminWelcome';
@@ -599,6 +600,14 @@ export default function App() {
             onAddInsurance={() => openAddInsurance()}
             onAddInsuranceForClient={openAddInsurance}
             onViewInsurance={setClientInsuranceDetailId}
+          />
+        )}
+        {page === 'api' && user && (
+          <ApiMonitoringPage
+            userId={user.id}
+            effectiveOwnerId={effectiveOwnerId}
+            clientInsurance={clientInsurance}
+            onRefreshInsurance={() => void refetch()}
           />
         )}
         {page === 'worksheet' && user && (

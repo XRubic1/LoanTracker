@@ -1,5 +1,4 @@
-import { buildClientInsuranceList } from '@/lib/clientInsuranceList';
-import { normalizeClientName } from '@/lib/importClients';
+import { buildClientsListRows } from '@/lib/clientsListReport';
 import type { Client, ClientInsurance } from '@/types';
 
 function escapeHtml(s: string): string {
@@ -10,37 +9,26 @@ function escapeHtml(s: string): string {
     .replace(/"/g, '&quot;');
 }
 
+function displayCell(value: string): string {
+  return value.trim() || '—';
+}
+
 /** Print current client registry with MC and DOT (from insurance when linked). */
 export function printClientsList(clients: Client[], clientInsurance: ClientInsurance[]): void {
   if (typeof window === 'undefined') return;
 
-  const insuranceByName = new Map(
-    clientInsurance.map((ci) => [normalizeClientName(ci.client), ci] as const)
-  );
-  const items = buildClientInsuranceList(clientInsurance, clients);
-
-  const rows = items
-    .map((item) => {
-      const name = item.kind === 'insurance' ? item.record.client : item.client.name;
-      const registry = item.kind === 'registry' ? item.client : clients.find(
-        (c) => normalizeClientName(c.name) === normalizeClientName(name)
-      );
-      const insurance =
-        item.kind === 'insurance' ? item.record : insuranceByName.get(normalizeClientName(name));
-      const expenses = registry?.expenses ?? '—';
-      const warning = registry?.warning_note?.trim() || '—';
-      const mc = insurance?.mc?.trim() || '—';
-      const dot = insurance?.dot?.trim() || '—';
-
-      return `
+  const rows = buildClientsListRows(clients, clientInsurance);
+  const tableRows = rows
+    .map(
+      (r) => `
     <tr>
-      <td>${escapeHtml(name)}</td>
-      <td>${escapeHtml(expenses)}</td>
-      <td class="wrap">${escapeHtml(warning)}</td>
-      <td class="mono">${escapeHtml(mc)}</td>
-      <td class="mono">${escapeHtml(dot)}</td>
-    </tr>`;
-    })
+      <td>${escapeHtml(r.client)}</td>
+      <td>${escapeHtml(displayCell(r.expenses))}</td>
+      <td class="wrap">${escapeHtml(displayCell(r.warning))}</td>
+      <td class="mono">${escapeHtml(displayCell(r.mc))}</td>
+      <td class="mono">${escapeHtml(displayCell(r.dot))}</td>
+    </tr>`
+    )
     .join('');
 
   const printDate = new Date().toLocaleDateString('en-US', {
@@ -118,7 +106,7 @@ export function printClientsList(clients: Client[], clientInsurance: ClientInsur
     <div class="sub">Clients List</div>
   </div>
   <h1>Client registry</h1>
-  <div class="meta">Printed ${printDate} · ${items.length} client${items.length !== 1 ? 's' : ''}</div>
+  <div class="meta">Printed ${printDate} · ${rows.length} client${rows.length !== 1 ? 's' : ''}</div>
   <table>
     <thead>
       <tr>
@@ -130,7 +118,7 @@ export function printClientsList(clients: Client[], clientInsurance: ClientInsur
       </tr>
     </thead>
     <tbody>
-      ${rows}
+      ${tableRows}
     </tbody>
   </table>
   <div class="footer">TRUFUNDING LLC · Clients List</div>

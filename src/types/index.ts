@@ -123,6 +123,7 @@ export type PageId =
   | 'worksheet'
   | 'clients'
   | 'userActivity'
+  | 'api'
   | 'admin';
 
 /** Client expense payment method. */
@@ -327,6 +328,116 @@ export interface InsuranceVerificationRow {
   owner_id: string | null;
   last_checked_date: string | null;
   checked_by: string | null;
+}
+
+/** BrokerSnapshot sync run status. */
+export type BrokerSnapshotSyncStatus = 'running' | 'success' | 'partial' | 'failed';
+
+/** One daily or manual BrokerSnapshot sync run. */
+export interface BrokerSnapshotSyncRun {
+  id: number;
+  status: BrokerSnapshotSyncStatus;
+  trigger_source: 'cron' | 'manual';
+  clients_checked: number;
+  cancellations_found: number;
+  errors_count: number;
+  error_summary: string | null;
+  started_at: string;
+  finished_at: string | null;
+  created_at?: string;
+}
+
+export interface BrokerSnapshotSyncRunRow {
+  id: number;
+  status: BrokerSnapshotSyncStatus;
+  trigger_source: 'cron' | 'manual';
+  clients_checked: number;
+  cancellations_found: number;
+  errors_count: number;
+  error_summary: string | null;
+  started_at: string;
+  finished_at: string | null;
+  created_at?: string;
+}
+
+/** Per-client API call log during a sync run. */
+export interface BrokerSnapshotApiLog {
+  id: number;
+  sync_run_id: number;
+  client_insurance_id: number | null;
+  owner_id: string | null;
+  client_name: string | null;
+  mc: string | null;
+  dot: string | null;
+  request_path: string | null;
+  http_status: number | null;
+  success: boolean;
+  error_message: string | null;
+  response_summary: Record<string, unknown> | null;
+  cancellation_detected: boolean;
+  cancellation_date: string | null;
+  duration_ms: number | null;
+  created_at: string;
+}
+
+export interface BrokerSnapshotApiLogRow {
+  id: number;
+  sync_run_id: number;
+  client_insurance_id: number | null;
+  owner_id: string | null;
+  client_name: string | null;
+  mc: string | null;
+  dot: string | null;
+  request_path: string | null;
+  http_status: number | null;
+  success: boolean;
+  error_message: string | null;
+  response_summary: Record<string, unknown> | null;
+  cancellation_detected: boolean;
+  cancellation_date: string | null;
+  duration_ms: number | null;
+  created_at: string;
+}
+
+/** Cancellation suggestion pending manual approval. */
+export type BrokerSnapshotSuggestionStatus = 'pending' | 'approved' | 'rejected' | 'superseded';
+
+export interface BrokerSnapshotCancellationSuggestion {
+  id: number;
+  sync_run_id: number | null;
+  client_insurance_id: number;
+  owner_id: string | null;
+  client_name: string | null;
+  mc: string | null;
+  suggested_cancellation_date: string;
+  suggested_dot: string | null;
+  policy_number: string | null;
+  insurance_company: string | null;
+  source_data: Record<string, unknown> | null;
+  review_status: BrokerSnapshotSuggestionStatus;
+  reviewed_by: string | null;
+  reviewed_at: string | null;
+  review_note: string | null;
+  created_at: string;
+}
+
+export interface BrokerSnapshotCancellationSuggestionRow {
+  id: number;
+  sync_run_id: number | null;
+  client_insurance_id: number;
+  owner_id: string | null;
+  client_name: string | null;
+  mc: string | null;
+  suggested_cancellation_date: string;
+  suggested_dot: string | null;
+  policy_number: string | null;
+  insurance_company: string | null;
+  source_data: Record<string, unknown> | null;
+  review_status: BrokerSnapshotSuggestionStatus;
+  reviewed_by: string | null;
+  reviewed_at: string | null;
+  review_note: string | null;
+  created_at: string;
 }
 
 /** Team member (owner's invited user) */

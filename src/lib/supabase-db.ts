@@ -27,6 +27,12 @@ import type {
   CompanyStatus,
   CompanyContext,
   PlatformAdmin,
+  BrokerSnapshotSyncRun,
+  BrokerSnapshotSyncRunRow,
+  BrokerSnapshotApiLog,
+  BrokerSnapshotApiLogRow,
+  BrokerSnapshotCancellationSuggestion,
+  BrokerSnapshotCancellationSuggestionRow,
 } from '@/types';
 import { AAA_PAYEES, CLIENT_EXPENSE_OPTIONS, type ClientExpenseType, type PageId } from '@/types';
 import { normalizeAllowedPages } from '@/lib/tabPermissions';
@@ -1355,4 +1361,393 @@ export async function updateAaaPayment(id: number, payment: AaaPayment): Promise
   const { data, error } = await supabase.from('aaa_payments').update(row).eq('id', id).select('*').single();
   if (error) throw error;
   return aaaPaymentFromRow(data as AaaPaymentRow)!;
+}
+
+// --- BrokerSnapshot API monitoring ---
+
+function syncRunFromRow(row: BrokerSnapshotSyncRunRow | null): BrokerSnapshotSyncRun | null {
+  if (!row) return null;
+  return {
+    id: row.id,
+    status: row.status,
+    trigger_source: row.trigger_source,
+    clients_checked: row.clients_checked,
+    cancellations_found: row.cancellations_found,
+    errors_count: row.errors_count,
+    error_summary: row.error_summary ?? null,
+    started_at: row.started_at,
+    finished_at: row.finished_at ?? null,
+    created_at: row.created_at,
+  };
+}
+
+function apiLogFromRow(row: BrokerSnapshotApiLogRow | null): BrokerSnapshotApiLog | null {
+  if (!row) return null;
+  return {
+    id: row.id,
+    sync_run_id: row.sync_run_id,
+    client_insurance_id: row.client_insurance_id ?? null,
+    owner_id: row.owner_id ?? null,
+    client_name: row.client_name ?? null,
+    mc: row.mc ?? null,
+    dot: row.dot ?? null,
+    request_path: row.request_path ?? null,
+    http_status: row.http_status ?? null,
+    success: row.success,
+    error_message: row.error_message ?? null,
+    response_summary: row.response_summary ?? null,
+    cancellation_detected: row.cancellation_detected,
+    cancellation_date: row.cancellation_date ?? null,
+    duration_ms: row.duration_ms ?? null,
+    created_at: row.created_at,
+  };
+}
+
+function suggestionFromRow(
+  row: BrokerSnapshotCancellationSuggestionRow | null
+): BrokerSnapshotCancellationSuggestion | null {
+  if (!row) return null;
+  return {
+    id: row.id,
+    sync_run_id: row.sync_run_id ?? null,
+    client_insurance_id: row.client_insurance_id,
+    owner_id: row.owner_id ?? null,
+    client_name: row.client_name ?? null,
+    mc: row.mc ?? null,
+    suggested_cancellation_date: row.suggested_cancellation_date,
+    suggested_dot: row.suggested_dot ?? null,
+    policy_number: row.policy_number ?? null,
+    insurance_company: row.insurance_company ?? null,
+    source_data: row.source_data ?? null,
+    review_status: row.review_status,
+    reviewed_by: row.reviewed_by ?? null,
+    reviewed_at: row.reviewed_at ?? null,
+    review_note: row.review_note ?? null,
+    created_at: row.created_at,
+  };
+}
+
+/** Fetch BrokerSnapshot sync runs within a date range (started_at). */
+export async function fetchBrokerSnapshotSyncRuns(
+  dateFrom: string,
+  dateTo: string
+): Promise<BrokerSnapshotSyncRun[]> {
+  const supabase = getSupabase();
+  if (!supabase) throw new Error('Supabase not configured');
+  const { data, error } = await supabase
+    .from('brokersnapshot_sync_runs')
+    .select('*')
+    .gte('started_at', `${dateFrom}T00:00:00`)
+    .lte('started_at', `${dateTo}T23:59:59`)
+    .order('started_at', { ascending: false });
+  if (error) throw error;
+  return (data as BrokerSnapshotSyncRunRow[] || []).map((row) => syncRunFromRow(row)!);
+}
+
+export interface FetchBrokerSnapshotApiLogsOptions {
+  syncRunId?: number;
+  dateFrom?: string;
+  dateTo?: string;
+  successOnly?: boolean;
+  errorsOnly?: boolean;
+  cancellationsOnly?: boolean;
+}
+
+/** Fetch API logs with optional filters. */
+export async function fetchBrokerSnapshotApiLogs(
+  options: FetchBrokerSnapshotApiLogsOptions = {}
+): Promise<BrokerSnapshotApiLog[]> {
+  const supabase = getSupabase();
+  if (!supabase) throw new Error('Supabase not configured');
+  let query = supabase.from('brokersnapshot_api_logs').select('*');
+  if (options.syncRunId != null) query = query.eq('sync_run_id', options.syncRunId);
+  if (options.dateFrom) query = query.gte('created_at', `${options.dateFrom}T00:00:00`);
+  if (options.dateTo) query = query.lte('created_at', `${options.dateTo}T23:59:59`);
+  if (options.successOnly) query = query.eq('success', true);
+  if (options.errorsOnly) query = query.eq('success', false);
+  if (options.cancellationsOnly) query = query.eq('cancellation_detected', true);
+  const { data, error } = await query.order('created_at', { ascending: false }).limit(500);
+  if (error) throw error;
+  return (data as BrokerSnapshotApiLogRow[] || []).map((row) => apiLogFromRow(row)!);
+}
+
+/** Fetch pending cancellation suggestions (newest first). */
+export async function fetchPendingCancellationSuggestions(
+  ownerId?: string
+): Promise<BrokerSnapshotCancellationSuggestion[]> {
+  const supabase = getSupabase();
+  if (!supabase) throw new Error('Supabase not configured');
+  let query = supabase
+    .from('brokersnapshot_cancellation_suggestions')
+    .select('*')
+    .eq('review_status', 'pending');
+  if (ownerId) query = query.eq('owner_id', ownerId);
+  const { data, error } = await query.order('created_at', { ascending: false });
+  if (error) throw error;
+  return (data as BrokerSnapshotCancellationSuggestionRow[] || []).map((row) => suggestionFromRow(row)!);
+}
+
+/** Fetch recent suggestions (all statuses) for history. */
+export async function fetchCancellationSuggestionsHistory(
+  limit = 100
+): Promise<BrokerSnapshotCancellationSuggestion[]> {
+  const supabase = getSupabase();
+  if (!supabase) throw new Error('Supabase not configured');
+  const { data, error } = await supabase
+    .from('brokersnapshot_cancellation_suggestions')
+    .select('*')
+    .order('created_at', { ascending: false })
+    .limit(limit);
+  if (error) throw error;
+  return (data as BrokerSnapshotCancellationSuggestionRow[] || []).map((row) => suggestionFromRow(row)!);
+}
+
+/** Approve a suggestion: update client_insurance and mark suggestion approved. */
+export async function approveCancellationSuggestion(
+  suggestionId: number,
+  userId: string
+): Promise<BrokerSnapshotCancellationSuggestion> {
+  const supabase = getSupabase();
+  if (!supabase) throw new Error('Supabase not configured');
+
+  const { data: suggestionRow, error: fetchError } = await supabase
+    .from('brokersnapshot_cancellation_suggestions')
+    .select('*')
+    .eq('id', suggestionId)
+    .eq('review_status', 'pending')
+    .single();
+  if (fetchError) throw fetchError;
+  const suggestion = suggestionFromRow(suggestionRow as BrokerSnapshotCancellationSuggestionRow)!;
+
+  const { data: insuranceRow, error: insuranceError } = await supabase
+    .from('client_insurance')
+    .select('*')
+    .eq('id', suggestion.client_insurance_id)
+    .single();
+  if (insuranceError) throw insuranceError;
+  const insurance = clientInsuranceFromRow(insuranceRow as ClientInsuranceRow)!;
+
+  await updateClientInsurance(suggestion.client_insurance_id, {
+    ...insurance,
+    status: 'cancellation',
+    expiration_date: suggestion.suggested_cancellation_date,
+    dot: suggestion.suggested_dot?.trim() || insurance.dot,
+  });
+
+  const { data: updated, error: updateError } = await supabase
+    .from('brokersnapshot_cancellation_suggestions')
+    .update({
+      review_status: 'approved',
+      reviewed_by: userId,
+      reviewed_at: new Date().toISOString(),
+    })
+    .eq('id', suggestionId)
+    .select('*')
+    .single();
+  if (updateError) throw updateError;
+  return suggestionFromRow(updated as BrokerSnapshotCancellationSuggestionRow)!;
+}
+
+/** Apply FMCSA pending cancellation to client_insurance (with or without a suggestion row). */
+export async function applyPendingCancellation(
+  clientInsuranceId: number,
+  cancellationDate: string,
+  userId: string,
+  suggestedDot?: string | null
+): Promise<void> {
+  const supabase = getSupabase();
+  if (!supabase) throw new Error('Supabase not configured');
+
+  const { data: insuranceRow, error: insuranceError } = await supabase
+    .from('client_insurance')
+    .select('*')
+    .eq('id', clientInsuranceId)
+    .single();
+  if (insuranceError) throw insuranceError;
+  const insurance = clientInsuranceFromRow(insuranceRow as ClientInsuranceRow)!;
+
+  await updateClientInsurance(clientInsuranceId, {
+    ...insurance,
+    status: 'cancellation',
+    expiration_date: cancellationDate,
+    dot: suggestedDot?.trim() || insurance.dot,
+  });
+
+  const { data: pendingSuggestion } = await supabase
+    .from('brokersnapshot_cancellation_suggestions')
+    .select('id')
+    .eq('client_insurance_id', clientInsuranceId)
+    .eq('review_status', 'pending')
+    .maybeSingle();
+
+  if (pendingSuggestion?.id) {
+    await supabase
+      .from('brokersnapshot_cancellation_suggestions')
+      .update({
+        review_status: 'approved',
+        reviewed_by: userId,
+        reviewed_at: new Date().toISOString(),
+      })
+      .eq('id', pendingSuggestion.id);
+  }
+}
+
+/** Approve all pending cancellations from last sync logs (and any open suggestions). */
+export async function approveAllCancellationSuggestions(
+  ownerId: string,
+  userId: string,
+  pendingLogs: BrokerSnapshotApiLog[] = []
+): Promise<{ approved: number; failed: number }> {
+  const seen = new Set<number>();
+  let approved = 0;
+  let failed = 0;
+
+  for (const log of pendingLogs) {
+    if (!log.cancellation_detected || !log.client_insurance_id) continue;
+    if (log.owner_id && log.owner_id !== ownerId) continue;
+    const date =
+      log.cancellation_date ??
+      (typeof log.response_summary?.pending_cancellation_date === 'string'
+        ? log.response_summary.pending_cancellation_date
+        : null);
+    if (!date || seen.has(log.client_insurance_id)) continue;
+    seen.add(log.client_insurance_id);
+    try {
+      await applyPendingCancellation(log.client_insurance_id, date, userId, log.dot);
+      approved++;
+    } catch {
+      failed++;
+    }
+  }
+
+  const pending = await fetchPendingCancellationSuggestions(ownerId);
+  for (const suggestion of pending) {
+    if (seen.has(suggestion.client_insurance_id)) continue;
+    seen.add(suggestion.client_insurance_id);
+    try {
+      await approveCancellationSuggestion(suggestion.id, userId);
+      approved++;
+    } catch {
+      failed++;
+    }
+  }
+
+  return { approved, failed };
+}
+
+/** Clear BrokerSnapshot monitoring data for one owner team. */
+export async function clearBrokerSnapshotMonitoringData(ownerId: string): Promise<{
+  suggestions_deleted: number;
+  logs_deleted: number;
+  sync_runs_deleted: number;
+}> {
+  const supabase = getSupabase();
+  if (!supabase) throw new Error('Supabase not configured');
+  const { data, error } = await supabase.rpc('clear_brokersnapshot_monitoring_data', {
+    p_owner_id: ownerId,
+  });
+  if (error) throw error;
+  const result = (data ?? {}) as {
+    suggestions_deleted?: number;
+    logs_deleted?: number;
+    sync_runs_deleted?: number;
+  };
+  return {
+    suggestions_deleted: result.suggestions_deleted ?? 0,
+    logs_deleted: result.logs_deleted ?? 0,
+    sync_runs_deleted: result.sync_runs_deleted ?? 0,
+  };
+}
+
+/** Reject a pending suggestion. */
+export async function rejectCancellationSuggestion(
+  suggestionId: number,
+  userId: string,
+  note?: string
+): Promise<BrokerSnapshotCancellationSuggestion> {
+  const supabase = getSupabase();
+  if (!supabase) throw new Error('Supabase not configured');
+  const { data, error } = await supabase
+    .from('brokersnapshot_cancellation_suggestions')
+    .update({
+      review_status: 'rejected',
+      reviewed_by: userId,
+      reviewed_at: new Date().toISOString(),
+      review_note: note?.trim() || null,
+    })
+    .eq('id', suggestionId)
+    .eq('review_status', 'pending')
+    .select('*')
+    .single();
+  if (error) throw error;
+  return suggestionFromRow(data as BrokerSnapshotCancellationSuggestionRow)!;
+}
+
+/** Parse edge function invoke errors into a user-readable message. */
+async function parseEdgeFunctionError(error: unknown): Promise<string> {
+  const base = error instanceof Error ? error.message : String(error);
+  const ctx = (error as { context?: Response })?.context;
+  if (ctx && typeof ctx.json === 'function') {
+    try {
+      const body = (await ctx.json()) as { error?: string; message?: string };
+      if (body.error) return body.error;
+      if (body.message) return body.message;
+    } catch {
+      // ignore JSON parse failure
+    }
+  }
+  if (base.includes('Failed to send a request to the Edge Function')) {
+    return (
+      'Edge function not reachable. Deploy it with: supabase functions deploy brokersnapshot-sync ' +
+      'and set BROKERSNAPSHOT_API_TOKEN in Supabase Dashboard → Edge Functions → Secrets.'
+    );
+  }
+  if (base.includes('non-2xx')) {
+    return `Edge function error: ${base}. Check Supabase → Edge Functions → brokersnapshot-sync → Logs.`;
+  }
+  return base;
+}
+
+export interface TriggerBrokerSnapshotSyncOptions {
+  /** When set, only these client_insurance rows are checked (manual test mode). */
+  clientInsuranceIds?: number[];
+}
+
+/** Trigger a manual BrokerSnapshot sync via edge function. */
+export async function triggerBrokerSnapshotSync(
+  options: TriggerBrokerSnapshotSyncOptions = {}
+): Promise<{
+  sync_run_id?: number;
+  status?: string;
+  clients_checked?: number;
+  cancellations_found?: number;
+  errors_count?: number;
+  error?: string;
+  message?: string;
+}> {
+  const supabase = getSupabase();
+  if (!supabase) throw new Error('Supabase not configured');
+  const body: { trigger: 'manual'; client_insurance_ids?: number[] } = { trigger: 'manual' };
+  if (options.clientInsuranceIds?.length) {
+    body.client_insurance_ids = options.clientInsuranceIds;
+  }
+  const { data, error } = await supabase.functions.invoke('brokersnapshot-sync', {
+    body,
+  });
+  if (error) {
+    throw new Error(await parseEdgeFunctionError(error));
+  }
+  const result = (data ?? {}) as {
+    sync_run_id?: number;
+    status?: string;
+    clients_checked?: number;
+    cancellations_found?: number;
+    errors_count?: number;
+    error?: string;
+    message?: string;
+  };
+  if (result.error) {
+    throw new Error(result.error);
+  }
+  return result;
 }

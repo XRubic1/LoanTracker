@@ -106,6 +106,15 @@ const navItems: { id: PageId; label: string; icon: React.ReactNode; ownerOnly?: 
     ),
   },
   {
+    id: 'api',
+    label: 'API',
+    icon: (
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+        <path d="M18 20V10M12 20V4M6 20v-6" />
+      </svg>
+    ),
+  },
+  {
     id: 'userActivity',
     label: 'User Activity',
     ownerOnly: true,

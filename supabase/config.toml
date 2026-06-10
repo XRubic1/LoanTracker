@@ -1,0 +1,10 @@
+# Supabase local development and deployment configuration.
+# See: https://supabase.com/docs/guides/cli/config
+
+[project]
+# Link to remote project: supabase link --project-ref <ref>
+
+[functions.brokersnapshot-sync]
+verify_jwt = false
+# Weekly schedule also set in migration 036 (pg_cron: Monday 06:00 UTC).
+# Dashboard: Integrations → Cron → brokersnapshot-sync → 0 6 * * 1
