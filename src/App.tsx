@@ -414,6 +414,7 @@ export default function App() {
         await addClient({
           name: payload.client.trim(),
           expenses: null,
+          email: null,
           warning_note: null,
           is_new_client: false,
           started_date: null,

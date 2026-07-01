@@ -137,6 +137,8 @@ export interface Client {
   name: string;
   /** Wire or ACH. */
   expenses: ClientExpenseType | null;
+  /** Contact email address(es), semicolon-separated when multiple. */
+  email: string | null;
   warning_note: string | null;
   is_new_client: boolean;
   started_date: string | null;
@@ -152,6 +154,7 @@ export interface ClientRow {
   owner_id: string | null;
   name: string;
   expenses: string | null;
+  email?: string | null;
   warning_note: string | null;
   is_new_client?: boolean;
   started_date?: string | null;

@@ -35,6 +35,7 @@ import type {
   BrokerSnapshotCancellationSuggestionRow,
 } from '@/types';
 import { AAA_PAYEES, CLIENT_EXPENSE_OPTIONS, type ClientExpenseType, type PageId } from '@/types';
+import { normalizeClientEmail } from '@/lib/clientEmails';
 import { normalizeAllowedPages } from '@/lib/tabPermissions';
 import { getSupabase } from './supabase';
 
@@ -92,6 +93,7 @@ function clientFromRow(row: ClientRow | null): Client | null {
     owner_id: row.owner_id ?? undefined,
     name: row.name,
     expenses: parseClientExpense(row.expenses),
+    email: normalizeClientEmail(row.email),
     warning_note: row.warning_note ?? null,
     is_new_client: Boolean(row.is_new_client ?? false) || verificationAlways,
     started_date: row.started_date ?? null,
@@ -108,6 +110,7 @@ function clientToRow(record: Client, ownerId?: string | null): Omit<ClientRow, '
     owner_id: ownerId ?? record.owner_id ?? null,
     name: record.name.trim(),
     expenses: record.expenses ?? null,
+    email: normalizeClientEmail(record.email),
     warning_note: record.warning_note?.trim() || null,
     is_new_client: isNewClient,
     started_date: isNewClient && record.started_date?.trim() ? record.started_date.trim() : null,

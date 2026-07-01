@@ -105,6 +105,7 @@ export function WorksheetEntryForm({
       id: 0,
       name: selectedInsurance.client,
       expenses: null,
+      email: null,
       warning_note: null,
       is_new_client: false,
       started_date: null,

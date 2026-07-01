@@ -3,6 +3,7 @@ import { Section } from '@/components/Section';
 import { TeamScopeFilter } from '@/components/TeamScopeFilter';
 import { useLinkedTeams } from '@/hooks/useLinkedTeams';
 import { matchesTeamScope, type TeamScopeFilterValue } from '@/lib/linkedTeams';
+import { copyClientEmails } from '@/lib/clientEmails';
 import {
   getNewClientsNeedingReview,
   getVerificationPeriodLabel,
@@ -32,6 +33,7 @@ export function ClientsPage({
   onDeleteClient,
 }: ClientsPageProps) {
   const [deletingId, setDeletingId] = useState<number | null>(null);
+  const [copyingEmails, setCopyingEmails] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<
     'all' | 'needs_review' | 'new_client' | 'always_verified'
@@ -72,8 +74,25 @@ export function ClientsPage({
     })
     .filter((c) => {
       if (!normalizedSearch) return true;
-      return c.name.toLowerCase().includes(normalizedSearch);
+      const haystack = `${c.name} ${c.email ?? ''}`.toLowerCase();
+      return haystack.includes(normalizedSearch);
     });
+
+  const handleCopyEmails = async () => {
+    setCopyingEmails(true);
+    try {
+      const { copied } = await copyClientEmails(list);
+      if (copied === 0) {
+        window.alert('No email addresses in the current list.');
+        return;
+      }
+      window.alert(`Copied ${copied} email address${copied !== 1 ? 'es' : ''} to clipboard.`);
+    } catch (err) {
+      window.alert(err instanceof Error ? err.message : String(err));
+    } finally {
+      setCopyingEmails(false);
+    }
+  };
 
   return (
     <>
@@ -87,6 +106,14 @@ export function ClientsPage({
       <div className="page-header">
         <h1 className="page-title">Clients</h1>
         <div className="flex flex-wrap gap-2">
+          <button
+            type="button"
+            onClick={() => void handleCopyEmails()}
+            disabled={copyingEmails || list.length === 0}
+            className="inline-flex items-center gap-1.5 py-1.5 px-3.5 rounded-lg border border-border text-xs font-medium text-muted2 bg-transparent transition-all hover:border-accent hover:text-accent hover:bg-accent/5 disabled:opacity-50"
+          >
+            {copyingEmails ? 'Copying…' : 'Copy all emails'}
+          </button>
           <button
             type="button"
             onClick={onImportClients}
@@ -123,10 +150,11 @@ export function ClientsPage({
 
       <Section title={`${list.length} client${list.length !== 1 ? 's' : ''}`}>
         <div className="overflow-x-auto -mx-1">
-          <table className="data-table w-full min-w-[640px]">
+          <table className="data-table w-full min-w-[720px]">
             <thead>
               <tr>
                 <th>Client</th>
+                <th>Email</th>
                 <th className="text-center">Expenses</th>
                 <th>Warning</th>
                 <th className="text-center">Verification</th>
@@ -140,6 +168,9 @@ export function ClientsPage({
                 return (
                   <tr key={c.id} className={needsReview ? 'bg-accent/5' : undefined}>
                     <td className="font-medium text-ink">{c.name}</td>
+                    <td className="text-muted2 text-[12px] max-w-[220px] truncate">
+                      {c.email?.trim() || '—'}
+                    </td>
                     <td className="text-muted2 text-center">{c.expenses ?? '—'}</td>
                     <td className={c.warning_note?.trim() ? 'text-accent text-[12px] max-w-[200px] truncate' : 'text-muted2'}>
                       {c.warning_note?.trim() || '—'}

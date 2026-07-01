@@ -1,6 +1,7 @@
 import type { Client } from '@/types';
 import { CLIENT_EXPENSE_OPTIONS, type ClientExpenseType } from '@/types';
 import { normalizeClientName } from '@/lib/importClients';
+import { isValidClientEmail, normalizeClientEmail } from '@/lib/clientEmails';
 import { parseVerificationPeriodInput } from '@/lib/clientUtils';
 
 /** One parsed row from Excel ready to import, update, or skip. */
@@ -33,6 +34,7 @@ export const CLIENT_IMPORT_HEADERS = [
   'Verification Days',
   'MC',
   'DOT',
+  'Email',
 ] as const;
 
 const HEADER_ALIASES: Record<string, string[]> = {
@@ -45,6 +47,7 @@ const HEADER_ALIASES: Record<string, string[]> = {
   verification_days: ['verification days', 'verification_days', 'days'],
   mc: ['mc', 'm.c.', 'm c'],
   dot: ['dot', 'usdot', 'us dot', 'd.o.t.'],
+  email: ['email', 'e-mail', 'email address', 'client email'],
 };
 
 function pad2(n: number): string {
@@ -187,6 +190,19 @@ export async function parseClientsExcelFile(
       continue;
     }
 
+    const emailRaw = String(cell(row, headerMap.email) ?? '').trim();
+    if (emailRaw && !isValidClientEmail(emailRaw)) {
+      rows.push({
+        rowNumber,
+        payload: emptyPayload(nameRaw),
+        mc: null,
+        dot: null,
+        status: 'invalid',
+        message: 'Invalid email address (use semicolons to separate multiple)',
+      });
+      continue;
+    }
+
     let isNewClient = parseYesNo(cell(row, headerMap.is_new_client));
     let startedDate = parseDateCell(cell(row, headerMap.started_date), parseExcelDate);
 
@@ -231,6 +247,7 @@ export async function parseClientsExcelFile(
     const payload: Omit<Client, 'id'> = {
       name: nameRaw,
       expenses,
+      email: normalizeClientEmail(emailRaw),
       warning_note: String(cell(row, headerMap.warning_note) ?? '').trim() || null,
       is_new_client: isNewClient,
       started_date: isNewClient ? startedDate : null,
@@ -282,6 +299,7 @@ function emptyPayload(name: string): Omit<Client, 'id'> {
   return {
     name,
     expenses: null,
+    email: null,
     warning_note: null,
     is_new_client: false,
     started_date: null,
@@ -296,9 +314,9 @@ export async function downloadClientsImportTemplate(): Promise<void> {
   const XLSX = await import('xlsx');
   const example: string[][] = [
     [...CLIENT_IMPORT_HEADERS],
-    ['Acme Transport', 'Wire', 'Call before billing', 'YES', '2026-01-15', 'NO', '30', 'MC-123456', 'DOT-987654'],
-    ['Beta Logistics', 'ACH', '', 'NO', '', '', '', '', ''],
-    ['Trusted Partner', 'Wire', '', 'YES', '2026-01-01', 'YES', 'always', 'MC-777', 'DOT-111222'],
+    ['Acme Transport', 'Wire', 'Call before billing', 'YES', '2026-01-15', 'NO', '30', 'MC-123456', 'DOT-987654', 'billing@acme.com; ops@acme.com'],
+    ['Beta Logistics', 'ACH', '', 'NO', '', '', '', '', '', ''],
+    ['Trusted Partner', 'Wire', '', 'YES', '2026-01-01', 'YES', 'always', 'MC-777', 'DOT-111222', 'ops@trusted.com'],
   ];
   const worksheet = XLSX.utils.aoa_to_sheet(example);
   worksheet['!cols'] = CLIENT_IMPORT_HEADERS.map((h) => ({

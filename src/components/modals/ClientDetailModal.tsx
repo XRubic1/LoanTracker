@@ -22,6 +22,10 @@ export function ClientDetailModal({ open, client, onClose, onEdit, onSave }: Cli
             <p className="text-[10px] uppercase tracking-wider text-muted mb-0.5">Expenses</p>
             <p className="text-ink">{client.expenses ?? '—'}</p>
           </div>
+          <div>
+            <p className="text-[10px] uppercase tracking-wider text-muted mb-0.5">Email</p>
+            <p className="text-ink break-all">{client.email?.trim() || '—'}</p>
+          </div>
           <div className="col-span-2">
             <p className="text-[10px] uppercase tracking-wider text-muted mb-0.5">Warning note</p>
             <p className={`text-ink ${client.warning_note?.trim() ? 'text-accent' : 'text-muted2'}`}>

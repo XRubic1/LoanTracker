@@ -4,6 +4,7 @@ import {
   formatVerificationPeriodInput,
   parseVerificationPeriodInput,
 } from '@/lib/clientUtils';
+import { isValidClientEmail, normalizeClientEmail } from '@/lib/clientEmails';
 import { CLIENT_EXPENSE_OPTIONS, type Client, type ClientExpenseType } from '@/types';
 
 interface EditClientModalProps {
@@ -15,6 +16,7 @@ interface EditClientModalProps {
 
 export function EditClientModal({ open, client, onClose, onSave }: EditClientModalProps) {
   const [name, setName] = useState('');
+  const [email, setEmail] = useState('');
   const [expenses, setExpenses] = useState<ClientExpenseType | ''>('');
   const [warningNote, setWarningNote] = useState('');
   const [isNewClient, setIsNewClient] = useState(false);
@@ -25,6 +27,7 @@ export function EditClientModal({ open, client, onClose, onSave }: EditClientMod
   useEffect(() => {
     if (!client) return;
     setName(client.name);
+    setEmail(client.email ?? '');
     setExpenses(client.expenses ?? '');
     setWarningNote(client.warning_note ?? '');
     setIsNewClient(client.is_new_client);
@@ -36,6 +39,10 @@ export function EditClientModal({ open, client, onClose, onSave }: EditClientMod
     if (!client) return;
     if (!name.trim()) {
       window.alert('Client name is required.');
+      return;
+    }
+    if (!isValidClientEmail(email)) {
+      window.alert('Please enter valid email address(es), separated by semicolons.');
       return;
     }
     setSubmitting(true);
@@ -50,6 +57,7 @@ export function EditClientModal({ open, client, onClose, onSave }: EditClientMod
       await onSave(client.id, {
         ...client,
         name: name.trim(),
+        email: normalizeClientEmail(email),
         expenses: expenses || null,
         warning_note: warningNote.trim() || null,
         is_new_client: tracked,
@@ -83,6 +91,17 @@ export function EditClientModal({ open, client, onClose, onSave }: EditClientMod
             onChange={(e) => setName(e.target.value)}
             className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-[13px] text-ink"
           />
+        </div>
+        <div>
+          <label className="block text-[11px] text-muted uppercase tracking-wider mb-1.5">Email</label>
+          <input
+            type="text"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            placeholder="client@example.com; billing@example.com"
+            className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-[13px] text-ink"
+          />
+          <p className="text-[11px] text-muted2 mt-1">Separate multiple addresses with a semicolon (;).</p>
         </div>
         <div>
           <label className="block text-[11px] text-muted uppercase tracking-wider mb-1.5">Expenses</label>
