@@ -11,6 +11,7 @@ interface ClosedPageProps
   onOpenLoan: (id: number) => void;
   onOpenReserve: (id: number) => void;
   onEditAaaPayment: (id: number) => void;
+  onDeleteAaaPayment?: (id: number) => Promise<void>;
 }
 
 type ClosedTab = 'loans' | 'reserves' | 'aaa';
@@ -24,6 +25,7 @@ export function ClosedPage({
   onOpenLoan,
   onOpenReserve,
   onEditAaaPayment,
+  onDeleteAaaPayment,
 }: ClosedPageProps) {
   const [tab, setTab] = useState<ClosedTab>('loans');
 
@@ -192,6 +194,7 @@ export function ClosedPage({
           <AaaPaymentsHistorySection
             payments={aaaPayments}
             onEdit={onEditAaaPayment}
+            onDelete={onDeleteAaaPayment}
             title="AAA payment history"
           />
         </div>

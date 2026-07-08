@@ -19,6 +19,7 @@ import {
   fetchAaaPayments,
   insertAaaPayment,
   updateAaaPayment,
+  deleteAaaPaymentById,
   fetchClients,
   fetchWorksheetClientRegistry,
   fetchWorksheetInsuranceLookup,
@@ -68,6 +69,7 @@ export interface UseDataResult {
   ) => Promise<InsuranceVerification>;
   addAaaPayment: (payload: Omit<AaaPayment, 'id' | 'createdAt'>) => Promise<AaaPayment>;
   updateAaaPaymentById: (id: number, payment: AaaPayment) => Promise<AaaPayment>;
+  removeAaaPayment: (id: number) => Promise<void>;
   addClient: (payload: Omit<Client, 'id'>) => Promise<Client>;
   updateClientById: (id: number, record: Client) => Promise<Client>;
   removeClient: (id: number) => Promise<void>;
@@ -389,6 +391,11 @@ export function useData(ownerId: string | null, userId: string | null = null): U
     return updated;
   }, []);
 
+  const removeAaaPayment = useCallback(async (id: number) => {
+    await deleteAaaPaymentById(id);
+    setAaaPayments((prev) => prev.filter((p) => p.id !== id));
+  }, []);
+
   const addClientRecord = useCallback(
     async (payload: Omit<Client, 'id'>) => {
       const added = await insertClient(payload, ownerId);
@@ -478,6 +485,7 @@ export function useData(ownerId: string | null, userId: string | null = null): U
     updateInsuranceVerification,
     addAaaPayment,
     updateAaaPaymentById,
+    removeAaaPayment,
     addClient: addClientRecord,
     updateClientById,
     removeClient,

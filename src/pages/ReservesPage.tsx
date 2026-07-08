@@ -12,7 +12,6 @@ import type { UseDataResult } from '@/hooks/useData';
 
 interface ReservesPageProps
   extends Pick<UseDataResult, 'reserves' | 'markReservePaid' | 'removeReserve'> {
-  runWithPasswordProtection: (action: () => void) => void;
   onOpenDetail: (id: number) => void;
   onAddReserve: () => void;
 }
@@ -21,7 +20,6 @@ export function ReservesPage({
   reserves,
   markReservePaid: _markReservePaid, // provided but not used in this list view
   removeReserve: _removeReserve,
-  runWithPasswordProtection: _runWithPasswordProtection,
   onOpenDetail,
   onAddReserve,
 }: ReservesPageProps) {

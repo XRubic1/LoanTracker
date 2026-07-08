@@ -1366,6 +1366,13 @@ export async function updateAaaPayment(id: number, payment: AaaPayment): Promise
   return aaaPaymentFromRow(data as AaaPaymentRow)!;
 }
 
+export async function deleteAaaPaymentById(id: number): Promise<void> {
+  const supabase = getSupabase();
+  if (!supabase) throw new Error('Supabase not configured');
+  const { error } = await supabase.from('aaa_payments').delete().eq('id', id);
+  if (error) throw error;
+}
+
 // --- BrokerSnapshot API monitoring ---
 
 function syncRunFromRow(row: BrokerSnapshotSyncRunRow | null): BrokerSnapshotSyncRun | null {

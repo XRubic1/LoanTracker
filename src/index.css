@@ -132,7 +132,7 @@ body {
 
 #root {
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
   height: 100%;
   background: var(--color-page);
 }
@@ -242,6 +242,13 @@ body {
     background-color: var(--color-nav);
     border-bottom: 0.5px solid var(--color-border);
     transition: background-color 0.2s ease, border-color 0.2s ease;
+  }
+
+  /* Vertical left navigation. Width is controlled via Tailwind utilities. */
+  .sidebar {
+    background-color: var(--color-nav);
+    border-right: 0.5px solid var(--color-border);
+    transition: background-color 0.2s ease, border-color 0.2s ease, width 0.2s ease;
   }
 
   .bg-input {

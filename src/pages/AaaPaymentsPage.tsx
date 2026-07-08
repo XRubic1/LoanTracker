@@ -6,6 +6,7 @@ import type { UseDataResult } from '@/hooks/useData';
 interface AaaPaymentsPageProps
   extends Pick<UseDataResult, 'aaaPayments' | 'addAaaPayment' | 'clientInsurance'> {
   onEditPayment: (id: number) => void;
+  onDeletePayment?: (id: number) => Promise<void>;
 }
 
 export function AaaPaymentsPage({
@@ -13,6 +14,7 @@ export function AaaPaymentsPage({
   addAaaPayment,
   clientInsurance,
   onEditPayment,
+  onDeletePayment,
 }: AaaPaymentsPageProps) {
   return (
     <>
@@ -31,7 +33,11 @@ export function AaaPaymentsPage({
         </Section>
       </div>
 
-      <AaaPaymentsHistorySection payments={aaaPayments} onEdit={onEditPayment} />
+      <AaaPaymentsHistorySection
+        payments={aaaPayments}
+        onEdit={onEditPayment}
+        onDelete={onDeletePayment}
+      />
     </>
   );
 }

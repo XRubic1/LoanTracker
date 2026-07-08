@@ -12,8 +12,9 @@ interface LoanDetailModalProps {
   onDelete: () => void;
   /** Toggle whether this loan is hidden from the dashboard lists. */
   onToggleHidden: (hidden: boolean) => void;
-  /** Run destructive action only after password confirmation. */
-  runWithPasswordProtection: (action: () => void) => void;
+  /** Run destructive action only when the current user is the account admin. */
+  runIfAccountAdmin: (action: () => void) => void;
+  isAccountAdmin: boolean;
   onCloseLoan: () => void;
   onUpdateInstallmentNote: (index: number, note: string) => void;
   /** When set, "Close installment" uses this single update (saves note + marks paid) to avoid race. paidDate is YYYY-MM-DD. */
@@ -56,7 +57,8 @@ export function LoanDetailModal({
   onReverse,
   onDelete,
   onToggleHidden,
-  runWithPasswordProtection,
+  runIfAccountAdmin,
+  isAccountAdmin,
   onCloseLoan,
   onUpdateInstallmentNote,
   onCloseInstallmentWithNote,
@@ -85,14 +87,14 @@ export function LoanDetailModal({
   const notes = loan.paymentNotes ?? [];
 
   const handleDelete = () => {
-    runWithPasswordProtection(() => {
+    runIfAccountAdmin(() => {
       if (!window.confirm('Delete this loan?')) return;
       onDelete();
     });
   };
 
   const handleReverse = () => {
-    runWithPasswordProtection(() => onReverse());
+    runIfAccountAdmin(() => onReverse());
   };
 
   const handleCloseLoan = () => {
@@ -351,13 +353,15 @@ export function LoanDetailModal({
             >
               Print
             </button>
-            <button
-              type="button"
-              onClick={handleDelete}
-              className="py-1.5 px-3.5 rounded-lg border border-red/30 text-red text-xs font-medium bg-transparent hover:bg-red/10"
-            >
-              Delete
-            </button>
+            {isAccountAdmin && (
+              <button
+                type="button"
+                onClick={handleDelete}
+                className="py-1.5 px-3.5 rounded-lg border border-red/30 text-red text-xs font-medium bg-transparent hover:bg-red/10"
+              >
+                Delete
+              </button>
+            )}
             <button
               type="button"
               onClick={onClose}
@@ -365,14 +369,16 @@ export function LoanDetailModal({
             >
               Close
             </button>
-            <button
-              type="button"
-              onClick={handleReverse}
-              disabled={!canReverse}
-              className="py-1.5 px-3.5 rounded-lg border border-border text-muted text-xs font-medium bg-transparent hover:bg-surface hover:text-ink disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              ↩ Reverse
-            </button>
+            {isAccountAdmin && (
+              <button
+                type="button"
+                onClick={handleReverse}
+                disabled={!canReverse}
+                className="py-1.5 px-3.5 rounded-lg border border-border text-muted text-xs font-medium bg-transparent hover:bg-surface hover:text-ink disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                ↩ Reverse
+              </button>
+            )}
             {!isFullyPaid && (
               <button
                 type="button"

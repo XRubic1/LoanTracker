@@ -10,8 +10,9 @@ interface ReserveDetailModalProps {
   onMarkDeducted: () => void;
   onReverse: () => void;
   onDelete: () => void;
-  /** Run destructive action only after password confirmation. */
-  runWithPasswordProtection: (action: () => void) => void;
+  /** Run destructive action only when the current user is the account admin. */
+  runIfAccountAdmin: (action: () => void) => void;
+  isAccountAdmin: boolean;
   onCloseReserve: () => void;
   onUpdateDeductionNote: (index: number, note: string) => void;
   /** When set, "Close deduction" uses this single update (saves note + marks deducted) to avoid race. */
@@ -51,7 +52,8 @@ export function ReserveDetailModal({
   onMarkDeducted,
   onReverse,
   onDelete,
-  runWithPasswordProtection,
+  runIfAccountAdmin,
+  isAccountAdmin,
   onCloseReserve,
   onUpdateDeductionNote,
   onCloseDeductionWithNote,
@@ -76,14 +78,14 @@ export function ReserveDetailModal({
   const notes = reserve.deductionNotes ?? [];
 
   const handleDelete = () => {
-    runWithPasswordProtection(() => {
+    runIfAccountAdmin(() => {
       if (!window.confirm('Delete this reserve?')) return;
       onDelete();
     });
   };
 
   const handleReverse = () => {
-    runWithPasswordProtection(() => onReverse());
+    runIfAccountAdmin(() => onReverse());
   };
 
   const handleCloseReserve = () => {
@@ -209,13 +211,15 @@ export function ReserveDetailModal({
           </div>
 
           <div className="flex flex-wrap gap-2.5 justify-end mt-5">
-            <button
-              type="button"
-              onClick={handleDelete}
-              className="py-1.5 px-3.5 rounded-lg border border-red/30 text-red text-xs font-medium bg-transparent hover:bg-red/10"
-            >
-              Delete
-            </button>
+            {isAccountAdmin && (
+              <button
+                type="button"
+                onClick={handleDelete}
+                className="py-1.5 px-3.5 rounded-lg border border-red/30 text-red text-xs font-medium bg-transparent hover:bg-red/10"
+              >
+                Delete
+              </button>
+            )}
             <button
               type="button"
               onClick={onClose}
@@ -223,14 +227,16 @@ export function ReserveDetailModal({
             >
               Close
             </button>
-            <button
-              type="button"
-              onClick={handleReverse}
-              disabled={!canReverse}
-              className="py-1.5 px-3.5 rounded-lg border border-border text-muted text-xs font-medium bg-transparent hover:bg-surface hover:text-ink disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              ↩ Reverse
-            </button>
+            {isAccountAdmin && (
+              <button
+                type="button"
+                onClick={handleReverse}
+                disabled={!canReverse}
+                className="py-1.5 px-3.5 rounded-lg border border-border text-muted text-xs font-medium bg-transparent hover:bg-surface hover:text-ink disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                ↩ Reverse
+              </button>
+            )}
             {!isClosed && (
               <button
                 type="button"

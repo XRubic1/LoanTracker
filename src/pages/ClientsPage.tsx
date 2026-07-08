@@ -16,6 +16,7 @@ import type { UseDataResult } from '@/hooks/useData';
 
 interface ClientsPageProps extends Pick<UseDataResult, 'clients'> {
   effectiveOwnerId: string;
+  isAccountAdmin: boolean;
   onAddClient: () => void;
   onImportClients: () => void;
   onViewClient: (id: number) => void;
@@ -26,6 +27,7 @@ interface ClientsPageProps extends Pick<UseDataResult, 'clients'> {
 export function ClientsPage({
   clients,
   effectiveOwnerId,
+  isAccountAdmin,
   onAddClient,
   onImportClients,
   onViewClient,
@@ -203,14 +205,16 @@ export function ClientsPage({
                       >
                         Edit
                       </button>
-                      <button
-                        type="button"
-                        onClick={() => void handleDelete(c.id, c.name)}
-                        disabled={deletingId === c.id}
-                        className="text-xs text-muted2 hover:text-red disabled:opacity-50"
-                      >
-                        {deletingId === c.id ? '…' : 'Delete'}
-                      </button>
+                      {isAccountAdmin && (
+                        <button
+                          type="button"
+                          onClick={() => void handleDelete(c.id, c.name)}
+                          disabled={deletingId === c.id}
+                          className="text-xs text-muted2 hover:text-red disabled:opacity-50"
+                        >
+                          {deletingId === c.id ? '…' : 'Delete'}
+                        </button>
+                      )}
                     </td>
                   </tr>
                 );

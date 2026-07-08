@@ -1,3 +1,4 @@
+import { useCallback, useEffect, useState } from 'react';
 import type { PageId } from '@/types';
 import { canAccessPage } from '@/lib/tabPermissions';
 import { BrandLogo, BrandWordmark } from '@/components/BrandLogo';
@@ -5,6 +6,22 @@ import { NotificationsToggle } from '@/components/NotificationsToggle';
 import { ThemeToggle } from '@/components/ThemeToggle';
 import { ReplayTourButton } from '@/components/OnboardingTutorial';
 import { ONBOARDING_TUTORIAL_ENABLED } from '@/lib/onboardingTutorial';
+
+/** localStorage key used to remember the sidebar collapsed state across sessions. */
+const SIDEBAR_COLLAPSED_KEY = 'sidebar:collapsed';
+
+/**
+ * Read the persisted collapsed preference.
+ * @returns true when the sidebar should start collapsed.
+ */
+function getInitialCollapsed(): boolean {
+  if (typeof window === 'undefined') return false;
+  try {
+    return window.localStorage.getItem(SIDEBAR_COLLAPSED_KEY) === '1';
+  } catch {
+    return false;
+  }
+}
 
 interface SidebarProps {
   page: PageId;
@@ -169,38 +186,93 @@ export function Sidebar({
     return canAccessPage(item.id, accessOptions);
   });
 
+  // Collapsed state, persisted so the user's preference survives reloads.
+  const [collapsed, setCollapsed] = useState<boolean>(getInitialCollapsed);
+
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(SIDEBAR_COLLAPSED_KEY, collapsed ? '1' : '0');
+    } catch {
+      /* ignore storage failures (e.g. private mode) */
+    }
+  }, [collapsed]);
+
+  const toggleCollapsed = useCallback(() => setCollapsed((prev) => !prev), []);
+
   return (
-    <nav className="topbar flex-shrink-0 z-10 flex items-center h-12 px-6 overflow-x-auto gap-0">
-      {/* Brand */}
-      <div className="flex items-center gap-1.5 mr-8 flex-shrink-0">
-        <BrandLogo size="xs" />
-        <BrandWordmark className="hidden sm:inline text-[13px] font-medium text-ink" />
+    <nav
+      className={`sidebar flex-shrink-0 z-10 flex flex-col h-full py-3 transition-[width] duration-200 ease-in-out ${
+        collapsed ? 'w-[60px] px-2' : 'w-[220px] px-3'
+      }`}
+    >
+      {/* Brand + collapse toggle */}
+      <div
+        className={`flex items-center h-9 mb-3 flex-shrink-0 ${
+          collapsed ? 'justify-center' : 'justify-between px-1'
+        }`}
+      >
+        {!collapsed && (
+          <div className="flex items-center gap-1.5 min-w-0">
+            <BrandLogo size="xs" />
+            <BrandWordmark className="text-[13px] font-medium text-ink truncate" />
+          </div>
+        )}
+        <button
+          type="button"
+          onClick={toggleCollapsed}
+          aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+          title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+          className="flex items-center justify-center w-7 h-7 rounded-md text-muted hover:text-ink hover:bg-[var(--color-row-hover)] transition-colors flex-shrink-0"
+        >
+          <svg
+            className={`w-[16px] h-[16px] transition-transform duration-200 ${collapsed ? 'rotate-180' : ''}`}
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth={2}
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
+            <path d="M15 18l-6-6 6-6" />
+          </svg>
+        </button>
       </div>
 
-      {/* Nav items — active item shows a bottom underline */}
-      <div className="flex items-center flex-1 min-w-0 h-full">
+      {/* Nav items — active item shows an accent background + left indicator */}
+      <div className="flex flex-col gap-0.5 flex-1 min-h-0 overflow-y-auto scrollable">
         {visibleNav.map(({ id, label, icon }) => (
           <button
             key={id}
             type="button"
             data-tour={`nav-${id}`}
             onClick={() => onPage(id)}
-            className={`h-full flex items-center gap-[5px] px-[14px] text-[12px] whitespace-nowrap transition-colors border-b-2 ${
+            title={collapsed ? label : undefined}
+            className={`relative flex items-center gap-2.5 rounded-md h-9 text-[12px] whitespace-nowrap transition-colors ${
+              collapsed ? 'justify-center px-0' : 'px-2.5'
+            } ${
               page === id
-                ? 'text-ink font-medium border-ink'
-                : 'text-muted font-normal border-transparent hover:text-ink'
+                ? 'text-ink font-medium bg-[var(--color-row-hover)]'
+                : 'text-muted font-normal hover:text-ink hover:bg-[var(--color-row-hover)]'
             }`}
           >
-            <span className="w-[14px] h-[14px] flex-shrink-0 [&>svg]:w-[14px] [&>svg]:h-[14px]">
+            {page === id && (
+              <span className="absolute left-0 top-1.5 bottom-1.5 w-[3px] rounded-full bg-ink" />
+            )}
+            <span className="w-[16px] h-[16px] flex-shrink-0 [&>svg]:w-[16px] [&>svg]:h-[16px]">
               {icon}
             </span>
-            <span className="hidden md:inline">{label}</span>
+            {!collapsed && <span className="truncate">{label}</span>}
           </button>
         ))}
       </div>
 
-      {/* Right side: theme, week range, sign out */}
-      <div className="flex items-center gap-3 flex-shrink-0" data-tour="topbar-tools">
+      {/* Footer: theme, notifications, week range, sign out */}
+      <div
+        className={`flex flex-col gap-2 mt-3 pt-3 flex-shrink-0 border-t border-divider ${
+          collapsed ? 'items-center' : ''
+        }`}
+        data-tour="topbar-tools"
+      >
         {ONBOARDING_TUTORIAL_ENABLED && onReplayTour && (
           <ReplayTourButton onReplay={onReplayTour} />
         )}
@@ -211,17 +283,18 @@ export function Sidebar({
           />
         )}
         <ThemeToggle />
-        {weekRange && (
-          <span className="date-badge">{weekRange}</span>
-        )}
+        {weekRange && !collapsed && <span className="date-badge">{weekRange}</span>}
         {onSignOut && (
           <button
             type="button"
             onClick={onSignOut}
-            className="flex-shrink-0 flex items-center gap-[5px] text-[12px] text-muted hover:text-red transition-colors"
+            title={collapsed ? 'Sign out' : undefined}
+            className={`flex items-center gap-2.5 rounded-md h-9 text-[12px] text-muted hover:text-red hover:bg-[var(--color-row-hover)] transition-colors ${
+              collapsed ? 'justify-center w-9 px-0' : 'px-2.5'
+            }`}
           >
             <svg
-              className="w-[14px] h-[14px] flex-shrink-0"
+              className="w-[16px] h-[16px] flex-shrink-0"
               viewBox="0 0 24 24"
               fill="none"
               stroke="currentColor"
@@ -231,7 +304,7 @@ export function Sidebar({
               <polyline points="16 17 21 12 16 7" />
               <line x1="21" y1="12" x2="9" y2="12" />
             </svg>
-            <span className="hidden md:inline">Sign out</span>
+            {!collapsed && <span>Sign out</span>}
           </button>
         )}
       </div>

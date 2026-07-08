@@ -21,7 +21,6 @@ interface LoansPageProps
     'loans' | 'markLoanPaid' | 'removeLoan'
   > {
   effectiveOwnerId: string;
-  runWithPasswordProtection: (action: () => void) => void;
   onOpenDetail: (id: number) => void;
   onAddLoan: () => void;
 }
@@ -31,7 +30,6 @@ export function LoansPage({
   effectiveOwnerId,
   markLoanPaid: _markLoanPaid, // provided but not used in this list view
   removeLoan: _removeLoan,
-  runWithPasswordProtection: _runWithPasswordProtection,
   onOpenDetail,
   onAddLoan,
 }: LoansPageProps) {

@@ -18,18 +18,21 @@ const PAGE_SIZE_OPTIONS = [10, 20, 50, 100] as const;
 interface AaaPaymentsHistorySectionProps {
   payments: AaaPayment[];
   onEdit: (id: number) => void;
+  onDelete?: (id: number) => Promise<void>;
   title?: string;
 }
 
 export function AaaPaymentsHistorySection({
   payments,
   onEdit,
+  onDelete,
   title = 'Payment history',
 }: AaaPaymentsHistorySectionProps) {
   const [filters, setFilters] = useState<AaaPaymentFilterState>(defaultAaaPaymentFilters);
   const [printMenuOpen, setPrintMenuOpen] = useState(false);
   const [pageSize, setPageSize] = useState<number>(10);
   const [page, setPage] = useState(1);
+  const [deletingId, setDeletingId] = useState<number | null>(null);
 
   const clientOptions = getAaaPaymentClients(payments);
   const filtered = filterAaaPayments(payments, filters);
@@ -52,6 +55,20 @@ export function AaaPaymentsHistorySection({
   ) => {
     setFilters((prev) => ({ ...prev, [key]: value }));
     setPage(1);
+  };
+
+  const handleDelete = async (payment: AaaPayment) => {
+    if (!onDelete) return;
+    const label = `${payment.client} · ${payment.payee} · ${fmt(payment.amount)}`;
+    if (!window.confirm(`Delete AAA payment for ${label}? This cannot be undone.`)) return;
+    setDeletingId(payment.id);
+    try {
+      await onDelete(payment.id);
+    } catch (err) {
+      window.alert(err instanceof Error ? err.message : String(err));
+    } finally {
+      setDeletingId(null);
+    }
   };
 
   return (
@@ -189,7 +206,7 @@ export function AaaPaymentsHistorySection({
               <th className="text-[10px] text-label uppercase tracking-widest py-0 pb-1.5 pr-2 text-left border-b border-border">
                 Amount
               </th>
-              <th className="text-[10px] text-label uppercase tracking-widest py-0 pb-2.5 text-right border-b border-border w-16">
+              <th className="text-[10px] text-label uppercase tracking-widest py-0 pb-2.5 text-right border-b border-border w-28">
                 
               </th>
             </tr>
@@ -209,7 +226,7 @@ export function AaaPaymentsHistorySection({
                 <td className="py-1.5 pr-2 border-b border-divider align-middle font-mono font-medium text-green">
                   {fmt(p.amount)}
                 </td>
-                <td className="py-1.5 pr-2 border-b border-divider align-middle text-right">
+                <td className="py-1.5 pr-2 border-b border-divider align-middle text-right whitespace-nowrap">
                   <button
                     type="button"
                     onClick={() => onEdit(p.id)}
@@ -217,6 +234,16 @@ export function AaaPaymentsHistorySection({
                   >
                     Edit
                   </button>
+                  {onDelete && (
+                    <button
+                      type="button"
+                      onClick={() => void handleDelete(p)}
+                      disabled={deletingId === p.id}
+                      className="py-1 px-2 rounded-md text-[11px] font-medium text-muted2 hover:text-red hover:bg-red/10 transition-colors disabled:opacity-50 ml-1"
+                    >
+                      {deletingId === p.id ? '…' : 'Delete'}
+                    </button>
+                  )}
                 </td>
               </tr>
             ))}

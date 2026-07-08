@@ -36,7 +36,6 @@ import { ClientInsuranceDetailModal } from '@/components/modals/ClientInsuranceD
 import { EditClientInsuranceModal } from '@/components/modals/EditClientInsuranceModal';
 import { EditAaaPaymentModal } from '@/components/modals/EditAaaPaymentModal';
 import type { Client, Loan } from '@/types';
-import { PasswordConfirmModal } from '@/components/PasswordConfirmModal';
 import { useAuth } from '@/contexts/AuthContext';
 import { useData } from '@/hooks/useData';
 import {
@@ -76,16 +75,20 @@ export default function App() {
   const [worksheetEntryId, setWorksheetEntryId] = useState<number | null>(null);
   const [importClientsOpen, setImportClientsOpen] = useState(false);
   const [addClientInsuranceInitialName, setAddClientInsuranceInitialName] = useState('');
-  const [passwordModalOpen, setPasswordModalOpen] = useState(false);
   const [notificationsHidden, setNotificationsHiddenState] = useState(getNotificationsHidden);
   const [tutorialReplay, setTutorialReplay] = useState(0);
-  const pendingPasswordActionRef = useRef<(() => void) | null>(null);
 
-  /** Run a destructive action (delete/reverse) only after the user enters the correct password. */
-  const runWithPasswordProtection = useCallback((action: () => void) => {
-    pendingPasswordActionRef.current = action;
-    setPasswordModalOpen(true);
-  }, []);
+  /** Only the account owner (admin) may delete or reverse loans/reserves. */
+  const runIfAccountAdmin = useCallback(
+    (action: () => void) => {
+      if (!isOwner) {
+        window.alert('Only the account admin can delete or reverse payments.');
+        return;
+      }
+      action();
+    },
+    [isOwner]
+  );
 
   const toggleNotificationsHidden = useCallback(() => {
     setNotificationsHiddenState((prev) => {
@@ -93,17 +96,6 @@ export default function App() {
       setNotificationsHidden(next);
       return next;
     });
-  }, []);
-
-  const handlePasswordSuccess = useCallback(() => {
-    pendingPasswordActionRef.current?.();
-    pendingPasswordActionRef.current = null;
-    setPasswordModalOpen(false);
-  }, []);
-
-  const closePasswordModal = useCallback(() => {
-    setPasswordModalOpen(false);
-    pendingPasswordActionRef.current = null;
   }, []);
 
   const {
@@ -134,6 +126,7 @@ export default function App() {
     aaaPayments,
     addAaaPayment,
     updateAaaPaymentById,
+    removeAaaPayment,
     clients,
     worksheetClients,
     worksheetClientInsurance,
@@ -501,10 +494,12 @@ export default function App() {
         onNavigate={setPage}
         replayToken={tutorialReplay}
       />
-      {!notificationsHidden && (
-        <AppNotifications loans={loans} clientInsurance={clientInsurance} clients={clients} />
-      )}
-      <main className="main flex-1 min-h-0 overflow-y-auto py-4 px-6" data-tour="main-content">
+      {/* Right-hand column: notifications banner stacked above the scrollable page content. */}
+      <div className="flex-1 min-w-0 min-h-0 flex flex-col">
+        {!notificationsHidden && (
+          <AppNotifications loans={loans} clientInsurance={clientInsurance} clients={clients} />
+        )}
+        <main className="main flex-1 min-h-0 overflow-y-auto py-4 px-6" data-tour="main-content">
         {configMissing && (
           <div className="mb-3 py-2 px-3 rounded-lg text-xs flex items-center justify-between gap-2 bg-alert-warn border border-red/30 text-alert-warn-fg">
             <span>
@@ -556,7 +551,6 @@ export default function App() {
               effectiveOwnerId={effectiveOwnerId}
               markLoanPaid={markLoanPaid}
               removeLoan={removeLoan}
-              runWithPasswordProtection={runWithPasswordProtection}
               onOpenDetail={setLoanDetailId}
               onAddLoan={() => setAddLoanOpen(true)}
             />
@@ -566,7 +560,6 @@ export default function App() {
             reserves={reserves}
             markReservePaid={markReservePaid}
             removeReserve={removeReserve}
-            runWithPasswordProtection={runWithPasswordProtection}
             onOpenDetail={setReserveDetailId}
             onAddReserve={() => setAddReserveOpen(true)}
           />
@@ -581,6 +574,7 @@ export default function App() {
             onOpenLoan={setLoanDetailId}
             onOpenReserve={setReserveDetailId}
             onEditAaaPayment={setEditAaaPaymentId}
+            onDeleteAaaPayment={isOwner ? removeAaaPayment : undefined}
           />
         )}
         {page === 'aaaPayments' && (
@@ -589,6 +583,7 @@ export default function App() {
             addAaaPayment={addAaaPayment}
             clientInsurance={clientInsurance}
             onEditPayment={setEditAaaPaymentId}
+            onDeletePayment={isOwner ? removeAaaPayment : undefined}
           />
         )}
         {page === 'clientInsurance' && (
@@ -626,6 +621,7 @@ export default function App() {
           <ClientsPage
             clients={clients}
             effectiveOwnerId={effectiveOwnerId}
+            isAccountAdmin={isOwner}
             onAddClient={() => setAddClientOpen(true)}
             onImportClients={() => setImportClientsOpen(true)}
             onViewClient={setClientDetailId}
@@ -644,7 +640,8 @@ export default function App() {
         )}
         {page === 'admin' && showAdminNav && <SuperAdminDashboard />}
         {page === 'users' && <UsersPage />}
-      </main>
+        </main>
+      </div>
 
       <LoanDetailModal
         loan={selectedLoan}
@@ -654,7 +651,8 @@ export default function App() {
         onReverse={handleLoanReverse}
         onDelete={handleLoanDelete}
         onToggleHidden={handleLoanToggleHidden}
-        runWithPasswordProtection={runWithPasswordProtection}
+        isAccountAdmin={isOwner}
+        runIfAccountAdmin={runIfAccountAdmin}
         onCloseLoan={handleCloseLoan}
         onUpdateInstallmentNote={handleLoanUpdateInstallmentNote}
         onCloseInstallmentWithNote={handleLoanCloseInstallmentWithNote}
@@ -667,7 +665,8 @@ export default function App() {
         onMarkDeducted={handleReserveMarkDeducted}
         onReverse={handleReserveReverse}
         onDelete={handleReserveDelete}
-        runWithPasswordProtection={runWithPasswordProtection}
+        isAccountAdmin={isOwner}
+        runIfAccountAdmin={runIfAccountAdmin}
         onCloseReserve={handleCloseReserve}
         onUpdateDeductionNote={handleReserveUpdateDeductionNote}
         onCloseDeductionWithNote={handleReserveCloseDeductionWithNote}
@@ -724,10 +723,14 @@ export default function App() {
           setClientInsuranceDetailId(null);
           setEditClientInsuranceId(id);
         }}
-        onDelete={async (id) => {
-          await removeClientInsurance(id);
-          setClientInsuranceDetailId(null);
-        }}
+        onDelete={
+          isOwner
+            ? async (id) => {
+                await removeClientInsurance(id);
+                setClientInsuranceDetailId(null);
+              }
+            : undefined
+        }
       />
       <EditClientInsuranceModal
         clientInsurance={editingClientInsurance}
@@ -784,12 +787,6 @@ export default function App() {
             await updateWorksheetEntryById(payload.id, payload);
           }
         }}
-      />
-      <PasswordConfirmModal
-        open={passwordModalOpen}
-        onClose={closePasswordModal}
-        onSuccess={handlePasswordSuccess}
-        message="Delete and reverse actions require a password."
       />
     </>
   );
