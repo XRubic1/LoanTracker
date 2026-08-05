@@ -1,17 +1,27 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Modal } from '@/components/Modal';
 import type { Loan, LoanProviderType } from '@/types';
+import { useAuth } from '@/contexts/AuthContext';
+import { useLinkedTeams } from '@/hooks/useLinkedTeams';
 import { fmt, isWeekdayOnlySchedule, toNextWeekdayOnOrAfter } from '@/lib/utils';
 
 interface AddLoanModalProps {
   open: boolean;
   onClose: () => void;
-  onAdd: (payload: Omit<Loan, 'id'>) => Promise<Loan>;
+  /** forOwnerId is the team owner UUID when a platform admin picks a team. */
+  onAdd: (payload: Omit<Loan, 'id'>, forOwnerId?: string | null) => Promise<Loan>;
 }
 
 const todayStr = new Date().toISOString().split('T')[0];
 
 export function AddLoanModal({ open, onClose, onAdd }: AddLoanModalProps) {
+  const { isPlatformAdmin, effectiveOwnerId } = useAuth();
+  const { options: teamOptions } = useLinkedTeams(
+    effectiveOwnerId,
+    isPlatformAdmin ? 'client-pool' : 'linked-group'
+  );
+  const teamChoices = teamOptions.filter((o) => o.ownerId);
+
   const [client, setClient] = useState('');
   const [ref, setRef] = useState('');
   const [total, setTotal] = useState('');
@@ -21,7 +31,22 @@ export function AddLoanModal({ open, onClose, onAdd }: AddLoanModalProps) {
   const [providerType, setProviderType] = useState<LoanProviderType>('TruFunding');
   const [providerName, setProviderName] = useState('');
   const [factoringFee, setFactoringFee] = useState('');
+  const [teamOwnerId, setTeamOwnerId] = useState('');
   const [submitting, setSubmitting] = useState(false);
+
+  // Reset / default team when modal opens for platform admin.
+  useEffect(() => {
+    if (!open) return;
+    if (!isPlatformAdmin) {
+      setTeamOwnerId('');
+      return;
+    }
+    setTeamOwnerId((prev) => {
+      if (prev && teamOptions.some((t) => t.ownerId === prev)) return prev;
+      const self = teamOptions.find((t) => t.ownerId === effectiveOwnerId);
+      return self?.ownerId ?? teamOptions.find((t) => t.ownerId)?.ownerId ?? '';
+    });
+  }, [open, isPlatformAdmin, effectiveOwnerId, teamOptions]);
 
   const totalNum = total.trim() ? parseFloat(total) : NaN;
   const totalInstNum = totalInstallments.trim() ? parseInt(totalInstallments, 10) : 0;
@@ -31,6 +56,19 @@ export function AddLoanModal({ open, onClose, onAdd }: AddLoanModalProps) {
 
   const inputClass = 'form-input font-sans text-xs py-1.5 px-2.5';
   const selectClass = 'select-field font-sans text-xs py-1.5 px-2.5';
+
+  const resetForm = () => {
+    setClient('');
+    setRef('');
+    setTotal('');
+    setTotalInstallments('');
+    setStartDate(new Date().toISOString().split('T')[0]);
+    setFreqDays(7);
+    setProviderType('TruFunding');
+    setProviderName('');
+    setFactoringFee('');
+    setTeamOwnerId('');
+  };
 
   const handleSubmit = async () => {
     if (
@@ -42,6 +80,10 @@ export function AddLoanModal({ open, onClose, onAdd }: AddLoanModalProps) {
       !startDate
     ) {
       window.alert('Fill all required fields (Client, Total, # Installments, Start date)');
+      return;
+    }
+    if (isPlatformAdmin && !teamOwnerId) {
+      window.alert('Select the team this loan belongs to');
       return;
     }
     if (providerType === 'Other' && !providerName.trim()) {
@@ -57,32 +99,27 @@ export function AddLoanModal({ open, onClose, onAdd }: AddLoanModalProps) {
 
     setSubmitting(true);
     try {
-      await onAdd({
-        client: client.trim(),
-        ref: ref.trim(),
-        total: totalNum,
-        installment,
-        paidCount: 0,
-        totalInstallments: totalInstNum,
-        startDate: normalizedStart,
-        freqDays: scheduleFreq,
-        paymentDates: [],
-        paymentNotes: [],
-        note: '',
-        providerType,
-        providerName: providerType === 'Other' ? providerName.trim() : '',
-        factoringFee: fee,
-        hidden: false,
-      });
-      setClient('');
-      setRef('');
-      setTotal('');
-      setTotalInstallments('');
-      setStartDate(new Date().toISOString().split('T')[0]);
-      setFreqDays(7);
-      setProviderType('TruFunding');
-      setProviderName('');
-      setFactoringFee('');
+      await onAdd(
+        {
+          client: client.trim(),
+          ref: ref.trim(),
+          total: totalNum,
+          installment,
+          paidCount: 0,
+          totalInstallments: totalInstNum,
+          startDate: normalizedStart,
+          freqDays: scheduleFreq,
+          paymentDates: [],
+          paymentNotes: [],
+          note: '',
+          providerType,
+          providerName: providerType === 'Other' ? providerName.trim() : '',
+          factoringFee: fee,
+          hidden: false,
+        },
+        isPlatformAdmin ? teamOwnerId : undefined
+      );
+      resetForm();
       onClose();
     } catch (err) {
       window.alert('Failed to add loan: ' + (err instanceof Error ? err.message : String(err)));
@@ -94,6 +131,32 @@ export function AddLoanModal({ open, onClose, onAdd }: AddLoanModalProps) {
   return (
     <Modal open={open} onClose={onClose} title="Add New Loan">
       <div className="space-y-3">
+        {isPlatformAdmin && (
+          <div>
+            <label className="block text-[11px] text-muted uppercase tracking-wider mb-1">
+              Team
+            </label>
+            <select
+              value={teamOwnerId}
+              onChange={(e) => setTeamOwnerId(e.target.value)}
+              className={`${selectClass} w-full`}
+              required
+            >
+              <option value="" disabled>
+                Select team…
+              </option>
+              {teamChoices.map((t) => (
+                <option key={t.ownerId} value={t.ownerId}>
+                  {t.label}
+                </option>
+              ))}
+            </select>
+            <p className="text-[11px] text-muted2 mt-1">
+              Loan will be created on this company&apos;s account.
+            </p>
+          </div>
+        )}
+
         <div className="flex gap-2.5 flex-wrap">
           <input
             type="text"

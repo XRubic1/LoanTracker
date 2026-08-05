@@ -49,7 +49,8 @@ export interface UseDataResult {
   error: string | null;
   configMissing: boolean;
   refetch: () => Promise<void>;
-  addLoan: (payload: Omit<Loan, 'id'>) => Promise<Loan>;
+  /** Optional forOwnerId lets platform admins assign the loan to another team. */
+  addLoan: (payload: Omit<Loan, 'id'>, forOwnerId?: string | null) => Promise<Loan>;
   updateLoanById: (id: number, loan: Loan) => Promise<Loan>;
   removeLoan: (id: number) => Promise<void>;
   markLoanPaid: (id: number) => Promise<void>;
@@ -217,8 +218,8 @@ export function useData(ownerId: string | null, userId: string | null = null): U
     };
   }, [configMissing, ownerId]);
 
-  const addLoan = useCallback(async (payload: Omit<Loan, 'id'>) => {
-    const added = await insertLoan(payload, ownerId);
+  const addLoan = useCallback(async (payload: Omit<Loan, 'id'>, forOwnerId?: string | null) => {
+    const added = await insertLoan(payload, forOwnerId ?? ownerId);
     setLoans((prev) => [...prev, added]);
     return added;
   }, [ownerId]);

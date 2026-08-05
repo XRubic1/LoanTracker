@@ -1,9 +1,10 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import type { Loan } from '@/types';
 import { Section } from '@/components/Section';
 import { Badge } from '@/components/Badge';
 import { TeamScopeFilter } from '@/components/TeamScopeFilter';
 import { useLinkedTeams } from '@/hooks/useLinkedTeams';
+import { useAuth } from '@/contexts/AuthContext';
 import {
   matchesTeamScope,
   type TeamScopeFilterValue,
@@ -33,22 +34,43 @@ export function LoansPage({
   onOpenDetail,
   onAddLoan,
 }: LoansPageProps) {
+  const { isPlatformAdmin } = useAuth();
   const [filter, setFilter] = useState<LoanFilter>('all');
-  const [teamScope, setTeamScope] = useState<TeamScopeFilterValue>(effectiveOwnerId);
+  // Platform admins see every tenant via RLS — default to all teams so the list matches print.
+  const [teamScope, setTeamScope] = useState<TeamScopeFilterValue>(
+    isPlatformAdmin ? 'all' : effectiveOwnerId
+  );
   const [hideClosed, setHideClosed] = useState(true); // start with closed loans hidden
   const [printMenuOpen, setPrintMenuOpen] = useState(false);
-  const { options: teamOptions } = useLinkedTeams(effectiveOwnerId, 'linked-group');
+  const { options: teamOptions } = useLinkedTeams(
+    effectiveOwnerId,
+    isPlatformAdmin ? 'client-pool' : 'linked-group'
+  );
+
+  // When platform-admin flag resolves after mount, show all teams (print already had them).
+  useEffect(() => {
+    if (isPlatformAdmin) setTeamScope('all');
+  }, [isPlatformAdmin]);
 
   useEffect(() => {
     if (!teamOptions.length) return;
     const hasSelection = teamOptions.some((o) => o.value === teamScope);
     if (hasSelection) return;
+    if (isPlatformAdmin && teamOptions.some((o) => o.value === 'all')) {
+      setTeamScope('all');
+      return;
+    }
     const selfOption = teamOptions.find((o) => o.ownerId === effectiveOwnerId);
     setTeamScope(selfOption?.value ?? teamOptions[0].value);
-  }, [teamOptions, teamScope, effectiveOwnerId]);
+  }, [teamOptions, teamScope, effectiveOwnerId, isPlatformAdmin]);
 
-  let list: Loan[] = [...loans];
-  list = list.filter((l) => matchesTeamScope(l.owner_id, teamScope, effectiveOwnerId));
+  // Loans for the selected team (print/export use this so they match the UI).
+  const scopedLoans = useMemo(
+    () => loans.filter((l) => matchesTeamScope(l.owner_id, teamScope, effectiveOwnerId)),
+    [loans, teamScope, effectiveOwnerId]
+  );
+
+  let list: Loan[] = [...scopedLoans];
   if (filter === 'due') list = list.filter((l) => !l.hidden && isDueThisWeek(l));
   if (filter === 'active') list = list.filter((l) => !l.hidden && l.paidCount < l.totalInstallments);
   if (filter === 'hidden') list = list.filter((l) => l.hidden);
@@ -110,18 +132,18 @@ export function LoansPage({
                   type="button"
                   onClick={() => {
                     setPrintMenuOpen(false);
-                    void exportOpenLoansSummaryExcel(loans);
+                    void exportOpenLoansSummaryExcel(scopedLoans);
                   }}
                   className="dropdown-item"
                 >
                   <div className="dropdown-item-title">Excel summary</div>
-                  <div className="dropdown-item-desc">Download .xlsx of all open loans</div>
+                  <div className="dropdown-item-desc">Download .xlsx of open loans for this team filter</div>
                 </button>
                 <button
                   type="button"
                   onClick={() => {
                     setPrintMenuOpen(false);
-                    printOpenLoans(loans);
+                    printOpenLoans(scopedLoans);
                   }}
                   className="dropdown-item"
                 >
@@ -147,6 +169,7 @@ export function LoansPage({
             value={teamScope}
             options={teamOptions}
             onChange={setTeamScope}
+            hideWhenSingle={!isPlatformAdmin}
           />
           <div className="filter-group">
           {(['all', 'due', 'active', 'hidden'] as const).map((f) => (
