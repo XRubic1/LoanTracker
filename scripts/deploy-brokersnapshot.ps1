@@ -12,7 +12,7 @@
 #   npx supabase@latest secrets set BROKERSNAPSHOT_CRON_OWNER_ID=owner-uuid-here --project-ref YOUR_PROJECT_REF
 
 param(
-  [string]$ProjectRef = "xntxsecsdzqhpfcohylh"
+  [string]$ProjectRef = "vghlrzpqioyuejkepokw"
 )
 
 $ErrorActionPreference = "Stop"
