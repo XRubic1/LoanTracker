@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { PageId } from '@/types';
 import { canAccessPage } from '@/lib/tabPermissions';
 import { BrandLogo, BrandWordmark } from '@/components/BrandLogo';
@@ -6,6 +6,10 @@ import { NotificationsToggle } from '@/components/NotificationsToggle';
 import { ThemeToggle } from '@/components/ThemeToggle';
 import { ReplayTourButton } from '@/components/OnboardingTutorial';
 import { ONBOARDING_TUTORIAL_ENABLED } from '@/lib/onboardingTutorial';
+import {
+  getSuperAdminNavTabs,
+  type SuperAdminTab,
+} from '@/lib/superAdminTabs';
 
 /** localStorage key used to remember the sidebar collapsed state across sessions. */
 const SIDEBAR_COLLAPSED_KEY = 'sidebar:collapsed';
@@ -36,12 +40,26 @@ interface SidebarProps {
   showAdmin?: boolean;
   /** null when account owner (all tabs except admin gating). */
   memberAllowedPages?: PageId[] | null;
+  /** Active Super Admin section (platform admin sidebar). */
+  adminTab?: SuperAdminTab;
+  /** Switch Super Admin section and open the admin page. */
+  onAdminTab?: (tab: SuperAdminTab) => void;
 }
 
-const navItems: { id: PageId; label: string; icon: React.ReactNode; ownerOnly?: boolean; adminOnly?: boolean }[] = [
+interface NavItem {
+  id: PageId;
+  label: string;
+  icon: React.ReactNode;
+  ownerOnly?: boolean;
+  adminOnly?: boolean;
+  section: 'platform' | 'workspace' | 'account';
+}
+
+const navItems: NavItem[] = [
   {
     id: 'overview',
     label: 'Overview',
+    section: 'workspace',
     icon: (
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
         <rect x="3" y="3" width="7" height="7" />
@@ -54,6 +72,7 @@ const navItems: { id: PageId; label: string; icon: React.ReactNode; ownerOnly?: 
   {
     id: 'worksheet',
     label: 'Worksheet',
+    section: 'workspace',
     icon: (
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
         <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z" />
@@ -66,6 +85,7 @@ const navItems: { id: PageId; label: string; icon: React.ReactNode; ownerOnly?: 
   {
     id: 'loans',
     label: 'Loans',
+    section: 'workspace',
     icon: (
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
         <path d="M12 2v20M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6" />
@@ -75,6 +95,7 @@ const navItems: { id: PageId; label: string; icon: React.ReactNode; ownerOnly?: 
   {
     id: 'reserves',
     label: 'Reserves',
+    section: 'workspace',
     icon: (
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
         <path d="M3 3h18v4H3zM3 10h18v4H3zM3 17h18v4H3z" />
@@ -84,6 +105,7 @@ const navItems: { id: PageId; label: string; icon: React.ReactNode; ownerOnly?: 
   {
     id: 'closed',
     label: 'Closed',
+    section: 'workspace',
     icon: (
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
         <path d="M22 11.08V12a10 10 0 11-5.93-9.14" />
@@ -94,6 +116,7 @@ const navItems: { id: PageId; label: string; icon: React.ReactNode; ownerOnly?: 
   {
     id: 'aaaPayments',
     label: 'AAA Payments',
+    section: 'workspace',
     icon: (
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
         <rect x="1" y="4" width="22" height="16" rx="2" ry="2" />
@@ -104,6 +127,7 @@ const navItems: { id: PageId; label: string; icon: React.ReactNode; ownerOnly?: 
   {
     id: 'clients',
     label: 'Clients',
+    section: 'workspace',
     icon: (
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
         <path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2" />
@@ -116,6 +140,7 @@ const navItems: { id: PageId; label: string; icon: React.ReactNode; ownerOnly?: 
   {
     id: 'clientInsurance',
     label: 'Client Insurance',
+    section: 'workspace',
     icon: (
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
         <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
@@ -125,6 +150,7 @@ const navItems: { id: PageId; label: string; icon: React.ReactNode; ownerOnly?: 
   {
     id: 'api',
     label: 'API',
+    section: 'workspace',
     icon: (
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
         <path d="M18 20V10M12 20V4M6 20v-6" />
@@ -135,6 +161,7 @@ const navItems: { id: PageId; label: string; icon: React.ReactNode; ownerOnly?: 
     id: 'userActivity',
     label: 'User Activity',
     ownerOnly: true,
+    section: 'account',
     icon: (
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
         <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" />
@@ -145,6 +172,7 @@ const navItems: { id: PageId; label: string; icon: React.ReactNode; ownerOnly?: 
     id: 'users',
     label: 'Users',
     ownerOnly: true,
+    section: 'account',
     icon: (
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
         <path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2" />
@@ -153,18 +181,15 @@ const navItems: { id: PageId; label: string; icon: React.ReactNode; ownerOnly?: 
       </svg>
     ),
   },
-  {
-    id: 'admin',
-    label: 'Super Admin',
-    adminOnly: true,
-    icon: (
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
-        <circle cx="12" cy="12" r="3" />
-        <path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42" />
-      </svg>
-    ),
-  },
 ];
+
+const SECTION_LABELS: Record<NavItem['section'], string> = {
+  platform: 'Platform',
+  workspace: 'Workspace',
+  account: 'Account',
+};
+
+const SECTION_ORDER: NavItem['section'][] = ['platform', 'workspace', 'account'];
 
 export function Sidebar({
   page,
@@ -178,6 +203,8 @@ export function Sidebar({
   isOwner = false,
   showAdmin = false,
   memberAllowedPages = null,
+  adminTab = 'dashboard',
+  onAdminTab,
 }: SidebarProps) {
   const accessOptions = { isOwner, showAdmin, allowedPages: memberAllowedPages };
   const visibleNav = navItems.filter((item) => {
@@ -186,7 +213,16 @@ export function Sidebar({
     return canAccessPage(item.id, accessOptions);
   });
 
-  // Collapsed state, persisted so the user's preference survives reloads.
+  const sections = useMemo(() => {
+    return SECTION_ORDER.map((section) => ({
+      section,
+      label: SECTION_LABELS[section],
+      items: visibleNav.filter((item) => item.section === section),
+    })).filter((s) => s.items.length > 0);
+  }, [visibleNav]);
+
+  const superAdminTabs = useMemo(() => getSuperAdminNavTabs(), []);
+
   const [collapsed, setCollapsed] = useState<boolean>(getInitialCollapsed);
 
   useEffect(() => {
@@ -199,13 +235,24 @@ export function Sidebar({
 
   const toggleCollapsed = useCallback(() => setCollapsed((prev) => !prev), []);
 
+  const handleAdminTab = useCallback(
+    (tab: SuperAdminTab) => {
+      onAdminTab?.(tab);
+      onPage('admin');
+    },
+    [onAdminTab, onPage]
+  );
+
+  /** Platform admins use Super Admin sections as the primary navbar. */
+  const useSuperAdminNav = showAdmin && onAdminTab != null;
+
   return (
     <nav
       className={`sidebar flex-shrink-0 z-10 flex flex-col h-full py-3 transition-[width] duration-200 ease-in-out ${
         collapsed ? 'w-[60px] px-2' : 'w-[220px] px-3'
       }`}
+      data-tour={useSuperAdminNav ? 'nav-admin' : undefined}
     >
-      {/* Brand + collapse toggle */}
       <div
         className={`flex items-center h-9 mb-3 flex-shrink-0 ${
           collapsed ? 'justify-center' : 'justify-between px-1'
@@ -238,35 +285,84 @@ export function Sidebar({
         </button>
       </div>
 
-      {/* Nav items — active item shows an accent background + left indicator */}
       <div className="flex flex-col gap-0.5 flex-1 min-h-0 overflow-y-auto scrollable">
-        {visibleNav.map(({ id, label, icon }) => (
-          <button
-            key={id}
-            type="button"
-            data-tour={`nav-${id}`}
-            onClick={() => onPage(id)}
-            title={collapsed ? label : undefined}
-            className={`relative flex items-center gap-2.5 rounded-md h-9 text-[12px] whitespace-nowrap transition-colors ${
-              collapsed ? 'justify-center px-0' : 'px-2.5'
-            } ${
-              page === id
-                ? 'text-ink font-medium bg-[var(--color-row-hover)]'
-                : 'text-muted font-normal hover:text-ink hover:bg-[var(--color-row-hover)]'
-            }`}
-          >
-            {page === id && (
-              <span className="absolute left-0 top-1.5 bottom-1.5 w-[3px] rounded-full bg-ink" />
+        {useSuperAdminNav ? (
+          <>
+            {!collapsed && (
+              <div className="px-2.5 pt-1 pb-1 text-[10px] font-medium uppercase tracking-[0.06em] text-label">
+                Super Admin
+              </div>
             )}
-            <span className="w-[16px] h-[16px] flex-shrink-0 [&>svg]:w-[16px] [&>svg]:h-[16px]">
-              {icon}
-            </span>
-            {!collapsed && <span className="truncate">{label}</span>}
-          </button>
-        ))}
+            {superAdminTabs.map(({ id, label }) => {
+              const active = page === 'admin' && adminTab === id;
+              return (
+                <button
+                  key={id}
+                  type="button"
+                  data-tour={`nav-admin-${id}`}
+                  onClick={() => handleAdminTab(id)}
+                  title={collapsed ? label : undefined}
+                  className={`relative flex items-center gap-2.5 rounded-md h-9 text-[12px] whitespace-nowrap transition-colors ${
+                    collapsed ? 'justify-center px-0' : 'px-2.5'
+                  } ${
+                    active
+                      ? 'text-ink font-medium bg-[var(--color-row-hover)]'
+                      : 'text-muted font-normal hover:text-ink hover:bg-[var(--color-row-hover)]'
+                  }`}
+                >
+                  {active && (
+                    <span className="absolute left-0 top-1.5 bottom-1.5 w-[3px] rounded-full bg-ink" />
+                  )}
+                  {!collapsed && <span className="truncate">{label}</span>}
+                  {collapsed && (
+                    <span className="text-[10px] font-medium uppercase">
+                      {label.slice(0, 1)}
+                    </span>
+                  )}
+                </button>
+              );
+            })}
+          </>
+        ) : (
+          sections.map(({ section, label, items }) => (
+            <div key={section} className="flex flex-col gap-0.5">
+              {!collapsed && sections.length > 1 && (
+                <div className="px-2.5 pt-1 pb-1 text-[10px] font-medium uppercase tracking-[0.06em] text-label">
+                  {label}
+                </div>
+              )}
+              {collapsed && sections.length > 1 && section !== sections[0]?.section && (
+                <div className="mx-auto w-4 h-px bg-divider my-1" aria-hidden />
+              )}
+              {items.map(({ id, label: itemLabel, icon }) => (
+                <button
+                  key={id}
+                  type="button"
+                  data-tour={`nav-${id}`}
+                  onClick={() => onPage(id)}
+                  title={collapsed ? itemLabel : undefined}
+                  className={`relative flex items-center gap-2.5 rounded-md h-9 text-[12px] whitespace-nowrap transition-colors ${
+                    collapsed ? 'justify-center px-0' : 'px-2.5'
+                  } ${
+                    page === id
+                      ? 'text-ink font-medium bg-[var(--color-row-hover)]'
+                      : 'text-muted font-normal hover:text-ink hover:bg-[var(--color-row-hover)]'
+                  }`}
+                >
+                  {page === id && (
+                    <span className="absolute left-0 top-1.5 bottom-1.5 w-[3px] rounded-full bg-ink" />
+                  )}
+                  <span className="w-[16px] h-[16px] flex-shrink-0 [&>svg]:w-[16px] [&>svg]:h-[16px]">
+                    {icon}
+                  </span>
+                  {!collapsed && <span className="truncate">{itemLabel}</span>}
+                </button>
+              ))}
+            </div>
+          ))
+        )}
       </div>
 
-      {/* Footer: theme, notifications, week range, sign out */}
       <div
         className={`flex flex-col gap-2 mt-3 pt-3 flex-shrink-0 border-t border-divider ${
           collapsed ? 'items-center' : ''
@@ -276,14 +372,16 @@ export function Sidebar({
         {ONBOARDING_TUTORIAL_ENABLED && onReplayTour && (
           <ReplayTourButton onReplay={onReplayTour} />
         )}
-        {showNotificationsToggle && onToggleNotificationsHidden && (
+        {showNotificationsToggle && onToggleNotificationsHidden && !useSuperAdminNav && (
           <NotificationsToggle
             hidden={notificationsHidden}
             onToggle={onToggleNotificationsHidden}
           />
         )}
         <ThemeToggle />
-        {weekRange && !collapsed && <span className="date-badge">{weekRange}</span>}
+        {weekRange && !collapsed && !useSuperAdminNav && (
+          <span className="date-badge">{weekRange}</span>
+        )}
         {onSignOut && (
           <button
             type="button"

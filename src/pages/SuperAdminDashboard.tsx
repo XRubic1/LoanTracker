@@ -1,62 +1,41 @@
-import { useState } from 'react';
 import { CompaniesTab } from '@/components/superAdmin/CompaniesTab';
 import { AllLoansTab } from '@/components/superAdmin/AllLoansTab';
 import { AllActivityTab } from '@/components/superAdmin/AllActivityTab';
 import { CompanyGroupsTab } from '@/components/superAdmin/CompanyGroupsTab';
+import { ClientInsuranceTab } from '@/components/superAdmin/ClientInsuranceTab';
+import { DeductedInstallmentsTab } from '@/components/superAdmin/DeductedInstallmentsTab';
+import { AdminClientsTab } from '@/components/superAdmin/AdminClientsTab';
 import { PlatformAdminsTab } from '@/components/superAdmin/PlatformAdminsTab';
 import { useAuth } from '@/contexts/AuthContext';
+import {
+  SUPER_ADMIN_FILL_TABS,
+  type SuperAdminTab,
+} from '@/lib/superAdminTabs';
 
-type SuperAdminTab = 'companies' | 'loans' | 'activity' | 'groups' | 'superAdmins';
+interface SuperAdminDashboardProps {
+  /** Active section from the main Super Admin sidebar. */
+  tab: SuperAdminTab;
+}
 
-const isDev = import.meta.env.DEV;
-
-const BASE_TABS: { id: SuperAdminTab; label: string }[] = [
-  { id: 'companies', label: 'Companies' },
-  { id: 'loans', label: 'All loans' },
-  { id: 'activity', label: 'All activity' },
-  { id: 'groups', label: 'Client groups' },
-];
-
-const DEV_TAB: { id: SuperAdminTab; label: string } = {
-  id: 'superAdmins',
-  label: 'Super admins',
-};
-
-export function SuperAdminDashboard() {
+/**
+ * Platform admin content pane. Section switching lives in the main sidebar.
+ */
+export function SuperAdminDashboard({ tab }: SuperAdminDashboardProps) {
   const { user } = useAuth();
-  const tabs = isDev ? [...BASE_TABS, DEV_TAB] : BASE_TABS;
-  const [tab, setTab] = useState<SuperAdminTab>('companies');
+  const fillsViewport = SUPER_ADMIN_FILL_TABS.has(tab);
+  const isDev = import.meta.env.DEV;
 
   return (
-    <div>
-      <div className="page-header">
-        <h1 className="page-title">Super Admin</h1>
-      </div>
-
-      <p className="text-muted2 text-[13px] mb-5 max-w-2xl">
-        Provision companies, invite team admins, and monitor loans and worksheet activity across
-        all tenants.
-      </p>
-
-      <div className="flex flex-wrap gap-1 mb-6 border-b border-border pb-0">
-        {tabs.map((t) => (
-          <button
-            key={t.id}
-            type="button"
-            onClick={() => setTab(t.id)}
-            className={`px-4 py-2.5 text-[13px] font-medium border-b-2 -mb-px transition-colors ${
-              tab === t.id
-                ? 'border-accent text-accent'
-                : 'border-transparent text-muted2 hover:text-ink'
-            }`}
-          >
-            {t.label}
-          </button>
-        ))}
-      </div>
-
+    <div
+      className={`h-full min-h-0 ${
+        fillsViewport ? 'overflow-hidden' : 'overflow-auto admin-table-scroll'
+      }`}
+    >
+      {tab === 'dashboard' && <AllLoansTab />}
+      {tab === 'clients' && <AdminClientsTab />}
+      {tab === 'insurance' && <ClientInsuranceTab />}
+      {tab === 'deductions' && <DeductedInstallmentsTab />}
       {tab === 'companies' && <CompaniesTab createdBy={user?.id ?? null} />}
-      {tab === 'loans' && <AllLoansTab />}
       {tab === 'activity' && <AllActivityTab />}
       {tab === 'groups' && <CompanyGroupsTab />}
       {tab === 'superAdmins' && isDev && <PlatformAdminsTab />}

@@ -44,7 +44,7 @@ const PUBLIC_TABLES = [
   'brokersnapshot_cancellation_suggestions',
 ];
 
-const AUTH_USERS_SKIP = new Set(['confirmed_at', 'email', 'phone']);
+const AUTH_USERS_SKIP = new Set(['confirmed_at']);
 const AUTH_IDENTITIES_SKIP = new Set(['email']);
 
 async function tableExists(client, schema, table) {

@@ -45,6 +45,7 @@ import {
 } from '@/lib/notificationsBanner';
 import { canAccessPage, getDefaultPageForUser } from '@/lib/tabPermissions';
 import { OnboardingTutorial } from '@/components/OnboardingTutorial';
+import type { SuperAdminTab } from '@/lib/superAdminTabs';
 
 export default function App() {
   const {
@@ -59,6 +60,7 @@ export default function App() {
     signOut,
   } = useAuth();
   const [page, setPage] = useState<PageId>('overview');
+  const [adminTab, setAdminTab] = useState<SuperAdminTab>('dashboard');
   const [loanDetailId, setLoanDetailId] = useState<number | null>(null);
   const [reserveDetailId, setReserveDetailId] = useState<number | null>(null);
   const [overviewCloseInstallmentLoanId, setOverviewCloseInstallmentLoanId] = useState<number | null>(null);
@@ -171,8 +173,14 @@ export default function App() {
     (memberAllowedPages?.includes('loans') ?? false);
 
   const showNotificationsToggle = useMemo(
-    () => hasActiveNotifications(loans, clientInsurance, clients),
-    [loans, clientInsurance, clients]
+    () =>
+      hasActiveNotifications(
+        loans,
+        clientInsurance,
+        // New-client review is team-only — exclude for Super Admin portal users.
+        showAdminNav ? [] : clients
+      ),
+    [loans, clientInsurance, clients, showAdminNav]
   );
 
   const selectedClientInsurance =
@@ -487,6 +495,8 @@ export default function App() {
         isOwner={isOwner}
         showAdmin={showAdminNav}
         memberAllowedPages={memberAllowedPages}
+        adminTab={adminTab}
+        onAdminTab={showAdminNav ? setAdminTab : undefined}
         onReplayTour={() => setTutorialReplay((n) => n + 1)}
       />
       <OnboardingTutorial
@@ -494,12 +504,20 @@ export default function App() {
         onNavigate={setPage}
         replayToken={tutorialReplay}
       />
-      {/* Right-hand column: notifications banner stacked above the scrollable page content. */}
+      {/* Right-hand column: notifications banner stacked above the scrollable page content.
+          Super Admin fills the viewport — skip banners so they don't push the layout down. */}
       <div className="flex-1 min-w-0 min-h-0 flex flex-col">
-        {!notificationsHidden && (
+        {!notificationsHidden && !(page === 'admin' && showAdminNav) && (
           <AppNotifications loans={loans} clientInsurance={clientInsurance} clients={clients} />
         )}
-        <main className="main flex-1 min-h-0 overflow-y-auto py-4 px-6" data-tour="main-content">
+        <main
+          className={`main flex-1 min-h-0 px-5 ${
+            page === 'admin' && showAdminNav
+              ? 'overflow-hidden py-2 flex flex-col'
+              : 'overflow-y-auto py-4'
+          }`}
+          data-tour="main-content"
+        >
         {configMissing && (
           <div className="mb-3 py-2 px-3 rounded-lg text-xs flex items-center justify-between gap-2 bg-alert-warn border border-red/30 text-alert-warn-fg">
             <span>
@@ -638,7 +656,11 @@ export default function App() {
             clearWorksheetActivityInRange={clearWorksheetActivityInRange}
           />
         )}
-        {page === 'admin' && showAdminNav && <SuperAdminDashboard />}
+        {page === 'admin' && showAdminNav && (
+          <div className="flex-1 min-h-0">
+            <SuperAdminDashboard tab={adminTab} />
+          </div>
+        )}
         {page === 'users' && <UsersPage />}
         </main>
       </div>

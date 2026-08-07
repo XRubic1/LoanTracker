@@ -3,9 +3,11 @@ interface ModalProps {
   onClose: () => void;
   title: string;
   children: React.ReactNode;
+  /** Optional panel width classes (defaults to compact dialog). */
+  panelClassName?: string;
 }
 
-export function Modal({ open, onClose, title, children }: ModalProps) {
+export function Modal({ open, onClose, title, children, panelClassName }: ModalProps) {
   if (!open) return null;
   return (
     <div
@@ -16,7 +18,9 @@ export function Modal({ open, onClose, title, children }: ModalProps) {
       aria-labelledby="modal-title"
     >
       <div
-        className="panel-surface rounded-xl p-5 w-[440px] max-w-[95vw]"
+        className={
+          panelClassName ?? 'panel-surface rounded-xl p-5 w-[440px] max-w-[95vw]'
+        }
         onClick={(e) => e.stopPropagation()}
       >
         <h3 id="modal-title" className="text-sm font-semibold text-ink mb-3 tracking-tight">

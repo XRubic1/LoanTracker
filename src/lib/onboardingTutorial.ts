@@ -126,7 +126,7 @@ export function buildTutorialSteps(options: BuildTutorialOptions): TutorialStep[
       {
         id: 'welcome-admin',
         title: 'Super Admin',
-        body: 'Use the Super Admin tab to create companies, link accounts for shared clients, and monitor all teams.',
+        body: 'Use the sidebar to open the live loans dashboard, insurance alerts, deducted installments, and company tools.',
         tourTarget: 'nav-admin',
         page: 'admin',
         placement: 'bottom',

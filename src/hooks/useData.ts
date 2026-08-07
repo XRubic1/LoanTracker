@@ -48,7 +48,7 @@ export interface UseDataResult {
   loading: boolean;
   error: string | null;
   configMissing: boolean;
-  refetch: () => Promise<void>;
+  refetch: (opts?: { silent?: boolean }) => Promise<void>;
   /** Optional forOwnerId lets platform admins assign the loan to another team. */
   addLoan: (payload: Omit<Loan, 'id'>, forOwnerId?: string | null) => Promise<Loan>;
   updateLoanById: (id: number, loan: Loan) => Promise<Loan>;
@@ -100,14 +100,20 @@ export function useData(ownerId: string | null, userId: string | null = null): U
   const [error, setError] = useState<string | null>(null);
 
   const configMissing = isConfigMissing();
+  /** Skip full-page "Loading…" when we already have data (realtime / soft sync). */
+  const hasLoadedOnceRef = useRef(false);
+  const refetchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const refetch = useCallback(async () => {
+  const refetch = useCallback(async (opts?: { silent?: boolean }) => {
     if (configMissing || ownerId == null) {
       setLoading(false);
       return;
     }
-    setLoading(true);
-    setError(null);
+    const silent = opts?.silent === true && hasLoadedOnceRef.current;
+    if (!silent) {
+      setLoading(true);
+      setError(null);
+    }
     try {
       const [loansData, reservesData] = await Promise.all([fetchLoans(), fetchReserves()]);
       setLoans(loansData);
@@ -157,64 +163,61 @@ export function useData(ownerId: string | null, userId: string | null = null): U
       } catch {
         setWorksheetEntries([]);
       }
+      hasLoadedOnceRef.current = true;
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
+      if (!silent) {
+        setError(err instanceof Error ? err.message : String(err));
+      } else {
+        console.warn('Silent data refresh failed:', err);
+      }
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   }, [configMissing, ownerId]);
 
-  useEffect(() => {
-    refetch();
+  /** Debounced background sync used by Realtime — avoids loading flash and refetch storms. */
+  const scheduleSilentRefetch = useCallback(() => {
+    if (refetchTimerRef.current) clearTimeout(refetchTimerRef.current);
+    refetchTimerRef.current = setTimeout(() => {
+      refetchTimerRef.current = null;
+      void refetch({ silent: true });
+    }, 250);
   }, [refetch]);
 
-  // Realtime: refetch when loans or reserves change (any user/tab) so UI stays in sync
-  const refetchRef = useRef(refetch);
-  refetchRef.current = refetch;
+  useEffect(() => {
+    void refetch();
+  }, [refetch]);
+
+  // Realtime: sync when loans/reserves/etc. change (other tabs/users) without a full page refresh
+  const scheduleSilentRefetchRef = useRef(scheduleSilentRefetch);
+  scheduleSilentRefetchRef.current = scheduleSilentRefetch;
   useEffect(() => {
     if (configMissing || ownerId == null) return;
     const supabase = getSupabase();
     if (!supabase) return;
+
+    const onChange = () => {
+      scheduleSilentRefetchRef.current();
+    };
+
     const channel = supabase
-      .channel('loans-reserves-client-insurance-changes')
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'loans' },
-        () => { refetchRef.current(); }
-      )
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'reserves' },
-        () => { refetchRef.current(); }
-      )
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'client_insurance' },
-        () => { refetchRef.current(); }
-      )
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'insurance_verification' },
-        () => { refetchRef.current(); }
-      )
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'aaa_payments' },
-        () => { refetchRef.current(); }
-      )
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'clients' },
-        () => { refetchRef.current(); }
-      )
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'worksheet_entries' },
-        () => { refetchRef.current(); }
-      )
-      .subscribe();
+      .channel(`workspace-data-${ownerId}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'loans' }, onChange)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'reserves' }, onChange)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'client_insurance' }, onChange)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'insurance_verification' }, onChange)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'aaa_payments' }, onChange)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'clients' }, onChange)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'worksheet_entries' }, onChange)
+      .subscribe((status, err) => {
+        if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+          console.warn('Realtime subscription issue:', status, err);
+        }
+      });
+
     return () => {
-      supabase.removeChannel(channel);
+      if (refetchTimerRef.current) clearTimeout(refetchTimerRef.current);
+      void supabase.removeChannel(channel);
     };
   }, [configMissing, ownerId]);
 

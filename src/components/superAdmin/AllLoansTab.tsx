@@ -1,224 +1,81 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { fetchAllLoansForAdmin, fetchCompaniesForAdmin } from '@/lib/supabase-db';
 import type { AdminLoanRow } from '@/lib/supabase-db';
 import type { Loan } from '@/types';
 import { Badge } from '@/components/Badge';
 import { useAuth } from '@/contexts/AuthContext';
+import { getSupabase } from '@/lib/supabase';
 import { fetchIsPlatformAdmin, isPlatformAdminEnv } from '@/lib/platformAdmin';
 import {
   fmt,
-  fmtDate,
   getLoanRemaining,
+  getLoanEffectiveTotal,
+  getLoanProviderDisplay,
   getNextDueDate,
   getLoanOverdueCount,
+  getLoanOverdueStatusLabel,
   isDueThisWeek,
 } from '@/lib/utils';
 
-/** Loans grouped under one team/company, split into open and closed. */
-interface TeamGroup {
-  key: string;
-  name: string;
-  open: AdminLoanRow[];
-  closed: AdminLoanRow[];
-}
+type StatusFilter = 'open' | 'closed' | 'all';
 
 function isLoanClosed(loan: Loan): boolean {
   return loan.paidCount >= loan.totalInstallments;
 }
 
 /**
- * Status for one loan. Overdue only counts installments whose grace period
- * (until the Monday after the due date) has passed — i.e. a whole week was
- * skipped. A payment due earlier in the current week is "due", not overdue.
+ * Status for Super Admin — ignore team "hidden" flag; show real schedule status.
  */
-function getLoanStatus(loan: Loan): { variant: 'due' | 'overdue' | 'ok' | 'closed'; label: string } {
+function getLoanStatus(loan: Loan): {
+  variant: 'due' | 'overdue' | 'ok' | 'closed';
+  label: string;
+} {
   if (isLoanClosed(loan)) return { variant: 'closed', label: 'Closed' };
   try {
-    const overdueCount = getLoanOverdueCount(loan);
-    if (overdueCount > 0) {
-      return { variant: 'overdue', label: overdueCount > 1 ? `Overdue ×${overdueCount}` : 'Overdue' };
+    const overdueLabel = getLoanOverdueStatusLabel(loan);
+    if (overdueLabel) {
+      return { variant: 'overdue', label: overdueLabel };
     }
-    if (isDueThisWeek(loan)) return { variant: 'due', label: 'Due this week' };
+    if (isDueThisWeek(loan)) return { variant: 'due', label: 'Open' };
   } catch {
     // Bad/missing schedule dates — still list the loan.
   }
-  return { variant: 'ok', label: 'On track' };
+  return { variant: 'ok', label: 'Pending' };
 }
 
-/** Compact stat used in the per-team header strip. */
-function TeamStat({
-  label,
-  value,
-  sub,
-  tone,
-}: {
-  label: string;
-  value: string;
-  sub?: string;
-  tone?: 'red' | 'blue';
-}) {
-  const valueClass = tone === 'red' ? 'text-red' : tone === 'blue' ? 'text-accent' : 'text-ink';
-  return (
-    <div className="panel-surface px-3.5 py-2.5">
-      <div className="text-[10px] text-label uppercase tracking-[0.05em] mb-1">{label}</div>
-      <div className={`text-[17px] font-medium leading-none tabular-nums ${valueClass}`}>{value}</div>
-      {sub && <div className="text-[10px] text-muted mt-1">{sub}</div>}
-    </div>
-  );
+/** Urgency rank for sorting (lower = more urgent). */
+function statusRank(loan: Loan): number {
+  if (isLoanClosed(loan)) return 3;
+  try {
+    if (getLoanOverdueCount(loan) > 0) return 0;
+    if (isDueThisWeek(loan)) return 1;
+  } catch {
+    return 2;
+  }
+  return 2;
 }
 
-/** Shared table for a list of loans (open or closed). */
-function LoanTable({ rows }: { rows: AdminLoanRow[] }) {
-  return (
-    <div className="overflow-x-auto">
-      <table className="w-full border-collapse text-[13px] min-w-[720px]">
-        <thead>
-          <tr className="border-b border-border bg-surface/40 text-[10px] uppercase tracking-wider text-label">
-            <th className="text-left font-normal px-4 py-2.5">Client</th>
-            <th className="text-left font-normal px-4 py-2.5">Ref</th>
-            <th className="text-right font-normal px-4 py-2.5">Total</th>
-            <th className="text-right font-normal px-4 py-2.5">Remaining</th>
-            <th className="text-left font-normal px-4 py-2.5">Next due</th>
-            <th className="text-center font-normal px-4 py-2.5 w-20">Paid</th>
-            <th className="text-left font-normal px-4 py-2.5 w-32">Status</th>
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map(({ loan }) => {
-            const status = getLoanStatus(loan);
-            let nextDueLabel = '—';
-            if (!isLoanClosed(loan)) {
-              try {
-                const nextDue = getNextDueDate(loan);
-                if (nextDue) nextDueLabel = fmtDate(nextDue);
-              } catch {
-                nextDueLabel = '—';
-              }
-            }
-            return (
-              <tr key={loan.id} className="border-b border-border last:border-b-0">
-                <td className="px-4 py-2.5 font-medium text-ink">{loan.client}</td>
-                <td className="px-4 py-2.5 text-muted2">{loan.ref || '—'}</td>
-                <td className="px-4 py-2.5 text-right tabular-nums">
-                  {fmt(loan.total + (loan.factoringFee ?? 0))}
-                </td>
-                <td className="px-4 py-2.5 text-right tabular-nums">{fmt(getLoanRemaining(loan))}</td>
-                <td className="px-4 py-2.5 text-muted2 tabular-nums">{nextDueLabel}</td>
-                <td className="px-4 py-2.5 text-center tabular-nums text-muted2">
-                  {loan.paidCount}/{loan.totalInstallments}
-                </td>
-                <td className="px-4 py-2.5">
-                  <Badge variant={status.variant}>{status.label}</Badge>
-                </td>
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
-    </div>
-  );
-}
-
-/** One team section: quick stats + open loans + closed loans (both always visible). */
-function TeamSection({ group }: { group: TeamGroup }) {
-  const stats = useMemo(() => {
-    const openLoans = group.open.map((r) => r.loan);
-    let outstanding = 0;
-    let overdueLoans = 0;
-    let dueThisWeek = 0;
-    for (const l of openLoans) {
-      outstanding += getLoanRemaining(l);
-      try {
-        const overdue = getLoanOverdueCount(l);
-        if (overdue > 0) overdueLoans += 1;
-        else if (isDueThisWeek(l)) dueThisWeek += 1;
-      } catch {
-        // skip bad schedule for stats
-      }
-    }
-    const totalFunded = [...group.open, ...group.closed].reduce(
-      (sum, r) => sum + r.loan.total + (r.loan.factoringFee ?? 0),
-      0
-    );
-    return { outstanding, overdueLoans, dueThisWeek, totalFunded };
-  }, [group]);
-
-  return (
-    <div className="space-y-2.5">
-      <div className="flex items-center gap-2 pt-1">
-        <h2 className="text-[14px] font-semibold text-ink">{group.name}</h2>
-        <span className="count-badge">{group.open.length + group.closed.length}</span>
-      </div>
-
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2.5">
-        <TeamStat
-          label="Open loans"
-          value={String(group.open.length)}
-          sub={`${group.closed.length} closed`}
-        />
-        <TeamStat label="Outstanding" value={fmt(stats.outstanding)} sub="remaining on open loans" />
-        <TeamStat label="Total funded" value={fmt(stats.totalFunded)} sub="all loans incl. fees" />
-        <TeamStat
-          label="Due this week"
-          value={String(stats.dueThisWeek)}
-          sub="payments this week"
-          tone={stats.dueThisWeek > 0 ? 'blue' : undefined}
-        />
-        <TeamStat
-          label="Overdue"
-          value={String(stats.overdueLoans)}
-          sub="week skipped"
-          tone={stats.overdueLoans > 0 ? 'red' : undefined}
-        />
-      </div>
-
-      {/* Open loans */}
-      <div className="panel-surface">
-        <div className="flex items-center justify-between px-4 py-[11px] border-b border-border">
-          <span className="text-[11px] font-medium text-ink uppercase tracking-[0.04em]">
-            Open loans
-          </span>
-          <span className="count-badge">{group.open.length}</span>
-        </div>
-        {group.open.length > 0 ? (
-          <LoanTable rows={group.open} />
-        ) : (
-          <p className="text-muted2 text-[13px] py-5 text-center">No open loans.</p>
-        )}
-      </div>
-
-      {/* Closed loans — always shown, not collapsed */}
-      <div className="panel-surface">
-        <div className="flex items-center justify-between px-4 py-[11px] border-b border-border">
-          <span className="text-[11px] font-medium text-ink uppercase tracking-[0.04em]">
-            Closed loans
-          </span>
-          <span className="count-badge">{group.closed.length}</span>
-        </div>
-        {group.closed.length > 0 ? (
-          <LoanTable rows={group.closed} />
-        ) : (
-          <p className="text-muted2 text-[13px] py-5 text-center">No closed loans.</p>
-        )}
-      </div>
-    </div>
-  );
-}
-
+/**
+ * Platform-wide loans dashboard: compact flat table that fills the viewport.
+ */
 export function AllLoansTab() {
   const { user } = useAuth();
   const [rows, setRows] = useState<AdminLoanRow[]>([]);
   const [companies, setCompanies] = useState<{ id: number; name: string }[]>([]);
   const [companyFilter, setCompanyFilter] = useState<number | 'all'>('all');
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>('open');
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   /** True when JWT/email is in platform_admins (required for RLS to return all loans). */
   const [dbPlatformAdmin, setDbPlatformAdmin] = useState<boolean | null>(null);
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    setError(null);
+  const load = useCallback(async (opts?: { silent?: boolean }) => {
+    const silent = opts?.silent === true;
+    if (!silent) {
+      setLoading(true);
+      setError(null);
+    }
     try {
       const [loanRows, companyRows, isDbAdmin] = await Promise.all([
         fetchAllLoansForAdmin(companyFilter === 'all' ? null : companyFilter),
@@ -229,9 +86,13 @@ export function AllLoansTab() {
       setCompanies(companyRows.map((c) => ({ id: c.id, name: c.name })));
       setDbPlatformAdmin(isDbAdmin);
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
+      if (!silent) {
+        setError(err instanceof Error ? err.message : String(err));
+      } else {
+        console.warn('All loans silent refresh failed:', err);
+      }
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   }, [companyFilter]);
 
@@ -239,146 +100,286 @@ export function AllLoansTab() {
     void load();
   }, [load]);
 
+  // Live updates when any loan is created, closed, or edited — no page refresh needed
+  const loadRef = useRef(load);
+  loadRef.current = load;
+  const silentRefreshTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => {
+    const supabase = getSupabase();
+    if (!supabase) return;
+
+    const scheduleRefresh = () => {
+      if (silentRefreshTimer.current) clearTimeout(silentRefreshTimer.current);
+      silentRefreshTimer.current = setTimeout(() => {
+        silentRefreshTimer.current = null;
+        void loadRef.current({ silent: true });
+      }, 250);
+    };
+
+    const channel = supabase
+      .channel('admin-all-loans-realtime')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'loans' }, scheduleRefresh)
+      .subscribe((status, err) => {
+        if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+          console.warn('All loans realtime issue:', status, err);
+        }
+      });
+
+    return () => {
+      if (silentRefreshTimer.current) clearTimeout(silentRefreshTimer.current);
+      void supabase.removeChannel(channel);
+    };
+  }, []);
+
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
-    if (!q) return rows;
-    return rows.filter(
-      (r) =>
+    return rows.filter((r) => {
+      const closed = isLoanClosed(r.loan);
+      // Include team-hidden loans; Super Admin ignores the hidden flag for display
+      if (statusFilter === 'open' && closed) return false;
+      if (statusFilter === 'closed' && !closed) return false;
+      if (!q) return true;
+      return (
         r.loan.client.toLowerCase().includes(q) ||
         r.loan.ref.toLowerCase().includes(q) ||
         (r.companyName?.toLowerCase().includes(q) ?? false)
-    );
-  }, [rows, search]);
+      );
+    });
+  }, [rows, search, statusFilter]);
 
-  // Group loans by team; open loans sorted urgent-first, closed by newest.
-  const teamGroups = useMemo(() => {
-    const map = new Map<string, TeamGroup>();
-    for (const row of filtered) {
-      const key = row.companyId != null ? String(row.companyId) : 'unassigned';
-      let group = map.get(key);
-      if (!group) {
-        group = { key, name: row.companyName ?? 'Unassigned', open: [], closed: [] };
-        map.set(key, group);
-      }
-      (isLoanClosed(row.loan) ? group.closed : group.open).push(row);
-    }
-
-    const statusRank = (loan: Loan) => {
+  /** Urgent-first sort so overdue/due loans surface at the top. */
+  const sorted = useMemo(() => {
+    return [...filtered].sort((a, b) => {
+      const rank = statusRank(a.loan) - statusRank(b.loan);
+      if (rank !== 0) return rank;
       try {
-        if (getLoanOverdueCount(loan) > 0) return 0;
-        if (isDueThisWeek(loan)) return 1;
+        const aDue = getNextDueDate(a.loan)?.getTime() ?? Infinity;
+        const bDue = getNextDueDate(b.loan)?.getTime() ?? Infinity;
+        if (aDue !== bDue) return aDue - bDue;
       } catch {
-        return 2;
+        // fall through
       }
-      return 2;
-    };
-
-    for (const group of map.values()) {
-      group.open.sort((a, b) => {
-        const rank = statusRank(a.loan) - statusRank(b.loan);
-        if (rank !== 0) return rank;
-        try {
-          const aDue = getNextDueDate(a.loan)?.getTime() ?? Infinity;
-          const bDue = getNextDueDate(b.loan)?.getTime() ?? Infinity;
-          return aDue - bDue;
-        } catch {
-          return 0;
-        }
-      });
-      group.closed.sort((a, b) => Number(b.loan.id) - Number(a.loan.id));
-    }
-
-    return [...map.values()].sort((a, b) => {
-      if (a.key === 'unassigned') return 1;
-      if (b.key === 'unassigned') return -1;
-      return a.name.localeCompare(b.name);
+      return a.loan.client.localeCompare(b.loan.client);
     });
   }, [filtered]);
 
-  const envOnlyAdmin =
-    dbPlatformAdmin === false && isPlatformAdminEnv(user?.email);
+  const summary = useMemo(() => {
+    let openCount = 0;
+    let closedCount = 0;
+    let outstanding = 0;
+    let portfolio = 0;
+    let overdueLoans = 0;
+    let dueThisWeek = 0;
+    let dueThisWeekAmount = 0;
+
+    for (const { loan } of rows) {
+      portfolio += getLoanEffectiveTotal(loan);
+      if (isLoanClosed(loan)) {
+        closedCount += 1;
+        continue;
+      }
+      openCount += 1;
+      outstanding += getLoanRemaining(loan);
+      try {
+        if (getLoanOverdueCount(loan) > 0) overdueLoans += 1;
+        else if (isDueThisWeek(loan)) {
+          dueThisWeek += 1;
+          dueThisWeekAmount += loan.installment;
+        }
+      } catch {
+        // skip bad schedule for stats
+      }
+    }
+
+    return {
+      openCount,
+      closedCount,
+      outstanding,
+      portfolio,
+      overdueLoans,
+      dueThisWeek,
+      dueThisWeekAmount,
+      totalLoans: rows.length,
+    };
+  }, [rows]);
+
+  const envOnlyAdmin = dbPlatformAdmin === false && isPlatformAdminEnv(user?.email);
 
   return (
-    <div className="space-y-4">
-      <p className="text-muted2 text-[13px]">
-        Read-only view of loans across all companies, grouped by team. Loans show as overdue only
-        when a payment week was skipped.
-      </p>
-
+    <div className="h-full min-h-0 flex flex-col gap-2">
       {error && (
-        <div className="rounded-lg border border-red/30 bg-red/5 px-4 py-2 text-[13px] text-red">
+        <div className="flex-shrink-0 rounded border border-red/30 bg-red/5 px-3 py-1.5 text-[12px] text-red">
           {error}
         </div>
       )}
 
       {envOnlyAdmin && (
-        <div className="rounded-lg border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-[13px] text-ink">
-          <p className="font-medium mb-1">Super Admin UI only — database access not granted</p>
-          <p className="text-muted2">
-            Your email is in <code className="text-[12px] text-ink">VITE_PLATFORM_ADMIN_EMAILS</code>{' '}
-            (nav access), but not in the <code className="text-[12px] text-ink">platform_admins</code>{' '}
-            table. Row-level security will not return other teams&apos; loans until you add it. Run
-            this in the Supabase SQL editor:
+        <div className="flex-shrink-0 rounded border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-[12px] text-ink">
+          <p className="font-medium mb-0.5">Database access not granted</p>
+          <p className="text-muted2 text-[11px]">
+            Add your email to <code className="text-ink">platform_admins</code>, then sign out/in.
           </p>
-          <pre className="mt-2 rounded-md bg-surface px-3 py-2 text-[12px] overflow-x-auto">
-            {`INSERT INTO public.platform_admins (email)\nVALUES ('${(user?.email ?? 'you@example.com').toLowerCase()}')\nON CONFLICT DO NOTHING;`}
-          </pre>
-          <p className="text-muted2 mt-2">Then sign out and sign back in, and reload this tab.</p>
         </div>
       )}
 
-      <div className="flex flex-wrap gap-3 items-end">
-        <div>
-          <label className="block text-[10px] uppercase tracking-wider text-muted mb-1">Company</label>
-          <select
-            value={companyFilter === 'all' ? 'all' : String(companyFilter)}
-            onChange={(e) =>
-              setCompanyFilter(e.target.value === 'all' ? 'all' : Number(e.target.value))
-            }
-            className="rounded-md border border-border bg-surface px-3 py-1.5 text-[13px] text-ink min-w-[180px]"
-          >
-            <option value="all">All companies</option>
-            {companies.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.name}
-              </option>
-            ))}
-          </select>
+      {/* Portfolio strip */}
+      {!loading && (
+        <div className="flex-shrink-0 grid grid-cols-2 sm:grid-cols-4 gap-2">
+          <div className="panel-surface px-3 py-2 min-w-0">
+            <div className="text-[10px] text-label uppercase tracking-[0.05em] mb-1">Portfolio</div>
+            <div className="text-[16px] font-medium leading-none tabular-nums text-ink truncate">
+              {fmt(summary.portfolio)}
+            </div>
+            <div className="text-[10px] text-muted2 mt-1">
+              {summary.totalLoans} loan{summary.totalLoans === 1 ? '' : 's'} funded
+            </div>
+          </div>
+          <div className="panel-surface px-3 py-2 min-w-0">
+            <div className="text-[10px] text-label uppercase tracking-[0.05em] mb-1">Open balance</div>
+            <div className="text-[16px] font-medium leading-none tabular-nums text-ink truncate">
+              {fmt(summary.outstanding)}
+            </div>
+            <div className="text-[10px] text-muted2 mt-1">
+              {summary.openCount} open loan{summary.openCount === 1 ? '' : 's'}
+            </div>
+          </div>
+          <div className="panel-surface px-3 py-2 min-w-0">
+            <div className="text-[10px] text-label uppercase tracking-[0.05em] mb-1">Due this week</div>
+            <div
+              className={`text-[16px] font-medium leading-none tabular-nums truncate ${
+                summary.dueThisWeek > 0 ? 'text-accent' : 'text-ink'
+              }`}
+            >
+              {summary.dueThisWeek}
+            </div>
+            <div className="text-[10px] text-muted2 mt-1 tabular-nums">
+              {summary.dueThisWeek > 0 ? `${fmt(summary.dueThisWeekAmount)} due` : 'none scheduled'}
+            </div>
+          </div>
+          <div className="panel-surface px-3 py-2 min-w-0">
+            <div className="text-[10px] text-label uppercase tracking-[0.05em] mb-1">Risky loans</div>
+            <div
+              className={`text-[16px] font-medium leading-none tabular-nums truncate ${
+                summary.overdueLoans > 0 ? 'text-red' : 'text-ink'
+              }`}
+            >
+              {summary.overdueLoans}
+            </div>
+            <div className="text-[10px] text-muted2 mt-1">past grace</div>
+          </div>
         </div>
-        <div className="flex-1 min-w-[200px]">
-          <label className="block text-[10px] uppercase tracking-wider text-muted mb-1">Search</label>
-          <input
-            type="search"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Client, ref, company…"
-            className="w-full rounded-md border border-border bg-surface px-3 py-1.5 text-[13px] text-ink"
-          />
+      )}
+
+      {/* Filters */}
+      <div className="flex-shrink-0 flex flex-wrap gap-x-3 gap-y-1.5 items-center">
+        <div className="flex gap-0.5">
+          {(
+            [
+              { id: 'open', label: 'Open' },
+              { id: 'closed', label: 'Closed' },
+              { id: 'all', label: 'All' },
+            ] as const
+          ).map((opt) => (
+            <button
+              key={opt.id}
+              type="button"
+              onClick={() => setStatusFilter(opt.id)}
+              className={`filter-btn ${statusFilter === opt.id ? 'filter-btn-active' : ''}`}
+            >
+              {opt.label}
+            </button>
+          ))}
         </div>
+        <select
+          value={companyFilter === 'all' ? 'all' : String(companyFilter)}
+          onChange={(e) =>
+            setCompanyFilter(e.target.value === 'all' ? 'all' : Number(e.target.value))
+          }
+          className="rounded border border-border bg-surface px-2 py-1 text-[12px] text-ink min-w-[140px]"
+          aria-label="Team filter"
+        >
+          <option value="all">All teams</option>
+          {companies.map((c) => (
+            <option key={c.id} value={c.id}>
+              {c.name}
+            </option>
+          ))}
+        </select>
+        <input
+          type="search"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder="Client, loan #, team…"
+          className="flex-1 min-w-[140px] rounded border border-border bg-surface px-2 py-1 text-[12px] text-ink"
+        />
         {!loading && (
-          <p className="text-[11px] text-muted2 pb-1.5">
-            {filtered.length} loan{filtered.length === 1 ? '' : 's'}
-            {search.trim() ? ' match' : ' loaded'}
-          </p>
+          <span className="text-[11px] text-muted2">
+            {sorted.length}
+            {statusFilter === 'open' && summary.closedCount > 0
+              ? ` · ${summary.closedCount} closed`
+              : ''}
+          </span>
         )}
       </div>
 
       {loading ? (
-        <p className="text-muted2 text-[13px]">Loading loans…</p>
-      ) : teamGroups.length === 0 ? (
-        <div className="panel-surface px-4 py-8 text-center space-y-2">
-          <p className="text-muted2 text-[13px]">No loans match filters.</p>
-          {rows.length === 0 && !envOnlyAdmin && dbPlatformAdmin && (
-            <p className="text-muted text-[12px]">
-              Query returned 0 rows. Confirm loans exist for company owners in the database.
-            </p>
-          )}
+        <p className="text-muted2 text-[12px] py-6 text-center">Loading loans…</p>
+      ) : sorted.length === 0 ? (
+        <div className="panel-surface flex-1 flex items-center justify-center px-4 py-6">
+          <p className="text-muted2 text-[12px]">No loans match filters.</p>
         </div>
       ) : (
-        <div className="space-y-7">
-          {teamGroups.map((group) => (
-            <TeamSection key={group.key} group={group} />
-          ))}
+        <div className="panel-surface flex-1 min-h-0 overflow-hidden flex flex-col">
+          <div className="flex-1 min-h-0 overflow-auto admin-table-scroll">
+            <table className="w-full border-collapse text-[12px] min-w-[860px]">
+              <thead className="sticky top-0 z-[1]">
+                <tr className="border-b border-border bg-[var(--color-panel)] text-[10px] uppercase tracking-wider text-label">
+                  <th className="text-left font-normal px-3 py-1.5">Client</th>
+                  <th className="text-left font-normal px-3 py-1.5">Loan #</th>
+                  <th className="text-left font-normal px-3 py-1.5">Provider</th>
+                  <th className="text-right font-normal px-3 py-1.5">Installment</th>
+                  <th className="text-right font-normal px-3 py-1.5">Balance</th>
+                  <th className="text-center font-normal px-3 py-1.5">Deducted</th>
+                  <th className="text-left font-normal px-3 py-1.5">Team</th>
+                  <th className="text-left font-normal px-3 py-1.5 w-28">Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {sorted.map(({ loan, companyName }) => {
+                  const status = getLoanStatus(loan);
+                  return (
+                    <tr
+                      key={loan.id}
+                      className="border-b border-border last:border-b-0 row-hover"
+                    >
+                      <td className="px-3 py-1 font-medium text-ink">{loan.client}</td>
+                      <td className="px-3 py-1 text-muted2 tabular-nums font-mono text-[11px]">
+                        {loan.ref || '—'}
+                      </td>
+                      <td className="px-3 py-1 text-muted2">{getLoanProviderDisplay(loan)}</td>
+                      <td className="px-3 py-1 text-right tabular-nums text-ink">
+                        {fmt(loan.installment)}
+                      </td>
+                      <td className="px-3 py-1 text-right tabular-nums font-medium text-ink">
+                        {fmt(getLoanRemaining(loan))}
+                      </td>
+                      <td
+                        className="px-3 py-1 text-center tabular-nums"
+                        title={`${loan.paidCount} deducted of ${loan.totalInstallments}`}
+                      >
+                        <span className="text-ink font-medium">{loan.paidCount}</span>
+                        <span className="text-muted2">/{loan.totalInstallments}</span>
+                      </td>
+                      <td className="px-3 py-1 text-muted2">{companyName ?? 'Unassigned'}</td>
+                      <td className="px-3 py-1">
+                        <Badge variant={status.variant}>{status.label}</Badge>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
         </div>
       )}
     </div>

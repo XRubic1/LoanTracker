@@ -11,6 +11,7 @@ import { getNewClientsNeedingReview } from '@/lib/clientUtils';
 import type { Client } from '@/types';
 import { hasActiveNotifications } from '@/lib/notificationsBanner';
 import { isNewLoan } from '@/lib/utils';
+import { useAuth } from '@/contexts/AuthContext';
 
 interface AppNotificationsProps {
   loans: Loan[];
@@ -19,10 +20,14 @@ interface AppNotificationsProps {
 }
 
 export function AppNotifications({ loans, clientInsurance, clients = [] }: AppNotificationsProps) {
+  const { isPlatformAdmin } = useAuth();
   const [cancellationPopupOpen, setCancellationPopupOpen] = useState(false);
   const [newClientPopupOpen, setNewClientPopupOpen] = useState(false);
 
-  if (!hasActiveNotifications(loans, clientInsurance, clients)) return null;
+  // New-client review is team-only — never surface it on the Super Admin portal.
+  const clientsForReview = isPlatformAdmin ? [] : clients;
+
+  if (!hasActiveNotifications(loans, clientInsurance, clientsForReview)) return null;
 
   const visibleLoans = loans.filter((l) => !l.hidden);
   const activeLoans = visibleLoans.filter((l) => l.paidCount < l.totalInstallments);
@@ -39,7 +44,7 @@ export function AppNotifications({ loans, clientInsurance, clients = [] }: AppNo
     .map((c) => ({ ...c, daysUntil: getDaysUntilCancellation(c) ?? 0 }))
     .sort((a, b) => a.daysUntil - b.daysUntil);
 
-  const newClientsNeedingReview = getNewClientsNeedingReview(clients);
+  const newClientsNeedingReview = getNewClientsNeedingReview(clientsForReview);
 
   const showCancellation = cancellationWithDate.length > 0;
   const showNewLoans = newLoans.length > 0;

@@ -843,8 +843,15 @@ export interface AdminLoanRow {
   companyId: number | null;
 }
 
-/** All loans visible to platform admin (RLS). */
-export async function fetchAllLoansForAdmin(companyId?: number | null): Promise<AdminLoanRow[]> {
+/** Client insurance row enriched with company for platform admin views. */
+export interface AdminInsuranceRow {
+  insurance: ClientInsurance;
+  companyName: string | null;
+  companyId: number | null;
+}
+
+/** Map company owner_id → company id/name for admin joins. */
+async function fetchOwnerToCompanyMap(): Promise<Map<string, { id: number; name: string }>> {
   const supabase = getSupabase();
   if (!supabase) throw new Error('Supabase not configured');
   const { data: companies } = await supabase.from('companies').select('id, name, owner_id');
@@ -852,8 +859,15 @@ export async function fetchAllLoansForAdmin(companyId?: number | null): Promise<
   for (const c of companies ?? []) {
     if (c.owner_id) ownerToCompany.set(c.owner_id, { id: c.id, name: c.name });
   }
-  let query = supabase.from('loans').select('*').order('id', { ascending: false });
-  const { data, error } = await query;
+  return ownerToCompany;
+}
+
+/** All loans visible to platform admin (RLS). */
+export async function fetchAllLoansForAdmin(companyId?: number | null): Promise<AdminLoanRow[]> {
+  const supabase = getSupabase();
+  if (!supabase) throw new Error('Supabase not configured');
+  const ownerToCompany = await fetchOwnerToCompanyMap();
+  const { data, error } = await supabase.from('loans').select('*').order('id', { ascending: false });
   if (error) throw error;
   const rows = (data ?? []) as LoanRow[];
   return rows
@@ -862,6 +876,62 @@ export async function fetchAllLoansForAdmin(companyId?: number | null): Promise<
       const co = row.owner_id ? ownerToCompany.get(row.owner_id) : undefined;
       return {
         loan,
+        companyName: co?.name ?? null,
+        companyId: co?.id ?? null,
+      };
+    })
+    .filter((r) => companyId == null || r.companyId === companyId);
+}
+
+/** All client insurance rows visible to platform admin (RLS). */
+export async function fetchAllClientInsuranceForAdmin(
+  companyId?: number | null
+): Promise<AdminInsuranceRow[]> {
+  const supabase = getSupabase();
+  if (!supabase) throw new Error('Supabase not configured');
+  const ownerToCompany = await fetchOwnerToCompanyMap();
+  const { data, error } = await supabase
+    .from('client_insurance')
+    .select('*')
+    .order('client', { ascending: true });
+  if (error) throw error;
+  const rows = (data ?? []) as ClientInsuranceRow[];
+  return rows
+    .map((row) => {
+      const insurance = clientInsuranceFromRow(row)!;
+      const co = row.owner_id ? ownerToCompany.get(row.owner_id) : undefined;
+      return {
+        insurance,
+        companyName: co?.name ?? null,
+        companyId: co?.id ?? null,
+      };
+    })
+    .filter((r) => companyId == null || r.companyId === companyId);
+}
+
+/** Client registry row enriched with company for platform admin views. */
+export interface AdminClientRow {
+  client: Client;
+  companyName: string | null;
+  companyId: number | null;
+}
+
+/** All clients visible to platform admin (RLS). */
+export async function fetchAllClientsForAdmin(
+  companyId?: number | null
+): Promise<AdminClientRow[]> {
+  const supabase = getSupabase();
+  if (!supabase) throw new Error('Supabase not configured');
+  const ownerToCompany = await fetchOwnerToCompanyMap();
+  const { data, error } = await supabase.from('clients').select('*').order('name', { ascending: true });
+  if (error) throw error;
+  const rows = (data ?? []) as ClientRow[];
+  return rows
+    .map((row) => {
+      const client = clientFromRow(row)!;
+      const co = row.owner_id ? ownerToCompany.get(row.owner_id) : undefined;
+      return {
+        client,
         companyName: co?.name ?? null,
         companyId: co?.id ?? null,
       };

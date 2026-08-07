@@ -393,3 +393,14 @@ export function getLoanOverdueCount(loan: Loan): number {
   return count;
 }
 
+/**
+ * Human label for overdue loans, e.g. "Due 1 week" / "Due 2 weeks".
+ * Uses overdue installment count (weekly schedules ≈ weeks behind).
+ */
+export function getLoanOverdueStatusLabel(loan: Loan): string | null {
+  const count = getLoanOverdueCount(loan);
+  if (count <= 0) return null;
+  if (count === 1) return 'Due 1 week';
+  return `Due ${count} weeks`;
+}
+
