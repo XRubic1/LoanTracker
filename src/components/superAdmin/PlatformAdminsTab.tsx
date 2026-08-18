@@ -4,11 +4,11 @@ import {
   fetchPlatformAdmins,
   removePlatformAdmin,
 } from '@/lib/supabase-db';
-import { isPlatformAdminEnv } from '@/lib/platformAdmin';
+import { isPlatformAdminEnv, isProtectedPlatformAdmin } from '@/lib/platformAdmin';
 import { useAuth } from '@/contexts/AuthContext';
 import type { PlatformAdmin } from '@/types';
 
-/** Dev-only: grant/revoke platform super-admin emails (platform_admins table). */
+/** Grant/revoke platform super-admin emails (platform_admins table). */
 export function PlatformAdminsTab() {
   const { user, isPlatformAdmin, refreshProfile } = useAuth();
   const [admins, setAdmins] = useState<PlatformAdmin[]>([]);
@@ -58,6 +58,10 @@ export function PlatformAdminsTab() {
       setError('You cannot remove your own super-admin access here.');
       return;
     }
+    if (isProtectedPlatformAdmin(email, admins)) {
+      setError('The primary super-admin email cannot be removed.');
+      return;
+    }
     if (!window.confirm(`Remove super-admin access for ${email}?`)) return;
     setError(null);
     try {
@@ -85,9 +89,9 @@ export function PlatformAdminsTab() {
   return (
     <div className="space-y-6">
       <div className="rounded-xl border border-accent/25 bg-accent/5 px-4 py-3 text-[13px] text-ink">
-        <strong className="font-medium">Development</strong> — Super admins can use the Super Admin
-        tab, create companies, and view all tenants. They must sign in with the same email listed
-        here (or in <code className="text-[12px]">VITE_PLATFORM_ADMIN_EMAILS</code> for nav only).
+        Super admins can access this console, create companies, and view all tenants. Add their
+        email here first — they can then create an account with that same address (no company invite
+        needed).
       </div>
 
       {error && (
@@ -132,10 +136,15 @@ export function PlatformAdminsTab() {
             <tbody>
               {admins.map((a) => {
                 const isSelf = a.email === user?.email?.trim().toLowerCase();
+                const isPrimary = isProtectedPlatformAdmin(a.email, admins);
+                const canRemove = !isSelf && !isPrimary;
                 return (
                   <tr key={a.email} className="border-b border-border last:border-b-0">
                     <td className="px-4 py-3 font-medium text-ink">
                       {a.email}
+                      {isPrimary && (
+                        <span className="ml-2 text-[11px] text-muted2 font-normal">(primary)</span>
+                      )}
                       {isSelf && (
                         <span className="ml-2 text-[11px] text-muted2 font-normal">(you)</span>
                       )}
@@ -146,7 +155,7 @@ export function PlatformAdminsTab() {
                         : '—'}
                     </td>
                     <td className="px-4 py-3 text-right">
-                      {!isSelf && (
+                      {canRemove ? (
                         <button
                           type="button"
                           onClick={() => void handleRemove(a.email)}
@@ -154,6 +163,8 @@ export function PlatformAdminsTab() {
                         >
                           Remove
                         </button>
+                      ) : (
+                        <span className="text-[11px] text-muted2">Locked</span>
                       )}
                     </td>
                   </tr>

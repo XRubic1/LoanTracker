@@ -43,7 +43,9 @@ export function AuthPage() {
       } else {
         const invited = await hasPendingInvite(email.trim());
         if (!invited) {
-          setError('Sign-up is invite-only. Use the email address you were invited with.');
+          setError(
+            'Sign-up is invite-only. Use an invited email or one that was granted super-admin access.'
+          );
           return;
         }
         const { error: err } = await signUp(email.trim(), password);
@@ -72,7 +74,9 @@ export function AuthPage() {
           <p className="text-[12px] text-muted2 mt-2 max-w-[240px]">{BRAND_TAGLINE}</p>
         </div>
         <p className="text-muted2 text-sm mb-3">
-          {mode === 'login' ? 'Sign in to your account' : 'Create your account (invite required)'}
+          {mode === 'login'
+            ? 'Sign in to your account'
+            : 'Create your account (invite or super-admin email)'}
         </p>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
@@ -93,7 +97,9 @@ export function AuthPage() {
               placeholder="you@example.com"
             />
             {mode === 'register' && registerAllowed === false && (
-              <p className="text-[11px] text-accent mt-1">No pending invite for this email.</p>
+              <p className="text-[11px] text-accent mt-1">
+                No pending invite or super-admin access for this email.
+              </p>
             )}
           </div>
           <div>

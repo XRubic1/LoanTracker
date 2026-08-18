@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { fetchAllLoansForAdmin, fetchCompaniesForAdmin } from '@/lib/supabase-db';
+import { fetchAllLoansForAdmin, fetchCompaniesForAdmin, insertLoan } from '@/lib/supabase-db';
 import type { AdminLoanRow } from '@/lib/supabase-db';
 import type { Loan } from '@/types';
 import { Badge } from '@/components/Badge';
+import { AddLoanModal } from '@/components/modals/AddLoanModal';
 import { useAuth } from '@/contexts/AuthContext';
 import { getSupabase } from '@/lib/supabase';
 import { fetchIsPlatformAdmin, isPlatformAdminEnv } from '@/lib/platformAdmin';
@@ -61,10 +62,13 @@ function statusRank(loan: Loan): number {
 export function AllLoansTab() {
   const { user } = useAuth();
   const [rows, setRows] = useState<AdminLoanRow[]>([]);
-  const [companies, setCompanies] = useState<{ id: number; name: string }[]>([]);
+  const [companies, setCompanies] = useState<{ id: number; name: string; owner_id: string | null }[]>(
+    []
+  );
   const [companyFilter, setCompanyFilter] = useState<number | 'all'>('all');
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('open');
   const [search, setSearch] = useState('');
+  const [addLoanOpen, setAddLoanOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   /** True when JWT/email is in platform_admins (required for RLS to return all loans). */
@@ -83,7 +87,7 @@ export function AllLoansTab() {
         fetchIsPlatformAdmin(),
       ]);
       setRows(loanRows);
-      setCompanies(companyRows.map((c) => ({ id: c.id, name: c.name })));
+      setCompanies(companyRows.map((c) => ({ id: c.id, name: c.name, owner_id: c.owner_id })));
       setDbPlatformAdmin(isDbAdmin);
     } catch (err) {
       if (!silent) {
@@ -204,6 +208,10 @@ export function AllLoansTab() {
   }, [rows]);
 
   const envOnlyAdmin = dbPlatformAdmin === false && isPlatformAdminEnv(user?.email);
+  const defaultTeamOwnerId =
+    companyFilter === 'all'
+      ? null
+      : companies.find((c) => c.id === companyFilter)?.owner_id ?? null;
 
   return (
     <div className="h-full min-h-0 flex flex-col gap-2">
@@ -320,6 +328,13 @@ export function AllLoansTab() {
               : ''}
           </span>
         )}
+        <button
+          type="button"
+          onClick={() => setAddLoanOpen(true)}
+          className="ml-auto inline-flex items-center py-1 px-3 rounded-lg btn-primary text-[12px] font-medium hover:opacity-90"
+        >
+          + Add loan
+        </button>
       </div>
 
       {loading ? (
@@ -382,6 +397,17 @@ export function AllLoansTab() {
           </div>
         </div>
       )}
+
+      <AddLoanModal
+        open={addLoanOpen}
+        onClose={() => setAddLoanOpen(false)}
+        defaultTeamOwnerId={defaultTeamOwnerId}
+        onAdd={async (payload, forOwnerId) => {
+          const added = await insertLoan(payload, forOwnerId);
+          await load({ silent: true });
+          return added;
+        }}
+      />
     </div>
   );
 }

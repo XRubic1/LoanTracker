@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { Modal } from '@/components/Modal';
 import type { Loan, LoanProviderType } from '@/types';
 import { useAuth } from '@/contexts/AuthContext';
-import { useLinkedTeams } from '@/hooks/useLinkedTeams';
+import { fetchCompaniesForAdmin } from '@/lib/supabase-db';
 import { fmt, isWeekdayOnlySchedule, toNextWeekdayOnOrAfter } from '@/lib/utils';
 
 interface AddLoanModalProps {
@@ -10,17 +10,25 @@ interface AddLoanModalProps {
   onClose: () => void;
   /** forOwnerId is the team owner UUID when a platform admin picks a team. */
   onAdd: (payload: Omit<Loan, 'id'>, forOwnerId?: string | null) => Promise<Loan>;
+  /** Prefill team when opened from Super Admin with a team filter selected. */
+  defaultTeamOwnerId?: string | null;
+}
+
+interface AdminTeamChoice {
+  ownerId: string;
+  label: string;
 }
 
 const todayStr = new Date().toISOString().split('T')[0];
 
-export function AddLoanModal({ open, onClose, onAdd }: AddLoanModalProps) {
-  const { isPlatformAdmin, effectiveOwnerId } = useAuth();
-  const { options: teamOptions } = useLinkedTeams(
-    effectiveOwnerId,
-    isPlatformAdmin ? 'client-pool' : 'linked-group'
-  );
-  const teamChoices = teamOptions.filter((o) => o.ownerId);
+export function AddLoanModal({
+  open,
+  onClose,
+  onAdd,
+  defaultTeamOwnerId,
+}: AddLoanModalProps) {
+  const { isPlatformAdmin } = useAuth();
+  const [teamChoices, setTeamChoices] = useState<AdminTeamChoice[]>([]);
 
   const [client, setClient] = useState('');
   const [ref, setRef] = useState('');
@@ -34,7 +42,28 @@ export function AddLoanModal({ open, onClose, onAdd }: AddLoanModalProps) {
   const [teamOwnerId, setTeamOwnerId] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
-  // Reset / default team when modal opens for platform admin.
+  // Load all provisioned teams so Super Admin can assign the loan.
+  useEffect(() => {
+    if (!open || !isPlatformAdmin) return;
+    let cancelled = false;
+    void fetchCompaniesForAdmin()
+      .then((rows) => {
+        if (cancelled) return;
+        const choices = rows
+          .filter((c) => c.owner_id && c.status === 'active')
+          .map((c) => ({ ownerId: c.owner_id as string, label: c.name }));
+        setTeamChoices(choices);
+      })
+      .catch((err) => {
+        console.warn('Failed to load teams for add loan:', err);
+        if (!cancelled) setTeamChoices([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [open, isPlatformAdmin]);
+
+  // Default team when modal opens for platform admin.
   useEffect(() => {
     if (!open) return;
     if (!isPlatformAdmin) {
@@ -42,11 +71,13 @@ export function AddLoanModal({ open, onClose, onAdd }: AddLoanModalProps) {
       return;
     }
     setTeamOwnerId((prev) => {
-      if (prev && teamOptions.some((t) => t.ownerId === prev)) return prev;
-      const self = teamOptions.find((t) => t.ownerId === effectiveOwnerId);
-      return self?.ownerId ?? teamOptions.find((t) => t.ownerId)?.ownerId ?? '';
+      if (defaultTeamOwnerId && teamChoices.some((t) => t.ownerId === defaultTeamOwnerId)) {
+        return defaultTeamOwnerId;
+      }
+      if (prev && teamChoices.some((t) => t.ownerId === prev)) return prev;
+      return teamChoices[0]?.ownerId ?? '';
     });
-  }, [open, isPlatformAdmin, effectiveOwnerId, teamOptions]);
+  }, [open, isPlatformAdmin, defaultTeamOwnerId, teamChoices]);
 
   const totalNum = total.trim() ? parseFloat(total) : NaN;
   const totalInstNum = totalInstallments.trim() ? parseInt(totalInstallments, 10) : 0;

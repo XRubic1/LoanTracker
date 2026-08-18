@@ -68,7 +68,7 @@ export function getDefaultPageForUser(options: {
   allowedPages: PageId[] | null;
   userRole?: 'platform_admin' | 'team_admin' | 'team_member' | 'standalone';
 }): PageId {
-  if (options.showAdmin && options.userRole === 'platform_admin') return 'admin';
+  if (options.showAdmin) return 'admin';
   if (options.isOwner) return 'overview';
   const pages = options.allowedPages ?? [];
   return pages[0] ?? 'loans';

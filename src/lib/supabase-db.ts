@@ -38,6 +38,7 @@ import { AAA_PAYEES, CLIENT_EXPENSE_OPTIONS, type ClientExpenseType, type PageId
 import { normalizeClientEmail } from '@/lib/clientEmails';
 import { normalizeAllowedPages } from '@/lib/tabPermissions';
 import { getSupabase } from './supabase';
+import { isProtectedPlatformAdmin } from '@/lib/platformAdmin';
 
 /** True when status indicates cancellation and we have an expiration/cancellation date. */
 function isCancellationWithDate(status: string, expirationDate: string | null): boolean {
@@ -436,14 +437,16 @@ export async function addPlatformAdmin(email: string): Promise<PlatformAdmin> {
   return data as PlatformAdmin;
 }
 
-/** Revoke super-admin access (cannot remove yourself in UI). */
+/** Revoke super-admin access. The original/primary email cannot be removed. */
 export async function removePlatformAdmin(email: string): Promise<void> {
   const supabase = getSupabase();
   if (!supabase) throw new Error('Supabase not configured');
-  const { error } = await supabase
-    .from('platform_admins')
-    .delete()
-    .eq('email', email.trim().toLowerCase());
+  const normalized = email.trim().toLowerCase();
+  const admins = await fetchPlatformAdmins();
+  if (isProtectedPlatformAdmin(normalized, admins)) {
+    throw new Error('The primary super-admin email cannot be removed.');
+  }
+  const { error } = await supabase.from('platform_admins').delete().eq('email', normalized);
   if (error) throw error;
 }
 

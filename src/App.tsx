@@ -155,16 +155,27 @@ export default function App() {
   const initialLandingSet = useRef(false);
 
   useEffect(() => {
-    if (!user || authLoading || effectiveOwnerId == null) return;
-    if (!initialLandingSet.current && userRole === 'platform_admin') {
-      setPage('admin');
+    if (!user) {
+      initialLandingSet.current = false;
+      return;
+    }
+    if (authLoading || effectiveOwnerId == null) return;
+
+    if (!initialLandingSet.current) {
+      if (showAdminNav) {
+        setPage('admin');
+        setAdminTab('dashboard');
+      } else {
+        setPage(getDefaultPageForUser(tabAccess));
+      }
       initialLandingSet.current = true;
       return;
     }
+
     if (!canAccessPage(page, tabAccess)) {
       setPage(getDefaultPageForUser(tabAccess));
     }
-  }, [page, tabAccess, user, authLoading, effectiveOwnerId, userRole]);
+  }, [page, tabAccess, user, authLoading, effectiveOwnerId, showAdminNav]);
 
   const showMemberEmptyWorkspace =
     userRole === 'team_member' &&

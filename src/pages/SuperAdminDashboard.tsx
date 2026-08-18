@@ -23,7 +23,6 @@ interface SuperAdminDashboardProps {
 export function SuperAdminDashboard({ tab }: SuperAdminDashboardProps) {
   const { user } = useAuth();
   const fillsViewport = SUPER_ADMIN_FILL_TABS.has(tab);
-  const isDev = import.meta.env.DEV;
 
   return (
     <div
@@ -38,7 +37,7 @@ export function SuperAdminDashboard({ tab }: SuperAdminDashboardProps) {
       {tab === 'companies' && <CompaniesTab createdBy={user?.id ?? null} />}
       {tab === 'activity' && <AllActivityTab />}
       {tab === 'groups' && <CompanyGroupsTab />}
-      {tab === 'superAdmins' && isDev && <PlatformAdminsTab />}
+      {tab === 'superAdmins' && <PlatformAdminsTab />}
     </div>
   );
 }

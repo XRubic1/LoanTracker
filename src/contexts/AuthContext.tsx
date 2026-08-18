@@ -66,8 +66,7 @@ async function resolveUserRole(
 ): Promise<{ role: UserRole; company: CompanyContext | null }> {
   if (isPlatformAdminFlag) {
     const ownCompany = await fetchCompanyByOwnerId(uid);
-    if (ownCompany) return { role: 'team_admin', company: ownCompany };
-    return { role: 'platform_admin', company: null };
+    return { role: 'platform_admin', company: ownCompany };
   }
   const ownCompany = await fetchCompanyByOwnerId(uid);
   if (ownCompany && uid === effectiveOwnerId) {

@@ -32,3 +32,28 @@ export async function resolveIsPlatformAdmin(email: string | undefined | null): 
   if (isPlatformAdminEnv(email)) return true;
   return fetchIsPlatformAdmin();
 }
+
+/** Email of the original (first-added) platform admin, if any. */
+export function getPrimaryPlatformAdminEmail(
+  admins: { email: string; created_at?: string }[]
+): string | null {
+  if (!admins.length) return null;
+  const sorted = [...admins].sort((a, b) => {
+    const aTime = a.created_at ? new Date(a.created_at).getTime() : Number.MAX_SAFE_INTEGER;
+    const bTime = b.created_at ? new Date(b.created_at).getTime() : Number.MAX_SAFE_INTEGER;
+    if (aTime !== bTime) return aTime - bTime;
+    return a.email.localeCompare(b.email);
+  });
+  return sorted[0]?.email?.trim().toLowerCase() ?? null;
+}
+
+/** True for the original super-admin email, or emails listed in VITE_PLATFORM_ADMIN_EMAILS. */
+export function isProtectedPlatformAdmin(
+  email: string | undefined | null,
+  admins: { email: string; created_at?: string }[]
+): boolean {
+  const normalized = email?.trim().toLowerCase();
+  if (!normalized) return false;
+  if (isPlatformAdminEnv(normalized)) return true;
+  return getPrimaryPlatformAdminEmail(admins) === normalized;
+}
