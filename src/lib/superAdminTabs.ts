@@ -26,6 +26,7 @@ export const SUPER_ADMIN_FILL_TABS = new Set<SuperAdminTab>([
   'clients',
   'insurance',
   'deductions',
+  'activity',
 ]);
 
 /** Nav items shown in the main sidebar for platform admins. */

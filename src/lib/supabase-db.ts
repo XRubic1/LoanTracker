@@ -976,6 +976,10 @@ function loanFromRow(row: LoanRow | null): Loan | null {
   const rawNotes = Array.isArray(row.payment_notes) ? row.payment_notes : [];
   const total = row.total_installments ?? 0;
   const paymentNotes = Array.from({ length: total }, (_, i) => rawNotes[i] ?? '');
+  const rawAmounts = Array.isArray(row.payment_amounts) ? row.payment_amounts : [];
+  const paymentAmounts = rawAmounts
+    .map((a) => Number(a))
+    .filter((a) => Number.isFinite(a));
   const providerType = (row.provider_type === 'Other' ? 'Other' : 'TruFunding') as LoanProviderType;
   return {
     id: row.id,
@@ -990,6 +994,8 @@ function loanFromRow(row: LoanRow | null): Loan | null {
     freqDays: row.freq_days ?? 7,
     paymentDates,
     paymentNotes,
+    paymentAmounts,
+    partialPaidAmount: Number(row.partial_paid_amount ?? 0) || 0,
     note: row.note ?? '',
     providerType,
     providerName: row.provider_name ?? '',
@@ -1002,6 +1008,9 @@ function loanToRow(loan: Loan, ownerId?: string | null): Omit<LoanRow, 'id'> {
   const total = loan.totalInstallments ?? 0;
   const paymentNotes = (loan.paymentNotes ?? []).slice(0, total);
   while (paymentNotes.length < total) paymentNotes.push('');
+  const paymentAmounts = (loan.paymentAmounts ?? [])
+    .map((a) => Number(a))
+    .filter((a) => Number.isFinite(a));
   return {
     owner_id: ownerId ?? null,
     client: loan.client,
@@ -1014,6 +1023,8 @@ function loanToRow(loan: Loan, ownerId?: string | null): Omit<LoanRow, 'id'> {
     freq_days: loan.freqDays ?? 7,
     payment_dates: loan.paymentDates ?? [],
     payment_notes: paymentNotes,
+    payment_amounts: paymentAmounts,
+    partial_paid_amount: Number(loan.partialPaidAmount ?? 0) || 0,
     note: loan.note || null,
     provider_type: loan.providerType ?? 'TruFunding',
     provider_name: loan.providerName || null,
@@ -1837,34 +1848,146 @@ export async function rejectCancellationSuggestion(
   return suggestionFromRow(data as BrokerSnapshotCancellationSuggestionRow)!;
 }
 
-/** Parse edge function invoke errors into a user-readable message. */
+/** Pull a useful string from a gateway / edge JSON error body. */
+function messageFromEdgeBody(body: unknown): string | null {
+  if (body == null) return null;
+  if (typeof body === 'string') {
+    const t = body.trim();
+    return t || null;
+  }
+  if (typeof body !== 'object') return String(body);
+
+  const o = body as Record<string, unknown>;
+  const parts: string[] = [];
+
+  // Supabase gateway often uses `msg`; our function uses `error` / `message`.
+  for (const key of ['error', 'message', 'msg', 'detail', 'details', 'hint'] as const) {
+    const v = o[key];
+    if (typeof v === 'string' && v.trim()) parts.push(v.trim());
+  }
+  if (typeof o.code === 'string' && o.code.trim()) {
+    parts.push(`code: ${o.code.trim()}`);
+  }
+  if (typeof o.name === 'string' && o.name.trim() && !parts.some((p) => p.includes(o.name as string))) {
+    parts.push(`name: ${o.name.trim()}`);
+  }
+
+  // Nested error objects (rare)
+  if (o.error && typeof o.error === 'object') {
+    const nested = messageFromEdgeBody(o.error);
+    if (nested) parts.push(nested);
+  }
+
+  const unique = [...new Set(parts.filter(Boolean))];
+  return unique.length ? unique.join(' · ') : null;
+}
+
+/** Explain known platform failures with actionable next steps. */
+function enrichKnownEdgeErrors(message: string, status?: number): string {
+  const lower = message.toLowerCase();
+  const isCompute =
+    lower.includes('not having enough compute') ||
+    lower.includes('worker_limit') ||
+    lower.includes('cpu time') ||
+    lower.includes('wall clock') ||
+    lower.includes('memory limit') ||
+    status === 546;
+
+  if (isCompute) {
+    return (
+      `${message}\n\n` +
+      'What this means: the brokersnapshot-sync Edge Function ran out of time/memory ' +
+      '(usually from checking too many clients in one run).\n' +
+      'Try: filter to one team and run Check API again, or check a smaller set from API Monitoring. ' +
+      'Full details: Supabase → Edge Functions → brokersnapshot-sync → Logs.'
+    );
+  }
+
+  if (status === 504 || lower.includes('timeout') || lower.includes('timed out')) {
+    return (
+      `${message}\n\n` +
+      'The function timed out before finishing. Try one team at a time, or fewer clients per run.'
+    );
+  }
+
+  if (status === 401 || status === 403) {
+    return `${message}\n\nSign out and sign back in, then retry. Confirm your email is in platform_admins if this is a Super Admin check.`;
+  }
+
+  return message;
+}
+
+/**
+ * Parse edge function invoke errors into a user-readable message.
+ * Reads Response status + body (JSON or text) so gateway errors are not just "non-2xx".
+ */
 async function parseEdgeFunctionError(error: unknown): Promise<string> {
   const base = error instanceof Error ? error.message : String(error);
+  const name =
+    error instanceof Error && error.name && error.name !== 'Error' ? error.name : null;
   const ctx = (error as { context?: Response })?.context;
-  if (ctx && typeof ctx.json === 'function') {
+  const status =
+    ctx && typeof (ctx as Response).status === 'number' ? (ctx as Response).status : undefined;
+  const statusText =
+    ctx && typeof (ctx as Response).statusText === 'string'
+      ? (ctx as Response).statusText
+      : undefined;
+
+  let bodyMessage: string | null = null;
+  let rawBody: string | null = null;
+
+  if (ctx && typeof (ctx as Response).text === 'function') {
     try {
-      const body = (await ctx.json()) as { error?: string; message?: string };
-      if (body.error) return body.error;
-      if (body.message) return body.message;
+      // Prefer text() so we can show non-JSON bodies and still parse JSON when present.
+      rawBody = await (ctx as Response).text();
+      if (rawBody?.trim()) {
+        try {
+          bodyMessage = messageFromEdgeBody(JSON.parse(rawBody));
+        } catch {
+          bodyMessage = rawBody.trim().slice(0, 800);
+        }
+      }
     } catch {
-      // ignore JSON parse failure
+      // Body may already be consumed; try json() as fallback.
+      if (typeof (ctx as Response).json === 'function') {
+        try {
+          bodyMessage = messageFromEdgeBody(await (ctx as Response).json());
+        } catch {
+          // ignore
+        }
+      }
     }
   }
+
+  const headerBits: string[] = [];
+  if (status != null) headerBits.push(`HTTP ${status}${statusText ? ` ${statusText}` : ''}`);
+  if (name) headerBits.push(name);
+
+  let core = bodyMessage || base;
+  if (!bodyMessage && rawBody?.trim() && rawBody.trim() !== base) {
+    core = `${base} · ${rawBody.trim().slice(0, 400)}`;
+  }
+  if (headerBits.length && bodyMessage) {
+    core = `${headerBits.join(' · ')}: ${bodyMessage}`;
+  } else if (headerBits.length && !bodyMessage) {
+    core = `${headerBits.join(' · ')}: ${base}`;
+  }
+
   if (base.includes('Failed to send a request to the Edge Function')) {
     return (
       'Edge function not reachable. Deploy it with: supabase functions deploy brokersnapshot-sync ' +
       'and set BROKERSNAPSHOT_API_TOKEN in Supabase Dashboard → Edge Functions → Secrets.'
     );
   }
-  if (base.includes('non-2xx')) {
-    return `Edge function error: ${base}. Check Supabase → Edge Functions → brokersnapshot-sync → Logs.`;
-  }
-  return base;
+
+  return enrichKnownEdgeErrors(core, status);
 }
 
 export interface TriggerBrokerSnapshotSyncOptions {
   /** When set, only these client_insurance rows are checked (manual test mode). */
   clientInsuranceIds?: number[];
+  /** Platform admin: limit sync to these company owner UUIDs. */
+  ownerIds?: string[];
 }
 
 /** Trigger a manual BrokerSnapshot sync via edge function. */
@@ -1875,33 +1998,80 @@ export async function triggerBrokerSnapshotSync(
   status?: string;
   clients_checked?: number;
   cancellations_found?: number;
+  out_of_service_found?: number;
   errors_count?: number;
+  cancellation_hits?: {
+    client_insurance_id: number;
+    client: string;
+    mc: string;
+    cancellation_date: string | null;
+  }[];
+  out_of_service_hits?: {
+    client_insurance_id: number;
+    client: string;
+    mc: string;
+    operating_status: string;
+    app_status: string;
+    status_updated: boolean;
+  }[];
   error?: string;
   message?: string;
 }> {
   const supabase = getSupabase();
   if (!supabase) throw new Error('Supabase not configured');
-  const body: { trigger: 'manual'; client_insurance_ids?: number[] } = { trigger: 'manual' };
+  const body: {
+    trigger: 'manual';
+    client_insurance_ids?: number[];
+    owner_ids?: string[];
+  } = { trigger: 'manual' };
   if (options.clientInsuranceIds?.length) {
     body.client_insurance_ids = options.clientInsuranceIds;
+  }
+  if (options.ownerIds?.length) {
+    body.owner_ids = options.ownerIds;
   }
   const { data, error } = await supabase.functions.invoke('brokersnapshot-sync', {
     body,
   });
   if (error) {
-    throw new Error(await parseEdgeFunctionError(error));
+    // On non-2xx, supabase-js may still put the JSON body in `data`.
+    const fromData = messageFromEdgeBody(data);
+    const parsed = await parseEdgeFunctionError(error);
+    if (fromData && !parsed.toLowerCase().includes(fromData.toLowerCase().slice(0, 40))) {
+      throw new Error(enrichKnownEdgeErrors(`${parsed}\n${fromData}`));
+    }
+    throw new Error(parsed);
   }
   const result = (data ?? {}) as {
     sync_run_id?: number;
     status?: string;
     clients_checked?: number;
     cancellations_found?: number;
+    out_of_service_found?: number;
     errors_count?: number;
+    cancellation_hits?: {
+      client_insurance_id: number;
+      client: string;
+      mc: string;
+      cancellation_date: string | null;
+    }[];
+    out_of_service_hits?: {
+      client_insurance_id: number;
+      client: string;
+      mc: string;
+      operating_status: string;
+      app_status: string;
+      status_updated: boolean;
+    }[];
     error?: string;
     message?: string;
+    msg?: string;
+    code?: string;
   };
-  if (result.error) {
-    throw new Error(result.error);
+  if (result.error || result.msg) {
+    throw new Error(
+      enrichKnownEdgeErrors(messageFromEdgeBody(result) ?? result.error ?? result.msg ?? 'Sync failed')
+    );
   }
   return result;
 }

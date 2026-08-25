@@ -2,6 +2,11 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import type { Loan, Reserve, Client, ClientInsurance, InsuranceVerification, AaaPayment, WorksheetEntry } from '@/types';
 import { isConfigMissing, getSupabase } from '@/lib/supabase';
 import {
+  buildCloseLoanFully,
+  buildPostInstallmentPayment,
+} from '@/lib/loanPaymentActions';
+import { getLoanOpenInstallmentRemaining } from '@/lib/utils';
+import {
   fetchLoans,
   fetchReserves,
   insertLoan,
@@ -240,25 +245,35 @@ export function useData(ownerId: string | null, userId: string | null = null): U
 
   const markLoanPaid = useCallback(async (id: number) => {
     const loan = loans.find((l) => l.id === id);
-    if (!loan || loan.paidCount >= loan.totalInstallments) return;
-    const paymentDates = loan.paymentDates ?? [];
-    const updated: Loan = {
-      ...loan,
-      paidCount: loan.paidCount + 1,
-      paymentDates: [...paymentDates, new Date().toISOString().split('T')[0]],
-    };
-    await updateLoanById(id, updated);
+    if (!loan) return;
+    const result = buildPostInstallmentPayment(
+      loan,
+      getLoanOpenInstallmentRemaining(loan) || loan.installment
+    );
+    if (!result.ok) {
+      window.alert(result.error);
+      return;
+    }
+    await updateLoanById(id, result.loan);
+    if (result.message) window.alert(result.message);
   }, [loans, updateLoanById]);
 
   const reverseLoanPayment = useCallback(
     async (id: number) => {
       const loan = loans.find((l) => l.id === id);
-      if (!loan || loan.paidCount === 0) return;
+      if (!loan) return;
+      // Undo partial on open installment first, then undo last full payment.
+      if ((Number(loan.partialPaidAmount ?? 0) || 0) > 0) {
+        await updateLoanById(id, { ...loan, partialPaidAmount: 0 });
+        return;
+      }
+      if (loan.paidCount === 0) return;
       const paymentDates = loan.paymentDates ?? [];
       const updated: Loan = {
         ...loan,
         paidCount: loan.paidCount - 1,
         paymentDates: paymentDates.slice(0, -1),
+        partialPaidAmount: 0,
       };
       await updateLoanById(id, updated);
     },
@@ -269,18 +284,9 @@ export function useData(ownerId: string | null, userId: string | null = null): U
   const closeLoan = useCallback(
     async (id: number) => {
       const loan = loans.find((l) => l.id === id);
-      if (!loan || loan.paidCount >= loan.totalInstallments) return;
-      const today = new Date().toISOString().split('T')[0];
-      const paymentDates = [...(loan.paymentDates ?? [])];
-      while (paymentDates.length < loan.totalInstallments) paymentDates.push(today);
-      const paymentNotes = [...(loan.paymentNotes ?? [])];
-      while (paymentNotes.length < loan.totalInstallments) paymentNotes.push('');
-      const updated: Loan = {
-        ...loan,
-        paidCount: loan.totalInstallments,
-        paymentDates,
-        paymentNotes,
-      };
+      if (!loan) return;
+      const updated = buildCloseLoanFully(loan);
+      if (!updated) return;
       await updateLoanById(id, updated);
     },
     [loans, updateLoanById]

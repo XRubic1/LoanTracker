@@ -8,10 +8,12 @@ export const BROKERSNAPSHOT_API_BASE = 'https://brokersnapshot.com/api/v2';
 /** includeInsurance: 1=active/pending, 2=history, 4=rejected */
 export const INCLUDE_INSURANCE_FLAGS = '7';
 
-/** Client insurance statuses excluded from BrokerSnapshot sync. */
-export function isBrokerSnapshotEligibleStatus(status: string | null | undefined): boolean {
-  const s = (status ?? '').trim().toLowerCase();
-  return s !== 'inactive' && s !== 'out';
+/**
+ * Statuses eligible for BrokerSnapshot check.
+ * Out/Inactive are included so active insurance can restore them to OK.
+ */
+export function isBrokerSnapshotEligibleStatus(_status: string | null | undefined): boolean {
+  return true;
 }
 
 /** Clients eligible for BrokerSnapshot sync on one owner account (not linked teams). */
@@ -71,12 +73,19 @@ export interface BrokerSnapshotInsuranceRequired {
   [key: string]: unknown;
 }
 
+export interface BrokerSnapshotAuthority {
+  OperatingStatus?: string;
+  operating_status?: string;
+  [key: string]: unknown;
+}
+
 export interface BrokerSnapshotCompanyData {
   Id?: string;
   dot_number?: number;
   prefix?: string;
   docket_number?: number;
   General?: { name?: string; status_code?: string };
+  Authority?: BrokerSnapshotAuthority;
   InsuranceRequired?: BrokerSnapshotInsuranceRequired;
   ActiveInsurances?: BrokerSnapshotInsuranceActive[];
   HistoryInsurances?: BrokerSnapshotInsuranceHistory[];
@@ -100,7 +109,30 @@ export interface BrokerSnapshotResponseSummary {
   pending_cancellation_date?: string;
   has_pending_cancellation?: boolean;
   operating_status?: string;
+  /** True when there is no current active insurance (not Authority status). */
+  is_out_of_service?: boolean;
 }
+
+/**
+ * App status update driven by CURRENT insurance coverage.
+ * Authority / historical operating status is never used to force Out.
+ */
+export type InsuranceCoverageAppStatus = 'OK' | 'inactive';
+
+export interface DetectedInsuranceCoverageUpdate {
+  /** Human-readable reason (active insurance / no coverage). */
+  reason: string;
+  /** Authority text kept for logs only — not used to decide Out. */
+  operating_status?: string;
+  app_status: InsuranceCoverageAppStatus;
+  active_policy_count: number;
+  suggested_dot?: string;
+}
+
+/** @deprecated Use DetectedInsuranceCoverageUpdate — Authority OOS is no longer applied. */
+export type OperatingStatusAppStatus = InsuranceCoverageAppStatus;
+/** @deprecated Use DetectedInsuranceCoverageUpdate */
+export type DetectedOperatingStatusIssue = DetectedInsuranceCoverageUpdate;
 
 export type CancellationSuggestionReason = 'pending' | 'lapsed';
 
@@ -160,7 +192,14 @@ export function todayDateOnly(): string {
 /** FMCSA uses this date when no cancellation is scheduled (open-ended policy). */
 export const FMCSA_NO_CANCEL_DATE = '2035-01-01';
 
-const CANCELLATION_DATE_FIELDS = ['cancel_effective_date', 'cancellation_date'] as const;
+/** API may return snake_case or PascalCase depending on serialization. */
+const CANCELLATION_DATE_FIELDS = [
+  'cancel_effective_date',
+  'CancelEffectiveDate',
+  'cancellation_date',
+  'CancellationDate',
+  'cancelEffectiveDate',
+] as const;
 
 /** Add calendar years to a YYYY-MM-DD date. */
 function addYearsToDate(dateOnly: string, years: number): string {
@@ -258,8 +297,8 @@ export function findPendingCancellation(
   return future[0] ?? null;
 }
 
-/** Build Company API request path (no token). */
-export function buildCompanyRequestPath(mc: string, dot?: string): string | null {
+/** Build Company API request path from MC only (DOT is never sent). */
+export function buildCompanyRequestPath(mc: string, _dot?: string): string | null {
   const parsed = parseMcDocket(mc);
   if (!parsed) return null;
   const params = new URLSearchParams({
@@ -268,8 +307,6 @@ export function buildCompanyRequestPath(mc: string, dot?: string): string | null
     include: '3',
     includeInsurance: INCLUDE_INSURANCE_FLAGS,
   });
-  const dotTrimmed = (dot ?? '').trim().replace(/^DOT[-\s]*/i, '').replace(/\D/g, '');
-  if (dotTrimmed) params.set('dot', dotTrimmed);
   return `/Company?${params.toString()}`;
 }
 
@@ -279,11 +316,73 @@ export function formatCancellationInsightDate(dateOnly: string): string {
   return d.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
 }
 
+/** Read FMCSA operating status from Company payload (Authority, then General). */
+export function getOperatingStatus(data: BrokerSnapshotCompanyData | undefined): string | undefined {
+  if (!data) return undefined;
+  const fromAuthority =
+    data.Authority?.OperatingStatus ?? data.Authority?.operating_status ?? undefined;
+  if (fromAuthority && String(fromAuthority).trim()) return String(fromAuthority).trim();
+  const fromGeneral = data.General?.status_code;
+  if (fromGeneral && String(fromGeneral).trim()) return String(fromGeneral).trim();
+  return undefined;
+}
+
+/**
+ * Authority operating-status text is logged only — never maps to app "out".
+ * Kept for backward-compatible call sites; always returns null.
+ */
+export function mapOperatingStatusToAppStatus(
+  _operatingStatus: string | null | undefined
+): OperatingStatusAppStatus | null {
+  return null;
+}
+
+/**
+ * Status updates from CURRENT ActiveInsurances only (not Authority / history).
+ * If BrokerSnapshot shows active insurance, never leave the client as Out/Inactive
+ * just because Authority says "Not Authorized" or "Out Of Service".
+ * Pending cancellations stay on the suggestion path.
+ */
+export function detectInsuranceCoverageUpdate(
+  record: ClientInsuranceSnapshot,
+  data: BrokerSnapshotCompanyData | undefined
+): DetectedInsuranceCoverageUpdate | null {
+  if (!data) return null;
+
+  const activeCount = (data.ActiveInsurances ?? []).length;
+  const operatingStatus = getOperatingStatus(data);
+  const suggestedDot =
+    data.dot_number && !(record.dot ?? '').trim() ? String(data.dot_number) : undefined;
+  const current = (record.status ?? '').trim().toLowerCase();
+
+  // Current coverage is active — restore OK if stuck as out/inactive from Authority.
+  if (activeCount > 0 && (current === 'out' || current === 'inactive')) {
+    return {
+      reason: 'active_insurance',
+      operating_status: operatingStatus,
+      app_status: 'OK',
+      active_policy_count: activeCount,
+      suggested_dot: suggestedDot,
+    };
+  }
+
+  return null;
+}
+
+/** @deprecated Use detectInsuranceCoverageUpdate */
+export function detectOperatingStatusIssue(
+  record: ClientInsuranceSnapshot,
+  data: BrokerSnapshotCompanyData | undefined
+): DetectedInsuranceCoverageUpdate | null {
+  return detectInsuranceCoverageUpdate(record, data);
+}
+
 /** Extract summary fields from API response for logging. */
 export function buildResponseSummary(data: BrokerSnapshotCompanyData | undefined): BrokerSnapshotResponseSummary {
   const active = data?.ActiveInsurances ?? [];
   const history = data?.HistoryInsurances ?? [];
   const pending = findPendingCancellation(data);
+  const operatingStatus = getOperatingStatus(data);
   let latestCancel: string | undefined;
   const today = todayDateOnly();
   for (const c of collectCancellationCandidates(data)) {
@@ -299,7 +398,9 @@ export function buildResponseSummary(data: BrokerSnapshotCompanyData | undefined
     latest_cancel_date: latestCancel,
     pending_cancellation_date: pending?.date,
     has_pending_cancellation: !!pending,
-    operating_status: (data as { Authority?: { OperatingStatus?: string } })?.Authority?.OperatingStatus,
+    operating_status: operatingStatus,
+    // Coverage gap flag — not Authority operating status.
+    is_out_of_service: active.length === 0 && !pending,
   };
 }
 

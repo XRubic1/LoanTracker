@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import type { Loan } from '@/types';
 import { Modal } from '@/components/Modal';
-import { fmt, fmtDate, getLoanRemaining, getScheduleDueDateOnly } from '@/lib/utils';
+import { fmt, fmtDate, getLoanInstallmentAmount, getLoanOpenInstallmentRemaining, getLoanRemaining, getScheduleDueDateOnly } from '@/lib/utils';
 
 interface LoanDetailModalProps {
   loan: Loan | null;
@@ -17,8 +17,13 @@ interface LoanDetailModalProps {
   isAccountAdmin: boolean;
   onCloseLoan: () => void;
   onUpdateInstallmentNote: (index: number, note: string) => void;
-  /** When set, "Close installment" uses this single update (saves note + marks paid) to avoid race. paidDate is YYYY-MM-DD. */
-  onCloseInstallmentWithNote?: (index: number, note: string, paidDate: string) => Promise<void>;
+  /** When set, posts paymentAmount toward the open installment (partial / full / overpay). */
+  onCloseInstallmentWithNote?: (
+    index: number,
+    note: string,
+    paidDate: string,
+    paymentAmount: number
+  ) => Promise<void>;
   /** Update the paid date for an already-closed installment. */
   onUpdatePaymentDate?: (index: number, date: string) => Promise<void>;
 }
@@ -67,6 +72,9 @@ export function LoanDetailModal({
   const [selectedInstallmentIndex, setSelectedInstallmentIndex] = useState<number | null>(null);
   const [popupNote, setPopupNote] = useState('');
   const [popupCloseDate, setPopupCloseDate] = useState('');
+  const [popupAmount, setPopupAmount] = useState('');
+  const [popupError, setPopupError] = useState<string | null>(null);
+  const [popupSubmitting, setPopupSubmitting] = useState(false);
 
   const todayStr = () => new Date().toISOString().split('T')[0];
 
@@ -76,6 +84,13 @@ export function LoanDetailModal({
       setPopupNote(notes[selectedInstallmentIndex] ?? '');
       const existingPaidDate = loan.paymentDates?.[selectedInstallmentIndex];
       setPopupCloseDate(existingPaidDate ?? todayStr());
+      setPopupError(null);
+      if (selectedInstallmentIndex === loan.paidCount) {
+        const rem = getLoanOpenInstallmentRemaining(loan);
+        setPopupAmount(String(rem > 0 ? rem : loan.installment));
+      } else {
+        setPopupAmount('');
+      }
     }
   }, [loan, selectedInstallmentIndex]);
 
@@ -85,6 +100,7 @@ export function LoanDetailModal({
   const isFullyPaid = loan.paidCount >= loan.totalInstallments;
   const canReverse = loan.paidCount > 0;
   const notes = loan.paymentNotes ?? [];
+  const openPartial = Number(loan.partialPaidAmount ?? 0) || 0;
 
   const handleDelete = () => {
     runIfAccountAdmin(() => {
@@ -111,18 +127,49 @@ export function LoanDetailModal({
     setSelectedInstallmentIndex(null);
   };
 
-  /** Save note and close this installment (only when it's the next unpaid). Uses popupCloseDate. */
+  /** Post payment toward the next unpaid installment (partial / full / overpay). */
   const handleCloseInstallment = async () => {
     if (selectedInstallmentIndex === null) return;
-    if (selectedInstallmentIndex === loan.paidCount && onCloseInstallmentWithNote) {
-      await onCloseInstallmentWithNote(selectedInstallmentIndex, popupNote.trim(), popupCloseDate || todayStr());
-    } else {
+
+    if (selectedInstallmentIndex < loan.paidCount) {
+      const msg = `Installment #${selectedInstallmentIndex + 1} is already fully paid. Nothing left to post on this installment.`;
+      setPopupError(msg);
+      window.alert(msg);
+      return;
+    }
+
+    if (selectedInstallmentIndex !== loan.paidCount) {
       onUpdateInstallmentNote(selectedInstallmentIndex, popupNote.trim());
-      if (selectedInstallmentIndex === loan.paidCount) {
+      closeInstallmentPopup();
+      return;
+    }
+
+    const amountNum = popupAmount.trim() ? parseFloat(popupAmount) : NaN;
+    if (!Number.isFinite(amountNum) || amountNum <= 0) {
+      setPopupError('Enter a payment amount greater than 0.');
+      return;
+    }
+
+    setPopupSubmitting(true);
+    setPopupError(null);
+    try {
+      if (onCloseInstallmentWithNote) {
+        await onCloseInstallmentWithNote(
+          selectedInstallmentIndex,
+          popupNote.trim(),
+          popupCloseDate || todayStr(),
+          amountNum
+        );
+      } else {
+        onUpdateInstallmentNote(selectedInstallmentIndex, popupNote.trim());
         await onMarkPaid();
       }
+      closeInstallmentPopup();
+    } catch (err) {
+      setPopupError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setPopupSubmitting(false);
     }
-    closeInstallmentPopup();
   };
 
   const handleSaveNoteOnly = () => {
@@ -276,12 +323,14 @@ export function LoanDetailModal({
             {Array.from({ length: loan.totalInstallments }, (_, i) => {
               const paid = i < loan.paidCount;
               const isNext = i === loan.paidCount;
+              const partialHere = isNext && openPartial > 0 ? openPartial : 0;
               const dueStr = getScheduleDueDateOnly(loan.startDate, i, loan.freqDays ?? 7);
               const [sy, sm, sd] = dueStr.split('-').map(Number);
               const scheduledDate = new Date(sy, sm - 1, sd);
               const actualDate =
                 loan.paymentDates?.[i] ? fmtDate(loan.paymentDates[i]) : null;
               const hasNote = !!(notes[i] ?? '').trim();
+              const slotAmount = getLoanInstallmentAmount(loan, i);
               return (
                 <div
                   key={i}
@@ -305,12 +354,16 @@ export function LoanDetailModal({
                     )}
                   </div>
                   <div className="flex items-center gap-1 shrink-0">
-                    <span className="font-mono text-yellow">{fmt(loan.installment)}</span>
+                    <span className="font-mono text-yellow">
+                      {partialHere > 0
+                        ? `${fmt(partialHere)} / ${fmt(slotAmount)}`
+                        : fmt(slotAmount)}
+                    </span>
                     <NoteIcon hasNote={hasNote} onClick={() => openInstallmentPopup(i)} />
                     <span
-                      className={`text-[11px] w-12 text-right ${paid ? 'text-green' : isNext ? 'text-yellow' : 'text-muted'}`}
+                      className={`text-[11px] w-14 text-right ${paid ? 'text-green' : partialHere > 0 ? 'text-yellow' : isNext ? 'text-yellow' : 'text-muted'}`}
                     >
-                      {paid ? '✓ Paid' : isNext ? 'Next' : 'Pending'}
+                      {paid ? '✓ Paid' : partialHere > 0 ? 'Partial' : isNext ? 'Next' : 'Pending'}
                     </span>
                   </div>
                 </div>
@@ -436,7 +489,7 @@ export function LoanDetailModal({
               })()}
             </p>
             <label className="block text-[11px] text-muted uppercase tracking-wider mb-1.5">
-              Close date
+              Payment date
             </label>
             <input
               type="date"
@@ -444,6 +497,27 @@ export function LoanDetailModal({
               onChange={(e) => setPopupCloseDate(e.target.value)}
               className="w-full bg-surface border border-border rounded-lg py-2 px-3 text-[13px] text-ink outline-none focus:border-accent mb-4"
             />
+            {selectedIsNextUnpaid && (
+              <>
+                {openPartial > 0 && (
+                  <p className="text-[12px] text-muted2 mb-2">
+                    Already posted: {fmt(openPartial)} · Remaining:{' '}
+                    {fmt(getLoanOpenInstallmentRemaining(loan))}
+                  </p>
+                )}
+                <label className="block text-[11px] text-muted uppercase tracking-wider mb-1.5">
+                  Payment amount
+                </label>
+                <input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={popupAmount}
+                  onChange={(e) => setPopupAmount(e.target.value)}
+                  className="w-full bg-surface border border-border rounded-lg py-2 px-3 text-[13px] text-ink outline-none focus:border-accent mb-4 tabular-nums"
+                />
+              </>
+            )}
             <label className="block text-[11px] text-muted uppercase tracking-wider mb-1.5">
               Note
             </label>
@@ -454,21 +528,28 @@ export function LoanDetailModal({
               rows={3}
               className="w-full bg-surface border border-border rounded-lg py-2 px-3 text-[13px] text-ink placeholder:text-muted outline-none focus:border-accent resize-none"
             />
+            {popupError && (
+              <p className="text-[12px] text-red-400 mt-2" role="alert">
+                {popupError}
+              </p>
+            )}
             <div className="flex flex-wrap gap-2 justify-end mt-4">
               <button
                 type="button"
                 onClick={closeInstallmentPopup}
-                className="py-1.5 px-3.5 rounded-lg border border-border text-muted2 text-xs font-medium hover:border-accent hover:text-accent"
+                disabled={popupSubmitting}
+                className="py-1.5 px-3.5 rounded-lg border border-border text-muted2 text-xs font-medium hover:border-accent hover:text-accent disabled:opacity-50"
               >
                 Cancel
               </button>
               {selectedIsNextUnpaid && !isFullyPaid ? (
                 <button
                   type="button"
-                  onClick={handleCloseInstallment}
-                  className="py-1.5 px-3.5 rounded-lg btn-primary text-xs font-medium hover:opacity-90"
+                  onClick={() => void handleCloseInstallment()}
+                  disabled={popupSubmitting}
+                  className="py-1.5 px-3.5 rounded-lg btn-primary text-xs font-medium hover:opacity-90 disabled:opacity-50"
                 >
-                  Close installment
+                  {popupSubmitting ? 'Posting…' : 'Post payment'}
                 </button>
               ) : (
                 <>
@@ -482,7 +563,7 @@ export function LoanDetailModal({
                   {selectedIsPaid && onUpdatePaymentDate && (
                     <button
                       type="button"
-                      onClick={handleSaveDate}
+                      onClick={() => void handleSaveDate()}
                       className="py-1.5 px-3.5 rounded-lg border border-accent/50 text-accent text-xs font-medium hover:bg-accent/10"
                     >
                       Save date

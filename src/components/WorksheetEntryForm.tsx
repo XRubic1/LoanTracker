@@ -192,7 +192,7 @@ export function WorksheetEntryForm({
     }
     if (clientAlerts?.requiresWorksheetVerified && !verified) {
       const proceed = window.confirm(
-        `${clientAlerts.fullVerificationMessage ?? clientAlerts.alwaysVerifyMessage ?? 'This batch should be marked Verified.'}\n\nContinue without marking Verified?`
+        `${clientAlerts.fullVerificationMessage ?? clientAlerts.alwaysVerifyMessage ?? 'This batch should be marked Full verification.'}\n\nContinue with Partial verification?`
       );
       if (!proceed) return;
     }
@@ -299,8 +299,11 @@ export function WorksheetEntryForm({
               }`}
             >
               <input type="checkbox" checked={verified} onChange={(e) => setVerified(e.target.checked)} />
-              Verified
+              Full verification
             </label>
+            <span className="text-[11px] text-muted2">
+              {verified ? 'Full' : 'Partial'}
+            </span>
           </div>
           <div className="flex gap-2">
             <button
@@ -419,8 +422,9 @@ export function WorksheetEntryForm({
           }`}
         >
           <input type="checkbox" checked={verified} onChange={(e) => setVerified(e.target.checked)} />
-          Verified
+          Full verification
         </label>
+        <span className="text-[11px] text-muted2">{verified ? 'Full' : 'Partial'}</span>
       </div>
       <div>
         <label className={labelClass}>Note</label>

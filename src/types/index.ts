@@ -16,6 +16,16 @@ export interface Loan {
   paymentDates: string[];
   /** Per-installment notes (same length as totalInstallments, empty string if none). */
   paymentNotes: string[];
+  /**
+   * Optional per-installment deduction amounts (same order as paymentDates / schedule).
+   * When empty, every installment uses `installment`. Needed for uneven import schedules.
+   */
+  paymentAmounts: number[];
+  /**
+   * Amount already posted toward the current open installment (index = paidCount).
+   * 0 when the open installment has no partial payments yet.
+   */
+  partialPaidAmount: number;
   note: string;
   /** TruFunding or Other; when Other, providerName is the custom name. */
   providerType: LoanProviderType;
@@ -57,6 +67,10 @@ export interface LoanRow {
   freq_days: number;
   payment_dates: string[];
   payment_notes?: string[];
+  /** Per-installment amounts; empty/null means use flat installment. */
+  payment_amounts?: number[] | null;
+  /** Amount already paid toward the current open installment. */
+  partial_paid_amount?: number | null;
   note: string | null;
   provider_type?: string;
   provider_name?: string | null;

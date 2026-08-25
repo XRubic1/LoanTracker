@@ -24,7 +24,7 @@ export async function exportWorksheetActivityExcel(
     'On Client List': r.entry.client_id != null ? 'YES' : 'NO',
     Invoices: r.entry.invoice_count,
     'Group Work': r.entry.group_work ? 'YES' : 'NO',
-    Verified: r.entry.verified ? 'YES' : 'NO',
+    Verification: r.entry.verified ? 'Full' : 'Partial',
     Note: r.entry.note ?? '',
     Expenses: r.expenses,
     'Warning Note': r.warningNote,

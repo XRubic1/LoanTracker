@@ -282,7 +282,7 @@ function WorksheetTable({
 
             <th>Group</th>
 
-            <th>Verified</th>
+            <th>Verification</th>
 
             <th>Expenses</th>
 
@@ -351,7 +351,7 @@ function WorksheetTable({
 
                 >
 
-                  {e.verified ? 'YES' : 'NO'}
+                  {e.verified ? 'Full' : 'Partial'}
 
                 </td>
 

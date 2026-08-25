@@ -341,8 +341,44 @@ export function isLoanPastDue(loan: Loan): boolean {
   return dueStr < todayDateOnly();
 }
 
+/** Amount for a specific installment index (0-based). Uses paymentAmounts when set. */
+export function getLoanInstallmentAmount(loan: Loan, index: number): number {
+  const custom = loan.paymentAmounts?.[index];
+  if (custom != null && Number.isFinite(Number(custom))) return Number(custom);
+  return loan.installment;
+}
+
+/** Remaining balance after paid installments (supports uneven paymentAmounts + partials). */
 export function getLoanRemaining(loan: Loan): number {
-  return Math.max(0, loan.total - loan.paidCount * loan.installment);
+  const amounts = loan.paymentAmounts ?? [];
+  let paid = 0;
+  if (amounts.length > 0) {
+    paid = amounts
+      .slice(0, Math.max(0, loan.paidCount))
+      .reduce((sum, a) => sum + (Number(a) || 0), 0);
+  } else {
+    paid = loan.paidCount * loan.installment;
+  }
+  const partial = Number(loan.partialPaidAmount ?? 0) || 0;
+  return Math.max(0, roundMoney(loan.total - paid - partial));
+}
+
+/** Scheduled due amount for the current open installment. */
+export function getLoanOpenInstallmentDue(loan: Loan): number {
+  if (loan.paidCount >= loan.totalInstallments) return loan.installment;
+  return getLoanInstallmentAmount(loan, loan.paidCount);
+}
+
+/** Remaining to fully close the current open installment. */
+export function getLoanOpenInstallmentRemaining(loan: Loan): number {
+  const due = getLoanOpenInstallmentDue(loan);
+  const partial = Number(loan.partialPaidAmount ?? 0) || 0;
+  return Math.max(0, roundMoney(due - partial));
+}
+
+/** Round to cents for money math. */
+function roundMoney(n: number): number {
+  return Math.round(n * 100) / 100;
 }
 
 /** Due this week = next due is within the current week OR the next due is already overdue (so overdue loans also appear here). */

@@ -4,7 +4,16 @@ import {
   fetchCompaniesForAdmin,
   type AdminLoanRow,
 } from '@/lib/supabase-db';
-import { fmt, getLoanBasePerInstallment, getLoanFeePerInstallment } from '@/lib/utils';
+import type { Loan } from '@/types';
+import {
+  fmt,
+  getLoanBasePerInstallment,
+  getLoanFeePerInstallment,
+  getLoanInstallmentAmount,
+  getLoanProviderDisplay,
+  getScheduleDueDateOnly,
+} from '@/lib/utils';
+import { AdminLoanInstallmentDetailModal } from '@/components/superAdmin/AdminLoanInstallmentDetailModal';
 
 /** Local calendar date as YYYY-MM-DD. */
 function todayDateOnly(): string {
@@ -12,18 +21,34 @@ function todayDateOnly(): string {
   return `${t.getFullYear()}-${String(t.getMonth() + 1).padStart(2, '0')}-${String(t.getDate()).padStart(2, '0')}`;
 }
 
+/** Format YYYY-MM-DD in local calendar (avoids UTC day shift). */
+function fmtLocalDate(dateStr: string | null | undefined): string {
+  if (!dateStr?.trim()) return '—';
+  const [y, m, d] = dateStr.split('-').map(Number);
+  if (!y || !m || !d) return dateStr;
+  return new Date(y, m - 1, d).toLocaleDateString('en-US', {
+    month: 'short',
+    day: 'numeric',
+  });
+}
+
 /** One installment closed/deducted on a specific date. */
 interface DeductionRow {
   key: string;
+  loan: Loan;
   loanId: number;
   client: string;
   ref: string;
+  provider: string;
   installmentIndex: number;
   totalInstallments: number;
   amount: number;
+  baseAmount: number;
+  feeAmount: number;
   note: string;
   companyName: string | null;
   paidDate: string;
+  scheduledDate: string;
 }
 
 /**
@@ -36,20 +61,25 @@ function buildDeductionsForDate(rows: AdminLoanRow[], date: string): DeductionRo
     for (let i = 0; i < dates.length; i++) {
       const paid = (dates[i] ?? '').trim();
       if (!paid || paid !== date) continue;
-      const computed =
-        getLoanBasePerInstallment(loan) + getLoanFeePerInstallment(loan);
-      const amount = computed > 0 ? computed : loan.installment;
+      const baseAmount = getLoanBasePerInstallment(loan);
+      const feeAmount = getLoanFeePerInstallment(loan);
+      const amount = getLoanInstallmentAmount(loan, i);
       out.push({
         key: `${loan.id}-${i}`,
+        loan,
         loanId: loan.id,
         client: loan.client,
         ref: loan.ref || '—',
+        provider: getLoanProviderDisplay(loan),
         installmentIndex: i,
         totalInstallments: loan.totalInstallments,
         amount,
+        baseAmount,
+        feeAmount,
         note: (loan.paymentNotes?.[i] ?? '').trim(),
         companyName,
         paidDate: paid,
+        scheduledDate: getScheduleDueDateOnly(loan.startDate, i, loan.freqDays ?? 7),
       });
     }
   }
@@ -64,6 +94,7 @@ function buildDeductionsForDate(rows: AdminLoanRow[], date: string): DeductionRo
 
 /**
  * Platform view of installments deducted on a chosen date (defaults to today).
+ * Click a row to open the full installment schedule for that loan.
  */
 export function DeductedInstallmentsTab() {
   const [rows, setRows] = useState<AdminLoanRow[]>([]);
@@ -73,6 +104,9 @@ export function DeductedInstallmentsTab() {
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [detailLoan, setDetailLoan] = useState<Loan | null>(null);
+  const [detailCompanyName, setDetailCompanyName] = useState<string | null>(null);
+  const [detailHighlightIndex, setDetailHighlightIndex] = useState<number | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -104,6 +138,7 @@ export function DeductedInstallmentsTab() {
       (r) =>
         r.client.toLowerCase().includes(q) ||
         r.ref.toLowerCase().includes(q) ||
+        r.provider.toLowerCase().includes(q) ||
         (r.companyName?.toLowerCase().includes(q) ?? false) ||
         r.note.toLowerCase().includes(q)
     );
@@ -113,14 +148,66 @@ export function DeductedInstallmentsTab() {
     () => filtered.reduce((sum, r) => sum + r.amount, 0),
     [filtered]
   );
+  const totalFee = useMemo(
+    () => filtered.reduce((sum, r) => sum + r.feeAmount, 0),
+    [filtered]
+  );
+  const uniqueLoans = useMemo(
+    () => new Set(filtered.map((r) => r.loanId)).size,
+    [filtered]
+  );
 
   const isToday = date === todayDateOnly();
+  const showFeeCol = filtered.some((r) => r.feeAmount > 0);
+
+  const openDetail = (row: DeductionRow) => {
+    setDetailLoan(row.loan);
+    setDetailCompanyName(row.companyName);
+    setDetailHighlightIndex(row.installmentIndex);
+  };
 
   return (
     <div className="h-full min-h-0 flex flex-col gap-2">
       {error && (
         <div className="flex-shrink-0 rounded border border-red/30 bg-red/5 px-3 py-1.5 text-[12px] text-red">
           {error}
+        </div>
+      )}
+
+      {!loading && filtered.length > 0 && (
+        <div className="flex-shrink-0 grid grid-cols-2 sm:grid-cols-4 gap-2">
+          <div className="panel-surface px-3 py-2 min-w-0">
+            <div className="text-[10px] text-label uppercase tracking-[0.05em] mb-1">Deducted</div>
+            <div className="text-[16px] font-medium leading-none tabular-nums text-ink truncate">
+              {filtered.length}
+            </div>
+            <div className="text-[10px] text-muted2 mt-1">
+              installment{filtered.length === 1 ? '' : 's'}
+            </div>
+          </div>
+          <div className="panel-surface px-3 py-2 min-w-0">
+            <div className="text-[10px] text-label uppercase tracking-[0.05em] mb-1">Total</div>
+            <div className="text-[16px] font-medium leading-none tabular-nums text-ink truncate">
+              {fmt(totalAmount)}
+            </div>
+            <div className="text-[10px] text-muted2 mt-1">
+              {uniqueLoans} loan{uniqueLoans === 1 ? '' : 's'}
+            </div>
+          </div>
+          <div className="panel-surface px-3 py-2 min-w-0">
+            <div className="text-[10px] text-label uppercase tracking-[0.05em] mb-1">Factoring</div>
+            <div className="text-[16px] font-medium leading-none tabular-nums text-ink truncate">
+              {fmt(totalFee)}
+            </div>
+            <div className="text-[10px] text-muted2 mt-1">fees in period</div>
+          </div>
+          <div className="panel-surface px-3 py-2 min-w-0">
+            <div className="text-[10px] text-label uppercase tracking-[0.05em] mb-1">Date</div>
+            <div className="text-[16px] font-medium leading-none text-ink truncate">
+              {isToday ? 'Today' : fmtLocalDate(date)}
+            </div>
+            <div className="text-[10px] text-muted2 mt-1 tabular-nums">{date}</div>
+          </div>
         </div>
       )}
 
@@ -137,11 +224,7 @@ export function DeductedInstallmentsTab() {
             className="rounded border border-border bg-surface px-2 py-1 text-[12px] text-ink"
           />
           {!isToday && (
-            <button
-              type="button"
-              onClick={() => setDate(todayDateOnly())}
-              className="filter-btn"
-            >
+            <button type="button" onClick={() => setDate(todayDateOnly())} className="filter-btn">
               Today
             </button>
           )}
@@ -165,18 +248,12 @@ export function DeductedInstallmentsTab() {
           type="search"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          placeholder="Client, loan #, team…"
+          placeholder="Client, loan #, provider, team…"
           className="flex-1 min-w-[140px] rounded border border-border bg-surface px-2 py-1 text-[12px] text-ink"
         />
         {!loading && (
-          <span className="text-[11px] text-muted2 tabular-nums">
-            <span className="text-ink font-medium">{filtered.length}</span> deducted
-            {filtered.length > 0 && (
-              <>
-                {' · '}
-                <span className="text-ink font-medium">{fmt(totalAmount)}</span>
-              </>
-            )}
+          <span className="text-[11px] text-muted2">
+            Click a row for full installment schedule
           </span>
         )}
       </div>
@@ -192,33 +269,63 @@ export function DeductedInstallmentsTab() {
       ) : (
         <div className="panel-surface flex-1 min-h-0 overflow-hidden flex flex-col">
           <div className="flex-1 min-h-0 overflow-auto admin-table-scroll">
-            <table className="w-full border-collapse text-[12px] min-w-[720px]">
+            <table className="w-full border-collapse text-[12px] min-w-[920px]">
               <thead className="sticky top-0 z-[1]">
                 <tr className="border-b border-border bg-[var(--color-panel)] text-[10px] uppercase tracking-wider text-label">
                   <th className="text-left font-normal px-3 py-1.5">Client</th>
                   <th className="text-left font-normal px-3 py-1.5">Loan #</th>
-                  <th className="text-center font-normal px-3 py-1.5">Installment</th>
+                  <th className="text-left font-normal px-3 py-1.5">Provider</th>
+                  <th className="text-center font-normal px-3 py-1.5">Inst.</th>
+                  <th className="text-left font-normal px-3 py-1.5">Scheduled</th>
+                  <th className="text-left font-normal px-3 py-1.5">Paid</th>
                   <th className="text-right font-normal px-3 py-1.5">Amount</th>
+                  {showFeeCol && (
+                    <th className="text-right font-normal px-3 py-1.5">Fee</th>
+                  )}
                   <th className="text-left font-normal px-3 py-1.5">Team</th>
                   <th className="text-left font-normal px-3 py-1.5">Note</th>
                 </tr>
               </thead>
               <tbody>
                 {filtered.map((r) => (
-                  <tr key={r.key} className="border-b border-border last:border-b-0 row-hover">
+                  <tr
+                    key={r.key}
+                    className="border-b border-border last:border-b-0 row-hover cursor-pointer"
+                    onClick={() => openDetail(r)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                        openDetail(r);
+                      }
+                    }}
+                    tabIndex={0}
+                    title="View full installment schedule"
+                  >
                     <td className="px-3 py-1 font-medium text-ink">{r.client}</td>
                     <td className="px-3 py-1 text-muted2 tabular-nums font-mono text-[11px]">
                       {r.ref}
                     </td>
+                    <td className="px-3 py-1 text-muted2">{r.provider}</td>
                     <td className="px-3 py-1 text-center tabular-nums">
                       <span className="text-ink font-medium">{r.installmentIndex + 1}</span>
                       <span className="text-muted2 text-[10px]">/{r.totalInstallments}</span>
                     </td>
+                    <td className="px-3 py-1 text-muted2 tabular-nums">
+                      {fmtLocalDate(r.scheduledDate)}
+                    </td>
+                    <td className="px-3 py-1 text-muted2 tabular-nums">
+                      {fmtLocalDate(r.paidDate)}
+                    </td>
                     <td className="px-3 py-1 text-right tabular-nums font-medium text-ink">
                       {fmt(r.amount)}
                     </td>
+                    {showFeeCol && (
+                      <td className="px-3 py-1 text-right tabular-nums text-muted2">
+                        {r.feeAmount > 0 ? fmt(r.feeAmount) : '—'}
+                      </td>
+                    )}
                     <td className="px-3 py-1 text-muted2">{r.companyName ?? 'Unassigned'}</td>
-                    <td className="px-3 py-1 text-muted2 max-w-[220px] truncate" title={r.note}>
+                    <td className="px-3 py-1 text-muted2 max-w-[180px] truncate" title={r.note}>
                       {r.note || '—'}
                     </td>
                   </tr>
@@ -228,6 +335,22 @@ export function DeductedInstallmentsTab() {
           </div>
         </div>
       )}
+
+      <AdminLoanInstallmentDetailModal
+        open={detailLoan != null}
+        loan={detailLoan}
+        companyName={detailCompanyName}
+        highlightIndex={detailHighlightIndex}
+        onClose={() => {
+          setDetailLoan(null);
+          setDetailCompanyName(null);
+          setDetailHighlightIndex(null);
+        }}
+        onLoanUpdated={(saved) => {
+          setDetailLoan(saved);
+          void load();
+        }}
+      />
     </div>
   );
 }

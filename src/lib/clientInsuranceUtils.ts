@@ -63,6 +63,7 @@ function parseDateToDateOnly(value: string): string | null {
 
 /**
  * Best-effort cancellation date from expiration_date, last_cancellation_date, or status text.
+ * Used when the record is (or should be treated as) a cancellation.
  */
 export function resolveInsuranceCancellationDate(c: ClientInsurance): string | null {
   if (c.expiration_date?.trim()) {
@@ -93,6 +94,26 @@ export function resolveInsuranceCancellationDate(c: ClientInsurance): string | n
   return null;
 }
 
+/** True when status is a cancellation (pending / scheduled / cancelled). */
+export function isInsuranceCancellationStatus(status: string | null | undefined): boolean {
+  const s = (status ?? '').trim().toLowerCase();
+  if (!s || s === 'ok' || s === 'inactive' || s === 'out') return false;
+  return (
+    s.includes('cancellation') ||
+    s.includes('cancelled') ||
+    s.includes('canceled')
+  );
+}
+
+/**
+ * Date for the "Cancel date" column — only when status is cancellation.
+ * OK / inactive / out must not show expiration or historical last_cancellation_date.
+ */
+export function getInsuranceCancelDateForDisplay(c: ClientInsurance): string | null {
+  if (!isInsuranceCancellationStatus(c.status)) return null;
+  return resolveInsuranceCancellationDate(c);
+}
+
 function statusImpliesCancellation(c: ClientInsurance): boolean {
   const s = (c.status ?? '').trim().toLowerCase();
   if (!s || s === 'ok') return false;
@@ -119,8 +140,10 @@ export function isClientInsuranceCancellationWithDate(c: ClientInsurance): boole
  * - 0 means today
  * - positive means future date
  * - negative means already passed
+ * Only applies when status implies a cancellation (not OK with a historical last_cancellation_date).
  */
 export function getDaysUntilCancellation(c: ClientInsurance): number | null {
+  if (!statusImpliesCancellation(c)) return null;
   const dateOnly = resolveInsuranceCancellationDate(c);
   if (!dateOnly) return null;
   const [y, m, d] = dateOnly.split('-').map(Number);

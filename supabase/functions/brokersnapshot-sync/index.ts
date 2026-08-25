@@ -9,12 +9,14 @@ import {
   buildCompanyRequestPath,
   buildResponseSummary,
   detectCancellationSuggestion,
+  detectOperatingStatusIssue,
   isBrokerSnapshotEligibleStatus,
   type BrokerSnapshotApiResponse,
   type ClientInsuranceSnapshot,
 } from '../_shared/brokersnapshot.ts';
 
-const RATE_LIMIT_MS = 200;
+/** Delay between BrokerSnapshot company lookups (slower = gentler on API + edge CPU). */
+const RATE_LIMIT_MS = 500;
 const MAX_RETRIES = 1;
 
 interface ClientInsuranceRow {
@@ -31,6 +33,8 @@ interface SyncRequestBody {
   trigger?: 'manual' | 'cron';
   /** Manual test mode: only check these client_insurance ids (saves API quota). */
   client_insurance_ids?: number[];
+  /** Platform admin: limit sync to these company owner UUIDs. */
+  owner_ids?: string[];
 }
 
 function sleep(ms: number): Promise<void> {
@@ -114,6 +118,7 @@ Deno.serve(async (req) => {
     let triggerSource: 'cron' | 'manual' = 'cron';
     let authenticated = false;
     let triggeringUserId: string | null = null;
+    let triggeringUserEmail: string | null = null;
 
     if (cronSecret && cronHeader === cronSecret) {
       authenticated = true;
@@ -124,6 +129,7 @@ Deno.serve(async (req) => {
         authenticated = true;
         triggerSource = 'manual';
         triggeringUserId = userData.user.id;
+        triggeringUserEmail = (userData.user.email ?? '').trim().toLowerCase() || null;
       }
     } else if (!cronSecret && requestBody.trigger === 'cron') {
       // pg_cron scheduled run (set CRON_SECRET in production for stricter auth)
@@ -166,42 +172,109 @@ Deno.serve(async (req) => {
     const syncRunId = runRow.id as number;
     let clientsChecked = 0;
     let cancellationsFound = 0;
+    let outOfServiceFound = 0;
     let errorsCount = 0;
     const errorMessages: string[] = [];
+    const cancellationHits: {
+      client_insurance_id: number;
+      client: string;
+      mc: string;
+      cancellation_date: string | null;
+    }[] = [];
+    const outOfServiceHits: {
+      client_insurance_id: number;
+      client: string;
+      mc: string;
+      operating_status: string;
+      app_status: string;
+      status_updated: boolean;
+    }[] = [];
 
-    // One team per run: manual = invoking user's owner; cron = BROKERSNAPSHOT_CRON_OWNER_ID secret.
-    const scopeOwnerId =
-      triggerSource === 'manual'
-        ? triggeringUserId
-        : Deno.env.get('BROKERSNAPSHOT_CRON_OWNER_ID')?.trim() || null;
+    // One team per run for normal users; platform admins sync all provisioned companies.
+    // Cron uses BROKERSNAPSHOT_CRON_OWNER_ID when set.
+    let syncOwnerIds: string[] = [];
 
-    const { data: syncOwnerRows, error: ownerIdsError } = await supabase.rpc(
-      'brokersnapshot_sync_owner_ids',
-      { p_triggering_user_id: scopeOwnerId }
-    );
+    if (triggerSource === 'manual' && triggeringUserId) {
+      let isPlatformAdmin = false;
+      if (triggeringUserEmail) {
+        const { data: adminRow } = await supabase
+          .from('platform_admins')
+          .select('email')
+          .eq('email', triggeringUserEmail)
+          .maybeSingle();
+        isPlatformAdmin = Boolean(adminRow);
+      }
 
-    if (ownerIdsError) {
-      await supabase
-        .from('brokersnapshot_sync_runs')
-        .update({
-          status: 'failed',
-          finished_at: new Date().toISOString(),
-          error_summary: ownerIdsError.message,
-        })
-        .eq('id', syncRunId);
-      return new Response(JSON.stringify({ error: ownerIdsError.message }), {
-        status: 500,
-        headers: { ...corsHeaders(), 'Content-Type': 'application/json' },
-      });
+      if (isPlatformAdmin) {
+        const bodyOwnerIds = Array.isArray(requestBody.owner_ids)
+          ? requestBody.owner_ids.filter((id) => typeof id === 'string' && id.length > 0)
+          : [];
+
+        if (bodyOwnerIds.length > 0) {
+          syncOwnerIds = [...new Set(bodyOwnerIds)];
+        } else {
+          const { data: companies } = await supabase
+            .from('companies')
+            .select('owner_id')
+            .not('owner_id', 'is', null)
+            .eq('status', 'active');
+          syncOwnerIds = [
+            ...new Set(
+              ((companies ?? []) as { owner_id: string | null }[])
+                .map((c) => c.owner_id)
+                .filter((id): id is string => Boolean(id))
+            ),
+          ];
+        }
+      } else {
+        const { data: syncOwnerRows, error: ownerIdsError } = await supabase.rpc(
+          'brokersnapshot_sync_owner_ids',
+          { p_triggering_user_id: triggeringUserId }
+        );
+        if (ownerIdsError) {
+          await supabase
+            .from('brokersnapshot_sync_runs')
+            .update({
+              status: 'failed',
+              finished_at: new Date().toISOString(),
+              error_summary: ownerIdsError.message,
+            })
+            .eq('id', syncRunId);
+          return new Response(JSON.stringify({ error: ownerIdsError.message }), {
+            status: 500,
+            headers: { ...corsHeaders(), 'Content-Type': 'application/json' },
+          });
+        }
+        syncOwnerIds = (syncOwnerRows as string[] | null) ?? [];
+      }
+    } else {
+      const scopeOwnerId = Deno.env.get('BROKERSNAPSHOT_CRON_OWNER_ID')?.trim() || null;
+      const { data: syncOwnerRows, error: ownerIdsError } = await supabase.rpc(
+        'brokersnapshot_sync_owner_ids',
+        { p_triggering_user_id: scopeOwnerId }
+      );
+      if (ownerIdsError) {
+        await supabase
+          .from('brokersnapshot_sync_runs')
+          .update({
+            status: 'failed',
+            finished_at: new Date().toISOString(),
+            error_summary: ownerIdsError.message,
+          })
+          .eq('id', syncRunId);
+        return new Response(JSON.stringify({ error: ownerIdsError.message }), {
+          status: 500,
+          headers: { ...corsHeaders(), 'Content-Type': 'application/json' },
+        });
+      }
+      syncOwnerIds = (syncOwnerRows as string[] | null) ?? [];
     }
-
-    const syncOwnerIds = (syncOwnerRows as string[] | null) ?? [];
 
     if (syncOwnerIds.length === 0) {
       const scopeHint =
         triggerSource === 'manual'
-          ? 'Could not resolve your team owner for sync.'
-          : 'Set BROKERSNAPSHOT_CRON_OWNER_ID in Edge Function secrets (Petar team owner UUID).';
+          ? 'Could not resolve your team owner for sync. Platform admins need active companies with team admins.'
+          : 'Set BROKERSNAPSHOT_CRON_OWNER_ID in Edge Function secrets (team owner UUID).';
       await supabase
         .from('brokersnapshot_sync_runs')
         .update({
@@ -264,7 +337,7 @@ Deno.serve(async (req) => {
         expiration_date: row.expiration_date,
       };
 
-      const requestPath = buildCompanyRequestPath(row.mc, row.dot ?? undefined);
+      const requestPath = buildCompanyRequestPath(row.mc);
       const startMs = Date.now();
 
       if (!requestPath) {
@@ -292,6 +365,7 @@ Deno.serve(async (req) => {
       const success = status === 200 && body?.Success === true;
       const responseSummary = success ? buildResponseSummary(body?.Data) : undefined;
       const detected = success ? detectCancellationSuggestion(snapshot, body?.Data) : null;
+      const oosIssue = success ? detectOperatingStatusIssue(snapshot, body?.Data) : null;
 
       await supabase.from('brokersnapshot_api_logs').insert({
         sync_run_id: syncRunId,
@@ -322,6 +396,15 @@ Deno.serve(async (req) => {
 
       if (responseSummary?.has_pending_cancellation) {
         cancellationsFound++;
+        cancellationHits.push({
+          client_insurance_id: row.id,
+          client: row.client,
+          mc: row.mc,
+          cancellation_date:
+            responseSummary.pending_cancellation_date ??
+            detected?.suggested_cancellation_date ??
+            null,
+        });
       }
 
       if (detected) {
@@ -359,11 +442,42 @@ Deno.serve(async (req) => {
         }
       }
 
-      // Update last checked timestamp
-      await supabase
-        .from('client_insurance')
-        .update({ brokersnapshot_last_checked_at: new Date().toISOString() })
-        .eq('id', row.id);
+      // Apply CURRENT insurance coverage updates only (never Authority OOS / Not Authorized).
+      // Also fill missing DOT from the live Company payload.
+      const insurancePatch: Record<string, unknown> = {
+        brokersnapshot_last_checked_at: new Date().toISOString(),
+      };
+      let statusUpdated = false;
+      if (
+        success &&
+        responseSummary?.dot_number &&
+        !(row.dot ?? '').trim()
+      ) {
+        insurancePatch.dot = String(responseSummary.dot_number);
+      }
+      if (oosIssue) {
+        const currentStatus = (row.status ?? '').trim().toLowerCase();
+        if (currentStatus !== oosIssue.app_status.toLowerCase()) {
+          insurancePatch.status = oosIssue.app_status;
+          statusUpdated = true;
+        }
+        if (oosIssue.suggested_dot) {
+          insurancePatch.dot = oosIssue.suggested_dot;
+        }
+        outOfServiceFound++;
+        outOfServiceHits.push({
+          client_insurance_id: row.id,
+          client: row.client,
+          mc: row.mc,
+          operating_status:
+            oosIssue.reason === 'active_insurance'
+              ? `Active insurance (${oosIssue.active_policy_count}) — restored OK`
+              : oosIssue.operating_status ?? oosIssue.reason,
+          app_status: oosIssue.app_status,
+          status_updated: statusUpdated || Boolean(oosIssue.suggested_dot),
+        });
+      }
+      await supabase.from('client_insurance').update(insurancePatch).eq('id', row.id);
 
       clientsChecked++;
       await sleep(RATE_LIMIT_MS);
@@ -390,7 +504,10 @@ Deno.serve(async (req) => {
         status: finalStatus,
         clients_checked: clientsChecked,
         cancellations_found: cancellationsFound,
+        out_of_service_found: outOfServiceFound,
         errors_count: errorsCount,
+        cancellation_hits: cancellationHits,
+        out_of_service_hits: outOfServiceHits,
       }),
       { headers: { ...corsHeaders(), 'Content-Type': 'application/json' } }
     );

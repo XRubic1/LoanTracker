@@ -36,6 +36,7 @@ import { ClientInsuranceDetailModal } from '@/components/modals/ClientInsuranceD
 import { EditClientInsuranceModal } from '@/components/modals/EditClientInsuranceModal';
 import { EditAaaPaymentModal } from '@/components/modals/EditAaaPaymentModal';
 import type { Client, Loan } from '@/types';
+import { buildPostInstallmentPayment } from '@/lib/loanPaymentActions';
 import { useAuth } from '@/contexts/AuthContext';
 import { useData } from '@/hooks/useData';
 import {
@@ -281,22 +282,17 @@ export default function App() {
     [selectedLoan, updateLoanById]
   );
 
-  /** Single update when closing an installment from LoanDetailModal (saves note + marks paid). paidDate defaults to today. */
+  /** Post payment toward the open installment from LoanDetailModal (partial / full / overpay). */
   const handleLoanCloseInstallmentWithNote = useCallback(
-    async (index: number, note: string, paidDate?: string) => {
+    async (index: number, note: string, paidDate: string, paymentAmount: number) => {
       if (selectedLoan == null || index !== selectedLoan.paidCount) return;
-      const loan = selectedLoan;
-      const paymentNotes = [...(loan.paymentNotes ?? [])];
-      while (paymentNotes.length <= index) paymentNotes.push('');
-      paymentNotes[index] = note;
-      const paymentDates = [...(loan.paymentDates ?? [])];
-      paymentDates.push(paidDate ?? new Date().toISOString().split('T')[0]);
-      await updateLoanById(loan.id, {
-        ...loan,
-        paidCount: loan.paidCount + 1,
-        paymentDates,
-        paymentNotes,
-      });
+      const result = buildPostInstallmentPayment(selectedLoan, paymentAmount, note, paidDate);
+      if (!result.ok) {
+        window.alert(result.error);
+        throw new Error(result.error);
+      }
+      await updateLoanById(selectedLoan.id, result.loan);
+      if (result.message) window.alert(result.message);
     },
     [selectedLoan, updateLoanById]
   );
@@ -348,23 +344,22 @@ export default function App() {
     [selectedReserve, updateReserveById]
   );
 
-  /** Single update: save note and mark next installment paid (avoids note being overwritten). */
+  /** Post payment toward the open installment from Overview (partial / full / overpay / new week). */
   const handleOverviewCloseInstallment = useCallback(
-    async (note: string, paidDate?: string) => {
+    async (note: string, paidDate: string, paymentAmount: number) => {
       if (overviewCloseInstallmentLoan == null) return;
-      const loan = overviewCloseInstallmentLoan;
-      const index = loan.paidCount;
-      const paymentNotes = [...(loan.paymentNotes ?? [])];
-      while (paymentNotes.length <= index) paymentNotes.push('');
-      paymentNotes[index] = note;
-      const paymentDates = [...(loan.paymentDates ?? [])];
-      paymentDates.push(paidDate ?? new Date().toISOString().split('T')[0]);
-      await updateLoanById(loan.id, {
-        ...loan,
-        paidCount: loan.paidCount + 1,
-        paymentDates,
-        paymentNotes,
-      });
+      const result = buildPostInstallmentPayment(
+        overviewCloseInstallmentLoan,
+        paymentAmount,
+        note,
+        paidDate
+      );
+      if (!result.ok) {
+        window.alert(result.error);
+        throw new Error(result.error);
+      }
+      await updateLoanById(overviewCloseInstallmentLoan.id, result.loan);
+      if (result.message) window.alert(result.message);
     },
     [overviewCloseInstallmentLoan, updateLoanById]
   );

@@ -142,6 +142,8 @@ export function AddLoanModal({
           freqDays: scheduleFreq,
           paymentDates: [],
           paymentNotes: [],
+          paymentAmounts: [],
+          partialPaidAmount: 0,
           note: '',
           providerType,
           providerName: providerType === 'Other' ? providerName.trim() : '',

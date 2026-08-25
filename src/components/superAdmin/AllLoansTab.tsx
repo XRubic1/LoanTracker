@@ -4,6 +4,7 @@ import type { AdminLoanRow } from '@/lib/supabase-db';
 import type { Loan } from '@/types';
 import { Badge } from '@/components/Badge';
 import { AddLoanModal } from '@/components/modals/AddLoanModal';
+import { AdminLoanInstallmentDetailModal } from '@/components/superAdmin/AdminLoanInstallmentDetailModal';
 import { useAuth } from '@/contexts/AuthContext';
 import { getSupabase } from '@/lib/supabase';
 import { fetchIsPlatformAdmin, isPlatformAdminEnv } from '@/lib/platformAdmin';
@@ -11,6 +12,7 @@ import {
   fmt,
   getLoanRemaining,
   getLoanEffectiveTotal,
+  getLoanInstallmentAmount,
   getLoanProviderDisplay,
   getNextDueDate,
   getLoanOverdueCount,
@@ -67,8 +69,11 @@ export function AllLoansTab() {
   );
   const [companyFilter, setCompanyFilter] = useState<number | 'all'>('all');
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('open');
+  const [providerFilter, setProviderFilter] = useState<string>('all');
   const [search, setSearch] = useState('');
   const [addLoanOpen, setAddLoanOpen] = useState(false);
+  const [detailLoan, setDetailLoan] = useState<Loan | null>(null);
+  const [detailCompanyName, setDetailCompanyName] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   /** True when JWT/email is in platform_admins (required for RLS to return all loans). */
@@ -135,6 +140,15 @@ export function AllLoansTab() {
     };
   }, []);
 
+  /** Unique provider labels for the filter dropdown. */
+  const providerOptions = useMemo(() => {
+    const set = new Set<string>();
+    for (const { loan } of rows) {
+      set.add(getLoanProviderDisplay(loan));
+    }
+    return Array.from(set).sort((a, b) => a.localeCompare(b));
+  }, [rows]);
+
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
     return rows.filter((r) => {
@@ -142,14 +156,19 @@ export function AllLoansTab() {
       // Include team-hidden loans; Super Admin ignores the hidden flag for display
       if (statusFilter === 'open' && closed) return false;
       if (statusFilter === 'closed' && !closed) return false;
+
+      const providerLabel = getLoanProviderDisplay(r.loan);
+      if (providerFilter !== 'all' && providerLabel !== providerFilter) return false;
+
       if (!q) return true;
       return (
         r.loan.client.toLowerCase().includes(q) ||
         r.loan.ref.toLowerCase().includes(q) ||
+        providerLabel.toLowerCase().includes(q) ||
         (r.companyName?.toLowerCase().includes(q) ?? false)
       );
     });
-  }, [rows, search, statusFilter]);
+  }, [rows, search, statusFilter, providerFilter]);
 
   /** Urgent-first sort so overdue/due loans surface at the top. */
   const sorted = useMemo(() => {
@@ -167,28 +186,32 @@ export function AllLoansTab() {
     });
   }, [filtered]);
 
+  /** Stats for the currently filtered list (provider / search / status / team). */
   const summary = useMemo(() => {
     let openCount = 0;
     let closedCount = 0;
     let outstanding = 0;
     let portfolio = 0;
+    let openTotal = 0;
     let overdueLoans = 0;
     let dueThisWeek = 0;
     let dueThisWeekAmount = 0;
 
-    for (const { loan } of rows) {
-      portfolio += getLoanEffectiveTotal(loan);
+    for (const { loan } of filtered) {
+      const effective = getLoanEffectiveTotal(loan);
+      portfolio += effective;
       if (isLoanClosed(loan)) {
         closedCount += 1;
         continue;
       }
       openCount += 1;
+      openTotal += effective;
       outstanding += getLoanRemaining(loan);
       try {
         if (getLoanOverdueCount(loan) > 0) overdueLoans += 1;
         else if (isDueThisWeek(loan)) {
           dueThisWeek += 1;
-          dueThisWeekAmount += loan.installment;
+          dueThisWeekAmount += getLoanInstallmentAmount(loan, loan.paidCount);
         }
       } catch {
         // skip bad schedule for stats
@@ -200,12 +223,13 @@ export function AllLoansTab() {
       closedCount,
       outstanding,
       portfolio,
+      openTotal,
       overdueLoans,
       dueThisWeek,
       dueThisWeekAmount,
-      totalLoans: rows.length,
+      totalLoans: filtered.length,
     };
-  }, [rows]);
+  }, [filtered]);
 
   const envOnlyAdmin = dbPlatformAdmin === false && isPlatformAdminEnv(user?.email);
   const defaultTeamOwnerId =
@@ -232,24 +256,31 @@ export function AllLoansTab() {
 
       {/* Portfolio strip */}
       {!loading && (
-        <div className="flex-shrink-0 grid grid-cols-2 sm:grid-cols-4 gap-2">
+        <div className="flex-shrink-0 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2">
           <div className="panel-surface px-3 py-2 min-w-0">
             <div className="text-[10px] text-label uppercase tracking-[0.05em] mb-1">Portfolio</div>
             <div className="text-[16px] font-medium leading-none tabular-nums text-ink truncate">
               {fmt(summary.portfolio)}
             </div>
             <div className="text-[10px] text-muted2 mt-1">
-              {summary.totalLoans} loan{summary.totalLoans === 1 ? '' : 's'} funded
+              {summary.totalLoans} loan{summary.totalLoans === 1 ? '' : 's'} shown
             </div>
           </div>
           <div className="panel-surface px-3 py-2 min-w-0">
-            <div className="text-[10px] text-label uppercase tracking-[0.05em] mb-1">Open balance</div>
+            <div className="text-[10px] text-label uppercase tracking-[0.05em] mb-1">Total loan</div>
             <div className="text-[16px] font-medium leading-none tabular-nums text-ink truncate">
-              {fmt(summary.outstanding)}
+              {fmt(summary.openTotal)}
             </div>
             <div className="text-[10px] text-muted2 mt-1">
               {summary.openCount} open loan{summary.openCount === 1 ? '' : 's'}
             </div>
+          </div>
+          <div className="panel-surface px-3 py-2 min-w-0">
+            <div className="text-[10px] text-label uppercase tracking-[0.05em] mb-1">Open $</div>
+            <div className="text-[16px] font-medium leading-none tabular-nums text-ink truncate">
+              {fmt(summary.outstanding)}
+            </div>
+            <div className="text-[10px] text-muted2 mt-1">{summary.openCount} open · filtered</div>
           </div>
           <div className="panel-surface px-3 py-2 min-w-0">
             <div className="text-[10px] text-label uppercase tracking-[0.05em] mb-1">Due this week</div>
@@ -313,11 +344,24 @@ export function AllLoansTab() {
             </option>
           ))}
         </select>
+        <select
+          value={providerFilter}
+          onChange={(e) => setProviderFilter(e.target.value)}
+          className="rounded border border-border bg-surface px-2 py-1 text-[12px] text-ink min-w-[140px]"
+          aria-label="Provider filter"
+        >
+          <option value="all">All providers</option>
+          {providerOptions.map((p) => (
+            <option key={p} value={p}>
+              {p}
+            </option>
+          ))}
+        </select>
         <input
           type="search"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          placeholder="Client, loan #, team…"
+          placeholder="Client, loan #, provider, team…"
           className="flex-1 min-w-[140px] rounded border border-border bg-surface px-2 py-1 text-[12px] text-ink"
         />
         {!loading && (
@@ -352,6 +396,7 @@ export function AllLoansTab() {
                   <th className="text-left font-normal px-3 py-1.5">Client</th>
                   <th className="text-left font-normal px-3 py-1.5">Loan #</th>
                   <th className="text-left font-normal px-3 py-1.5">Provider</th>
+                  <th className="text-right font-normal px-3 py-1.5">Total</th>
                   <th className="text-right font-normal px-3 py-1.5">Installment</th>
                   <th className="text-right font-normal px-3 py-1.5">Balance</th>
                   <th className="text-center font-normal px-3 py-1.5">Deducted</th>
@@ -365,13 +410,29 @@ export function AllLoansTab() {
                   return (
                     <tr
                       key={loan.id}
-                      className="border-b border-border last:border-b-0 row-hover"
+                      className="border-b border-border last:border-b-0 row-hover cursor-pointer"
+                      onClick={() => {
+                        setDetailLoan(loan);
+                        setDetailCompanyName(companyName);
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.preventDefault();
+                          setDetailLoan(loan);
+                          setDetailCompanyName(companyName);
+                        }
+                      }}
+                      tabIndex={0}
+                      title="View installment deductions"
                     >
                       <td className="px-3 py-1 font-medium text-ink">{loan.client}</td>
                       <td className="px-3 py-1 text-muted2 tabular-nums font-mono text-[11px]">
                         {loan.ref || '—'}
                       </td>
                       <td className="px-3 py-1 text-muted2">{getLoanProviderDisplay(loan)}</td>
+                      <td className="px-3 py-1 text-right tabular-nums text-ink">
+                        {fmt(getLoanEffectiveTotal(loan))}
+                      </td>
                       <td className="px-3 py-1 text-right tabular-nums text-ink">
                         {fmt(loan.installment)}
                       </td>
@@ -406,6 +467,20 @@ export function AllLoansTab() {
           const added = await insertLoan(payload, forOwnerId);
           await load({ silent: true });
           return added;
+        }}
+      />
+
+      <AdminLoanInstallmentDetailModal
+        open={detailLoan != null}
+        loan={detailLoan}
+        companyName={detailCompanyName}
+        onClose={() => {
+          setDetailLoan(null);
+          setDetailCompanyName(null);
+        }}
+        onLoanUpdated={(saved) => {
+          setDetailLoan(saved);
+          void load({ silent: true });
         }}
       />
     </div>
