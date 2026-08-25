@@ -1,6 +1,15 @@
 /** Provider type for loans */
 export type LoanProviderType = 'TruFunding' | 'Other';
 
+/** One payment posted toward a specific installment. */
+export interface LoanInstallmentPayment {
+  amount: number;
+  /** Payment date YYYY-MM-DD. */
+  date: string;
+  /** Optional note for this payment only. */
+  note: string;
+}
+
 /** App model: loan (camelCase) */
 export interface Loan {
   id: number;
@@ -26,6 +35,11 @@ export interface Loan {
    * 0 when the open installment has no partial payments yet.
    */
   partialPaidAmount: number;
+  /**
+   * Payments posted per installment (index-aligned with the schedule).
+   * installmentPayments[i] lists every payment toward installment #i+1.
+   */
+  installmentPayments: LoanInstallmentPayment[][];
   note: string;
   /** TruFunding or Other; when Other, providerName is the custom name. */
   providerType: LoanProviderType;
@@ -71,6 +85,8 @@ export interface LoanRow {
   payment_amounts?: number[] | null;
   /** Amount already paid toward the current open installment. */
   partial_paid_amount?: number | null;
+  /** Payments per installment: [[{amount, date, note}, ...], ...]. */
+  installment_payments?: LoanInstallmentPayment[][] | null;
   note: string | null;
   provider_type?: string;
   provider_name?: string | null;

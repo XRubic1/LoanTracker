@@ -1,5 +1,6 @@
 import type {
   Loan,
+  LoanInstallmentPayment,
   Reserve,
   LoanRow,
   ReserveRow,
@@ -980,6 +981,7 @@ function loanFromRow(row: LoanRow | null): Loan | null {
   const paymentAmounts = rawAmounts
     .map((a) => Number(a))
     .filter((a) => Number.isFinite(a));
+  const installmentPayments = parseInstallmentPayments(row.installment_payments, total);
   const providerType = (row.provider_type === 'Other' ? 'Other' : 'TruFunding') as LoanProviderType;
   return {
     id: row.id,
@@ -995,6 +997,7 @@ function loanFromRow(row: LoanRow | null): Loan | null {
     paymentDates,
     paymentNotes,
     paymentAmounts,
+    installmentPayments,
     partialPaidAmount: Number(row.partial_paid_amount ?? 0) || 0,
     note: row.note ?? '',
     providerType,
@@ -1004,6 +1007,38 @@ function loanFromRow(row: LoanRow | null): Loan | null {
   };
 }
 
+/** Normalize jsonb installment_payments into LoanInstallmentPayment[][]. */
+function parseInstallmentPayments(
+  raw: LoanRow['installment_payments'],
+  totalInstallments: number
+): LoanInstallmentPayment[][] {
+  const source = Array.isArray(raw) ? raw : [];
+  const out: LoanInstallmentPayment[][] = [];
+  const len = Math.max(totalInstallments, source.length);
+  for (let i = 0; i < len; i++) {
+    const slot = source[i];
+    if (!Array.isArray(slot)) {
+      out.push([]);
+      continue;
+    }
+    out.push(
+      slot
+        .map((p) => {
+          if (!p || typeof p !== 'object') return null;
+          const amount = Number((p as LoanInstallmentPayment).amount);
+          if (!Number.isFinite(amount)) return null;
+          return {
+            amount,
+            date: String((p as LoanInstallmentPayment).date ?? ''),
+            note: String((p as LoanInstallmentPayment).note ?? ''),
+          };
+        })
+        .filter((p): p is LoanInstallmentPayment => p != null)
+    );
+  }
+  return out;
+}
+
 function loanToRow(loan: Loan, ownerId?: string | null): Omit<LoanRow, 'id'> {
   const total = loan.totalInstallments ?? 0;
   const paymentNotes = (loan.paymentNotes ?? []).slice(0, total);
@@ -1011,6 +1046,7 @@ function loanToRow(loan: Loan, ownerId?: string | null): Omit<LoanRow, 'id'> {
   const paymentAmounts = (loan.paymentAmounts ?? [])
     .map((a) => Number(a))
     .filter((a) => Number.isFinite(a));
+  const installmentPayments = parseInstallmentPayments(loan.installmentPayments, total);
   return {
     owner_id: ownerId ?? null,
     client: loan.client,
@@ -1024,6 +1060,7 @@ function loanToRow(loan: Loan, ownerId?: string | null): Omit<LoanRow, 'id'> {
     payment_dates: loan.paymentDates ?? [],
     payment_notes: paymentNotes,
     payment_amounts: paymentAmounts,
+    installment_payments: installmentPayments,
     partial_paid_amount: Number(loan.partialPaidAmount ?? 0) || 0,
     note: loan.note || null,
     provider_type: loan.providerType ?? 'TruFunding',

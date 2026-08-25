@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react';
 import type { Loan } from '@/types';
 import { Modal } from '@/components/Modal';
+import { InstallmentPaymentsList } from '@/components/InstallmentPaymentsList';
+import { getInstallmentPayments } from '@/lib/loanPaymentActions';
 import {
   fmt,
   fmtDate,
@@ -40,8 +42,10 @@ export function CloseInstallmentModal({
 
   useEffect(() => {
     if (loan && open) {
-      const notes = loan.paymentNotes ?? [];
-      setNote(notes[index] ?? '');
+      // Always start blank — do not prefill with existing installment notes.
+      // Those include auto "Partial $X on DATE" lines; resubmitting them
+      // compounds notes on every payment.
+      setNote('');
       setCloseDate(todayStr());
       setLocalError(null);
       const remaining = getLoanOpenInstallmentRemaining(loan);
@@ -138,6 +142,13 @@ export function CloseInstallmentModal({
           )}
         </div>
 
+        {!creatingNextWeek && (
+          <InstallmentPaymentsList
+            payments={getInstallmentPayments(loan, index)}
+            compact
+          />
+        )}
+
         <p className="text-[12px] text-muted2 leading-relaxed">
           Enter less than remaining to leave the installment open. Enter more than remaining to close
           it and apply the difference to the next installment.
@@ -165,13 +176,13 @@ export function CloseInstallmentModal({
           className="w-full bg-surface border border-border rounded-lg py-2 px-3 text-[13px] text-ink outline-none focus:border-accent mb-2"
         />
         <label className="block text-[11px] text-muted uppercase tracking-wider mb-1.5">
-          Note
+          Note for this payment
         </label>
         <textarea
           value={note}
           onChange={(e) => setNote(e.target.value)}
-          placeholder="Add a note (optional)…"
-          rows={3}
+          placeholder="Optional note for this payment…"
+          rows={2}
           className="w-full bg-surface border border-border rounded-lg py-2 px-3 text-[13px] text-ink placeholder:text-muted outline-none focus:border-accent resize-none"
         />
 

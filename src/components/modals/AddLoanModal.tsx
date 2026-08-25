@@ -143,6 +143,7 @@ export function AddLoanModal({
           paymentDates: [],
           paymentNotes: [],
           paymentAmounts: [],
+          installmentPayments: [],
           partialPaidAmount: 0,
           note: '',
           providerType,

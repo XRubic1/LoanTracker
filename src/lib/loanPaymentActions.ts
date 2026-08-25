@@ -1,4 +1,4 @@
-import type { Loan } from '@/types';
+import type { Loan, LoanInstallmentPayment } from '@/types';
 
 /** Today's date as YYYY-MM-DD (local calendar). */
 export function todayDateOnly(): string {
@@ -46,6 +46,54 @@ function padNotes(notes: string[] | undefined, length: number): string[] {
   return out;
 }
 
+/** Deep-clone installment payment slots. */
+function clonePaymentSlots(
+  payments: LoanInstallmentPayment[][] | undefined
+): LoanInstallmentPayment[][] {
+  return (payments ?? []).map((slot) =>
+    (Array.isArray(slot) ? slot : []).map((p) => ({
+      amount: Number(p.amount) || 0,
+      date: String(p.date ?? ''),
+      note: String(p.note ?? ''),
+    }))
+  );
+}
+
+/** Ensure slots exist through `index` (inclusive). */
+function ensurePaymentSlot(
+  payments: LoanInstallmentPayment[][] | undefined,
+  index: number
+): LoanInstallmentPayment[][] {
+  const out = clonePaymentSlots(payments);
+  while (out.length <= index) out.push([]);
+  return out;
+}
+
+/** Append one payment entry to an installment slot. */
+function pushPayment(
+  payments: LoanInstallmentPayment[][] | undefined,
+  index: number,
+  entry: LoanInstallmentPayment
+): LoanInstallmentPayment[][] {
+  const out = ensurePaymentSlot(payments, index);
+  out[index] = [...out[index], { ...entry, amount: roundMoney(entry.amount) }];
+  return out;
+}
+
+/** Payments posted toward installment `index` (0-based). */
+export function getInstallmentPayments(
+  loan: Loan,
+  index: number
+): LoanInstallmentPayment[] {
+  const slot = loan.installmentPayments?.[index];
+  return Array.isArray(slot) ? slot : [];
+}
+
+/** Sum of payment amounts for one installment. */
+export function sumInstallmentPayments(payments: LoanInstallmentPayment[]): number {
+  return roundMoney(payments.reduce((sum, p) => sum + (Number(p.amount) || 0), 0));
+}
+
 /**
  * Close the next open installment in full (optional note + paid date).
  * Uses remaining due after any partial. Returns null if nothing left to close
@@ -65,16 +113,17 @@ export function buildCloseNextInstallment(
 }
 
 /**
- * Mark the loan fully paid: fill remaining payment dates/notes through totalInstallments.
- * Returns null if already fully paid.
+ * Mark the loan fully paid: fill remaining payment dates through totalInstallments.
+ * Records a closing payment for each unpaid slot. Returns null if already fully paid.
  */
 export function buildCloseLoanFully(loan: Loan, paidDate?: string): Loan | null {
   if (loan.paidCount >= loan.totalInstallments && !(loan.partialPaidAmount > 0)) return null;
   const date = paidDate?.trim() || todayDateOnly();
-  let working: Loan = { ...loan, partialPaidAmount: 0 };
+  let working: Loan = {
+    ...loan,
+    installmentPayments: clonePaymentSlots(loan.installmentPayments),
+  };
   const paymentDates = [...(working.paymentDates ?? [])];
-  while (paymentDates.length < working.totalInstallments) paymentDates.push(date);
-  const paymentNotes = padNotes(working.paymentNotes, working.totalInstallments);
 
   const hasCustomAmounts = (working.paymentAmounts ?? []).length > 0;
   let paymentAmounts = [...(working.paymentAmounts ?? [])];
@@ -85,11 +134,30 @@ export function buildCloseLoanFully(loan: Loan, paidDate?: string): Loan | null 
     paymentAmounts = paymentAmounts.slice(0, working.totalInstallments);
   }
 
+  for (let i = working.paidCount; i < working.totalInstallments; i++) {
+    const due = amountAtIndex(working, i);
+    const already =
+      i === working.paidCount ? Number(working.partialPaidAmount ?? 0) || 0 : 0;
+    const remaining = roundMoney(due - already);
+    if (remaining > 0.009) {
+      working = {
+        ...working,
+        installmentPayments: pushPayment(working.installmentPayments, i, {
+          amount: remaining,
+          date,
+          note: '',
+        }),
+      };
+    }
+    if (paymentDates.length <= i) paymentDates.push(date);
+    else if (!paymentDates[i]) paymentDates[i] = date;
+    paymentAmounts = withRecordedAmount({ ...working, paymentAmounts }, i, due);
+  }
+
   return {
     ...working,
     paidCount: working.totalInstallments,
     paymentDates,
-    paymentNotes,
     paymentAmounts,
     partialPaidAmount: 0,
   };
@@ -132,6 +200,11 @@ export function buildLoanAmountEdit(loan: Loan, input: LoanAmountEditInput): Loa
 
   const paymentDates = [...(loan.paymentDates ?? [])].slice(0, paidCount);
   const paymentNotes = padNotes(loan.paymentNotes, totalInstallments);
+  const installmentPayments = clonePaymentSlots(loan.installmentPayments).slice(
+    0,
+    totalInstallments
+  );
+  while (installmentPayments.length < totalInstallments) installmentPayments.push([]);
 
   // Keep deducted amounts; unpaid slots fall back to the new flat installment.
   const paymentAmounts: number[] = [];
@@ -153,6 +226,7 @@ export function buildLoanAmountEdit(loan: Loan, input: LoanAmountEditInput): Loa
     paymentDates,
     paymentNotes,
     paymentAmounts,
+    installmentPayments,
     partialPaidAmount,
   };
 }
@@ -180,9 +254,16 @@ export function buildAddInstallment(loan: Loan, input: AddInstallmentInput): Loa
     }
 
     const paymentNotes = padNotes(loan.paymentNotes, loan.totalInstallments);
-    paymentNotes.splice(insertAt, 0, note);
+    paymentNotes.splice(insertAt, 0, '');
     while (paymentNotes.length < totalInstallments) paymentNotes.push('');
     paymentNotes.length = totalInstallments;
+
+    const installmentPayments = ensurePaymentSlot(loan.installmentPayments, loan.totalInstallments);
+    installmentPayments.splice(insertAt, 0, [
+      { amount: roundMoney(amount), date: paidDate, note },
+    ]);
+    while (installmentPayments.length < totalInstallments) installmentPayments.push([]);
+    installmentPayments.length = totalInstallments;
 
     const paymentDates = [...(loan.paymentDates ?? [])].slice(0, insertAt);
     paymentDates.push(paidDate);
@@ -194,6 +275,7 @@ export function buildAddInstallment(loan: Loan, input: AddInstallmentInput): Loa
       paymentDates,
       paymentNotes,
       paymentAmounts,
+      installmentPayments,
       partialPaidAmount: 0,
     };
   }
@@ -208,11 +290,56 @@ export function buildAddInstallment(loan: Loan, input: AddInstallmentInput): Loa
   const paymentNotes = padNotes(loan.paymentNotes, totalInstallments);
   paymentNotes[index] = note;
 
+  const installmentPayments = ensurePaymentSlot(loan.installmentPayments, index);
+
   return {
     ...loan,
     totalInstallments,
     paymentNotes,
     paymentAmounts,
+    installmentPayments,
+  };
+}
+
+/**
+ * Undo the last payment event: open-installment partial first, else reopen last closed slot.
+ * Returns null when there is nothing to reverse.
+ */
+export function buildReverseLastPayment(loan: Loan): Loan | null {
+  const payments = clonePaymentSlots(loan.installmentPayments);
+  const openIndex = loan.paidCount;
+  const openSlot = payments[openIndex] ?? [];
+
+  // Undo last partial on the open installment.
+  if ((Number(loan.partialPaidAmount ?? 0) || 0) > 0 || openSlot.length > 0) {
+    if (openSlot.length === 0) {
+      return { ...loan, partialPaidAmount: 0, installmentPayments: payments };
+    }
+    const nextSlot = openSlot.slice(0, -1);
+    payments[openIndex] = nextSlot;
+    return {
+      ...loan,
+      installmentPayments: payments,
+      partialPaidAmount: sumInstallmentPayments(nextSlot),
+    };
+  }
+
+  if (loan.paidCount === 0) return null;
+
+  const index = loan.paidCount - 1;
+  const slot = [...(payments[index] ?? [])];
+  if (slot.length > 0) slot.pop();
+  payments[index] = slot;
+
+  const paymentDates = [...(loan.paymentDates ?? [])].slice(0, -1);
+  const partialPaidAmount = sumInstallmentPayments(slot);
+
+  return {
+    ...loan,
+    paidCount: loan.paidCount - 1,
+    paymentDates,
+    installmentPayments: payments,
+    partialPaidAmount,
   };
 }
 
@@ -224,6 +351,8 @@ export function buildAddInstallment(loan: Loan, input: AddInstallmentInput): Loa
  * - amount > remaining due → installment closes; excess applies to the next installment
  *   (auto-creates installment #N+1 when the schedule is exhausted)
  * - posting when the current slot is already fully covered → error message
+ *
+ * Each posted chunk is stored on installmentPayments[index] (not in paymentNotes).
  */
 export function buildPostInstallmentPayment(
   loan: Loan,
@@ -237,12 +366,14 @@ export function buildPostInstallmentPayment(
   }
 
   const date = paidDate?.trim() || todayDateOnly();
-  const noteTrim = note.trim();
+  // User note applies once to the first payment chunk in this action.
+  let userNoteRemaining = note.trim();
   let working: Loan = {
     ...loan,
     paymentDates: [...(loan.paymentDates ?? [])],
     paymentNotes: [...(loan.paymentNotes ?? [])],
     paymentAmounts: [...(loan.paymentAmounts ?? [])],
+    installmentPayments: clonePaymentSlots(loan.installmentPayments),
     partialPaidAmount: Number(loan.partialPaidAmount ?? 0) || 0,
   };
   let remainingPayment = amount;
@@ -259,6 +390,7 @@ export function buildPostInstallmentPayment(
         ...working,
         totalInstallments: nextNum,
         paymentNotes: padNotes(working.paymentNotes, nextNum),
+        installmentPayments: ensurePaymentSlot(working.installmentPayments, nextNum - 1),
       };
       messages.push(`Created installment #${nextNum}.`);
     }
@@ -279,20 +411,17 @@ export function buildPostInstallmentPayment(
     if (remainingPayment + 0.009 < remainingDue) {
       const posted = remainingPayment;
       const newPartial = roundMoney(already + posted);
-      const paymentNotes = padNotes(working.paymentNotes, working.totalInstallments);
-      const partialLine = `Partial ${fmtMoney(posted)} on ${date}`;
-      paymentNotes[index] = noteTrim
-        ? paymentNotes[index]
-          ? `${paymentNotes[index]}; ${partialLine} — ${noteTrim}`
-          : `${partialLine} — ${noteTrim}`
-        : paymentNotes[index]
-          ? `${paymentNotes[index]}; ${partialLine}`
-          : partialLine;
+      const entryNote = userNoteRemaining;
+      userNoteRemaining = '';
 
       working = {
         ...working,
         partialPaidAmount: newPartial,
-        paymentNotes,
+        installmentPayments: pushPayment(working.installmentPayments, index, {
+          amount: posted,
+          date,
+          note: entryNote,
+        }),
       };
       messages.push(
         `Posted ${fmtMoney(posted)} toward installment #${index + 1}. ` +
@@ -305,20 +434,11 @@ export function buildPostInstallmentPayment(
     // Close this installment (payment covers what was left).
     const applied = remainingDue;
     remainingPayment = roundMoney(remainingPayment - applied);
+    const entryNote = userNoteRemaining;
+    userNoteRemaining = '';
 
     const paymentDates = [...(working.paymentDates ?? [])];
     paymentDates.push(date);
-
-    const paymentNotes = padNotes(working.paymentNotes, Math.max(working.totalInstallments, index + 1));
-    if (noteTrim && !messages.length) {
-      paymentNotes[index] = already > 0
-        ? `${paymentNotes[index] ? `${paymentNotes[index]}; ` : ''}Closed — ${noteTrim}`
-        : noteTrim;
-    } else if (already > 0) {
-      paymentNotes[index] = paymentNotes[index]
-        ? `${paymentNotes[index]}; Closed`
-        : `Closed after partials totaling ${fmtMoney(due)}`;
-    }
 
     const paymentAmounts = withRecordedAmount(working, index, due);
 
@@ -326,8 +446,12 @@ export function buildPostInstallmentPayment(
       ...working,
       paidCount: working.paidCount + 1,
       paymentDates,
-      paymentNotes,
       paymentAmounts,
+      installmentPayments: pushPayment(working.installmentPayments, index, {
+        amount: applied,
+        date,
+        note: entryNote,
+      }),
       partialPaidAmount: 0,
     };
 

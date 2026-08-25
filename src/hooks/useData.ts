@@ -4,6 +4,7 @@ import { isConfigMissing, getSupabase } from '@/lib/supabase';
 import {
   buildCloseLoanFully,
   buildPostInstallmentPayment,
+  buildReverseLastPayment,
 } from '@/lib/loanPaymentActions';
 import { getLoanOpenInstallmentRemaining } from '@/lib/utils';
 import {
@@ -262,19 +263,8 @@ export function useData(ownerId: string | null, userId: string | null = null): U
     async (id: number) => {
       const loan = loans.find((l) => l.id === id);
       if (!loan) return;
-      // Undo partial on open installment first, then undo last full payment.
-      if ((Number(loan.partialPaidAmount ?? 0) || 0) > 0) {
-        await updateLoanById(id, { ...loan, partialPaidAmount: 0 });
-        return;
-      }
-      if (loan.paidCount === 0) return;
-      const paymentDates = loan.paymentDates ?? [];
-      const updated: Loan = {
-        ...loan,
-        paidCount: loan.paidCount - 1,
-        paymentDates: paymentDates.slice(0, -1),
-        partialPaidAmount: 0,
-      };
+      const updated = buildReverseLastPayment(loan);
+      if (!updated) return;
       await updateLoanById(id, updated);
     },
     [loans, updateLoanById]

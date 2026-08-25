@@ -9,6 +9,7 @@ import {
   buildCloseLoanFully,
   buildLoanAmountEdit,
   buildPostInstallmentPayment,
+  getInstallmentPayments,
   isLoanFullyPaid,
   todayDateOnly,
 } from '@/lib/loanPaymentActions';
@@ -21,6 +22,7 @@ import {
   getLoanRemaining,
   getScheduleDueDateOnly,
 } from '@/lib/utils';
+import { InstallmentPaymentsList } from '@/components/InstallmentPaymentsList';
 
 interface AdminLoanInstallmentDetailModalProps {
   loan: Loan | null;
@@ -513,6 +515,7 @@ export function AdminLoanInstallmentDetailModal({
                     </>
                   )}
                   <th className="text-left font-normal px-3 py-1.5 w-24">Status</th>
+                  <th className="text-left font-normal px-3 py-1.5">Payments</th>
                   <th className="text-left font-normal px-3 py-1.5">Note</th>
                 </tr>
               </thead>
@@ -527,6 +530,7 @@ export function AdminLoanInstallmentDetailModal({
                   const dueStr = getScheduleDueDateOnly(loan.startDate, i, loan.freqDays ?? 7);
                   const paidStr = (paidDates[i] ?? '').trim();
                   const note = (notes[i] ?? '').trim();
+                  const payments = getInstallmentPayments(loan, i);
                   const highlighted = highlightIndex === i;
                   const slotAmount = getLoanInstallmentAmount(loan, i);
                   const statusLabel = paid
@@ -537,6 +541,14 @@ export function AdminLoanInstallmentDetailModal({
                         ? 'Next'
                         : 'Pending';
                   const statusVariant = paid ? 'ok' : partialOnOpen > 0 || isNext ? 'due' : 'closed';
+                  const paymentsLabel =
+                    payments.length === 0
+                      ? '—'
+                      : payments.length === 1
+                        ? fmt(payments[0].amount)
+                        : `${payments.length}× · ${fmt(
+                            payments.reduce((s, p) => s + (Number(p.amount) || 0), 0)
+                          )}`;
 
                   return (
                     <tr
@@ -573,7 +585,24 @@ export function AdminLoanInstallmentDetailModal({
                         <Badge variant={statusVariant}>{statusLabel}</Badge>
                       </td>
                       <td
-                        className="px-3 py-1.5 text-muted2 max-w-[200px] truncate"
+                        className="px-3 py-1.5 text-muted2 tabular-nums max-w-[140px] truncate"
+                        title={
+                          payments.length
+                            ? payments
+                                .map(
+                                  (p) =>
+                                    `${fmt(p.amount)} on ${p.date || '—'}${
+                                      p.note?.trim() ? ` — ${p.note.trim()}` : ''
+                                    }`
+                                )
+                                .join('\n')
+                            : undefined
+                        }
+                      >
+                        {paymentsLabel}
+                      </td>
+                      <td
+                        className="px-3 py-1.5 text-muted2 max-w-[160px] truncate"
                         title={note || undefined}
                       >
                         {note || '—'}
@@ -584,6 +613,20 @@ export function AdminLoanInstallmentDetailModal({
               </tbody>
             </table>
           </div>
+
+          {highlightIndex != null &&
+            highlightIndex >= 0 &&
+            highlightIndex < loan.totalInstallments && (
+              <div className="flex-shrink-0 rounded-lg border border-border bg-surface/60 p-3">
+                <div className="text-[11px] text-muted uppercase tracking-wider mb-1">
+                  Installment #{highlightIndex + 1} payment history
+                </div>
+                <InstallmentPaymentsList
+                  payments={getInstallmentPayments(loan, highlightIndex)}
+                  compact
+                />
+              </div>
+            )}
 
           <div className="flex flex-wrap items-center justify-end gap-2 flex-shrink-0">
             <button

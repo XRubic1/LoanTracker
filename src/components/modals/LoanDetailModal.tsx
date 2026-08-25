@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react';
 import type { Loan } from '@/types';
 import { Modal } from '@/components/Modal';
+import { InstallmentPaymentsList } from '@/components/InstallmentPaymentsList';
+import { getInstallmentPayments } from '@/lib/loanPaymentActions';
 import { fmt, fmtDate, getLoanInstallmentAmount, getLoanOpenInstallmentRemaining, getLoanRemaining, getScheduleDueDateOnly } from '@/lib/utils';
 
 interface LoanDetailModalProps {
@@ -81,7 +83,13 @@ export function LoanDetailModal({
   useEffect(() => {
     if (loan && selectedInstallmentIndex !== null) {
       const notes = loan.paymentNotes ?? [];
-      setPopupNote(notes[selectedInstallmentIndex] ?? '');
+      // Open installment: blank note for this payment only (avoid re-posting
+      // prior auto "Partial $X on DATE" lines). Paid slots: edit existing note.
+      if (selectedInstallmentIndex === loan.paidCount) {
+        setPopupNote('');
+      } else {
+        setPopupNote(notes[selectedInstallmentIndex] ?? '');
+      }
       const existingPaidDate = loan.paymentDates?.[selectedInstallmentIndex];
       setPopupCloseDate(existingPaidDate ?? todayStr());
       setPopupError(null);
@@ -120,7 +128,8 @@ export function LoanDetailModal({
 
   const openInstallmentPopup = (index: number) => {
     setSelectedInstallmentIndex(index);
-    setPopupNote(notes[index] ?? '');
+    // Blank for open installment payments; keep existing text when editing paid notes.
+    setPopupNote(index === loan.paidCount ? '' : (notes[index] ?? ''));
   };
 
   const closeInstallmentPopup = () => {
@@ -317,7 +326,7 @@ export function LoanDetailModal({
           )}
 
           <div className="text-[11px] text-muted uppercase tracking-wider mt-4 mb-2">
-            Installments — click row or note icon to add note or mark paid
+            Installments — click a row to view payments, add a note, or post payment
           </div>
           <div className="flex flex-col gap-2 max-h-[260px] overflow-y-auto scrollable">
             {Array.from({ length: loan.totalInstallments }, (_, i) => {
@@ -330,6 +339,7 @@ export function LoanDetailModal({
               const actualDate =
                 loan.paymentDates?.[i] ? fmtDate(loan.paymentDates[i]) : null;
               const hasNote = !!(notes[i] ?? '').trim();
+              const paymentCount = getInstallmentPayments(loan, i).length;
               const slotAmount = getLoanInstallmentAmount(loan, i);
               return (
                 <div
@@ -347,6 +357,14 @@ export function LoanDetailModal({
                         <span className="text-green ml-1">→ paid {actualDate}</span>
                       )}
                     </span>
+                    {paymentCount > 0 && (
+                      <span
+                        className="shrink-0 text-[10px] text-accent px-1.5 py-0.5 rounded bg-accent/10"
+                        title={`${paymentCount} payment${paymentCount === 1 ? '' : 's'}`}
+                      >
+                        {paymentCount} pay{paymentCount === 1 ? '' : 's'}
+                      </span>
+                    )}
                     {hasNote && (
                       <span className="shrink-0 text-[10px] text-muted px-1.5 py-0.5 rounded bg-border/50" title={notes[i]}>
                         note
@@ -359,7 +377,7 @@ export function LoanDetailModal({
                         ? `${fmt(partialHere)} / ${fmt(slotAmount)}`
                         : fmt(slotAmount)}
                     </span>
-                    <NoteIcon hasNote={hasNote} onClick={() => openInstallmentPopup(i)} />
+                    <NoteIcon hasNote={hasNote || paymentCount > 0} onClick={() => openInstallmentPopup(i)} />
                     <span
                       className={`text-[11px] w-14 text-right ${paid ? 'text-green' : partialHere > 0 ? 'text-yellow' : isNext ? 'text-yellow' : 'text-muted'}`}
                     >
@@ -488,6 +506,12 @@ export function LoanDetailModal({
                 );
               })()}
             </p>
+
+            <InstallmentPaymentsList
+              payments={getInstallmentPayments(loan, selectedInstallmentIndex)}
+              compact
+            />
+
             <label className="block text-[11px] text-muted uppercase tracking-wider mb-1.5">
               Payment date
             </label>
@@ -519,13 +543,17 @@ export function LoanDetailModal({
               </>
             )}
             <label className="block text-[11px] text-muted uppercase tracking-wider mb-1.5">
-              Note
+              {selectedIsNextUnpaid ? 'Note for this payment' : 'Installment note'}
             </label>
             <textarea
               value={popupNote}
               onChange={(e) => setPopupNote(e.target.value)}
-              placeholder="Add a note (optional)…"
-              rows={3}
+              placeholder={
+                selectedIsNextUnpaid
+                  ? 'Optional note for this payment…'
+                  : 'Edit installment note…'
+              }
+              rows={2}
               className="w-full bg-surface border border-border rounded-lg py-2 px-3 text-[13px] text-ink placeholder:text-muted outline-none focus:border-accent resize-none"
             />
             {popupError && (
