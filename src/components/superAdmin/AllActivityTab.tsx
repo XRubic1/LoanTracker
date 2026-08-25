@@ -60,7 +60,7 @@ export function AllActivityTab() {
       );
       setEntries(entryRows);
       setClientsById(new Map(clientRows.map((r) => [r.client.id, r.client])));
-      setClientInsurance(insuranceRows.map((r) => r.record));
+      setClientInsurance(insuranceRows.map((r) => r.insurance));
 
       const ownerIds = [
         ...new Set(companyRows.map((c) => c.owner_id).filter(Boolean)),
