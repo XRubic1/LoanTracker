@@ -9,6 +9,7 @@ import { ReservesPage } from '@/pages/ReservesPage';
 import { ClosedPage } from '@/pages/ClosedPage';
 import { AaaPaymentsPage } from '@/pages/AaaPaymentsPage';
 import { ClientInsurancePage } from '@/pages/ClientInsurancePage';
+import { MotusInsurancePage } from '@/pages/MotusInsurancePage';
 import { ClientsPage } from '@/pages/ClientsPage';
 import { WorksheetPage } from '@/pages/WorksheetPage';
 import { UserActivityPage } from '@/pages/UserActivityPage';
@@ -124,6 +125,7 @@ export default function App() {
     insuranceVerification,
     addClientInsurance,
     updateClientInsuranceById,
+    updateClientInsuranceCancellationById,
     removeClientInsurance,
     updateInsuranceVerification,
     aaaPayments,
@@ -610,6 +612,12 @@ export default function App() {
             onDeletePayment={isOwner ? removeAaaPayment : undefined}
           />
         )}
+        {page === 'motus' && (
+          <MotusInsurancePage
+            clientInsurance={clientInsurance}
+            onUpdateCancellation={updateClientInsuranceCancellationById}
+          />
+        )}
         {page === 'clientInsurance' && (
           <ClientInsurancePage
             clientInsurance={clientInsurance}
@@ -664,7 +672,11 @@ export default function App() {
         )}
         {page === 'admin' && showAdminNav && (
           <div className="flex-1 min-h-0">
-            <SuperAdminDashboard tab={adminTab} />
+            <SuperAdminDashboard
+              tab={adminTab}
+              clientInsurance={clientInsurance}
+              onUpdateCancellation={updateClientInsuranceCancellationById}
+            />
           </div>
         )}
         {page === 'users' && <UsersPage />}

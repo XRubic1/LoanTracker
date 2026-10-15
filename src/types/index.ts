@@ -150,6 +150,7 @@ export type PageId =
   | 'aaaPayments'
   | 'users'
   | 'clientInsurance'
+  | 'motus'
   | 'worksheet'
   | 'clients'
   | 'userActivity'

@@ -84,6 +84,10 @@ const NAV_STEP_COPY: Partial<Record<PageId, { title: string; body: string }>> = 
     title: 'Client Insurance',
     body: 'Track MC numbers, status, and insurance verification for each client.',
   },
+  motus: {
+    title: 'MOTUS',
+    body: 'Look up public FMCSA insurance for a DOT or MC, or check a spreadsheet three numbers at a time.',
+  },
   users: {
     title: 'Users',
     body: 'Invite teammates by email and choose which tabs they can access.',
@@ -143,6 +147,7 @@ export function buildTutorialSteps(options: BuildTutorialOptions): TutorialStep[
     'reserves',
     'clients',
     'clientInsurance',
+    'motus',
     'closed',
     'aaaPayments',
     'users',

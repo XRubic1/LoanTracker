@@ -3,6 +3,7 @@ export type SuperAdminTab =
   | 'dashboard'
   | 'clients'
   | 'insurance'
+  | 'motus'
   | 'deductions'
   | 'companies'
   | 'activity'
@@ -13,6 +14,7 @@ export const SUPER_ADMIN_BASE_TABS: { id: SuperAdminTab; label: string }[] = [
   { id: 'dashboard', label: 'Dashboard' },
   { id: 'clients', label: 'Clients' },
   { id: 'insurance', label: 'Client Insurance' },
+  { id: 'motus', label: 'MOTUS' },
   { id: 'deductions', label: 'Deducted' },
   { id: 'companies', label: 'Companies' },
   { id: 'activity', label: 'Activity' },

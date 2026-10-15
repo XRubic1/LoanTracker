@@ -6,5 +6,9 @@
 
 [functions.brokersnapshot-sync]
 verify_jwt = false
+
+# Signed-in MOTUS lookup. Auth is checked inside the function.
+[functions.motus-insurance]
+verify_jwt = false
 # Weekly schedule also set in migration 036 (pg_cron: Monday 06:00 UTC).
 # Dashboard: Integrations → Cron → brokersnapshot-sync → 0 6 * * 1

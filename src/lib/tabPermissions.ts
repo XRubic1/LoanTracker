@@ -10,6 +10,7 @@ export const ASSIGNABLE_PAGE_IDS: PageId[] = [
   'aaaPayments',
   'clients',
   'clientInsurance',
+  'motus',
   'api',
 ];
 
@@ -23,6 +24,7 @@ export const PAGE_LABELS: Record<PageId, string> = {
   worksheet: 'Worksheet',
   clients: 'Clients',
   clientInsurance: 'Client Insurance',
+  motus: 'MOTUS',
   api: 'API',
   userActivity: 'User Activity',
   users: 'Users',

@@ -3,10 +3,12 @@ import { AllLoansTab } from '@/components/superAdmin/AllLoansTab';
 import { AllActivityTab } from '@/components/superAdmin/AllActivityTab';
 import { CompanyGroupsTab } from '@/components/superAdmin/CompanyGroupsTab';
 import { ClientInsuranceTab } from '@/components/superAdmin/ClientInsuranceTab';
+import { MotusInsurancePage } from '@/pages/MotusInsurancePage';
 import { DeductedInstallmentsTab } from '@/components/superAdmin/DeductedInstallmentsTab';
 import { AdminClientsTab } from '@/components/superAdmin/AdminClientsTab';
 import { PlatformAdminsTab } from '@/components/superAdmin/PlatformAdminsTab';
 import { useAuth } from '@/contexts/AuthContext';
+import type { ClientInsurance } from '@/types';
 import {
   SUPER_ADMIN_FILL_TABS,
   type SuperAdminTab,
@@ -15,12 +17,14 @@ import {
 interface SuperAdminDashboardProps {
   /** Active section from the main Super Admin sidebar. */
   tab: SuperAdminTab;
+  clientInsurance: ClientInsurance[];
+  onUpdateCancellation: (id: number, expirationDate: string) => Promise<ClientInsurance>;
 }
 
 /**
  * Platform admin content pane. Section switching lives in the main sidebar.
  */
-export function SuperAdminDashboard({ tab }: SuperAdminDashboardProps) {
+export function SuperAdminDashboard({ tab, clientInsurance, onUpdateCancellation }: SuperAdminDashboardProps) {
   const { user } = useAuth();
   const fillsViewport = SUPER_ADMIN_FILL_TABS.has(tab);
 
@@ -33,6 +37,9 @@ export function SuperAdminDashboard({ tab }: SuperAdminDashboardProps) {
       {tab === 'dashboard' && <AllLoansTab />}
       {tab === 'clients' && <AdminClientsTab />}
       {tab === 'insurance' && <ClientInsuranceTab />}
+      {tab === 'motus' && (
+        <MotusInsurancePage clientInsurance={clientInsurance} onUpdateCancellation={onUpdateCancellation} />
+      )}
       {tab === 'deductions' && <DeductedInstallmentsTab />}
       {tab === 'companies' && <CompaniesTab createdBy={user?.id ?? null} />}
       {tab === 'activity' && <AllActivityTab />}

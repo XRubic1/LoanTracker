@@ -1218,6 +1218,27 @@ export async function insertClientInsurance(
   return inserted;
 }
 
+export async function updateClientInsuranceCancellation(
+  id: number,
+  expirationDate: string
+): Promise<ClientInsurance> {
+  const supabase = getSupabase();
+  if (!supabase) throw new Error('Supabase not configured');
+  const { data, error } = await supabase
+    .from('client_insurance')
+    .update({
+      status: 'cancellation',
+      expiration_date: expirationDate,
+      last_cancellation_date: expirationDate,
+    })
+    .eq('id', id)
+    .select('*')
+    .single();
+  if (error) throw error;
+  await insertCancellationAuditRow(id, expirationDate);
+  return clientInsuranceFromRow(data as ClientInsuranceRow)!;
+}
+
 export async function updateClientInsurance(id: number, record: ClientInsurance): Promise<ClientInsurance> {
   const supabase = getSupabase();
   if (!supabase) throw new Error('Supabase not configured');

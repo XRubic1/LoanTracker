@@ -19,6 +19,7 @@ import {
   fetchClientInsurance,
   insertClientInsurance,
   updateClientInsurance,
+  updateClientInsuranceCancellation,
   deleteClientInsuranceById,
   fetchInsuranceVerification,
   upsertInsuranceVerification,
@@ -70,6 +71,7 @@ export interface UseDataResult {
   closeReserve: (id: number) => Promise<void>;
   addClientInsurance: (payload: Omit<ClientInsurance, 'id'>) => Promise<ClientInsurance>;
   updateClientInsuranceById: (id: number, record: ClientInsurance) => Promise<ClientInsurance>;
+  updateClientInsuranceCancellationById: (id: number, expirationDate: string) => Promise<ClientInsurance>;
   removeClientInsurance: (id: number) => Promise<void>;
   updateInsuranceVerification: (
     payload: { last_checked_date: string; checked_by: string }
@@ -361,6 +363,14 @@ export function useData(ownerId: string | null, userId: string | null = null): U
     return updated;
   }, []);
 
+  const updateClientInsuranceCancellationById = useCallback(async (id: number, expirationDate: string) => {
+    const updated = await updateClientInsuranceCancellation(id, expirationDate);
+    setClientInsurance((prev) =>
+      prev.map((r) => (r.id === id ? updated : r)).sort((a, b) => a.client.localeCompare(b.client))
+    );
+    return updated;
+  }, []);
+
   const removeClientInsurance = useCallback(async (id: number) => {
     await deleteClientInsuranceById(id);
     setClientInsurance((prev) => prev.filter((r) => r.id !== id));
@@ -481,6 +491,7 @@ export function useData(ownerId: string | null, userId: string | null = null): U
     closeReserve,
     addClientInsurance,
     updateClientInsuranceById,
+    updateClientInsuranceCancellationById,
     removeClientInsurance,
     updateInsuranceVerification,
     addAaaPayment,
