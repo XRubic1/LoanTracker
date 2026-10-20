@@ -17,9 +17,20 @@ interface AppNotificationsProps {
   loans: Loan[];
   clientInsurance: ClientInsurance[];
   clients?: Client[];
+  /** Open issues from the automatic MOTUS check. */
+  motusIssueCount?: number;
+  motusLastRun?: string | null;
+  onOpenMotusAutoCheck?: () => void;
 }
 
-export function AppNotifications({ loans, clientInsurance, clients = [] }: AppNotificationsProps) {
+export function AppNotifications({
+  loans,
+  clientInsurance,
+  clients = [],
+  motusIssueCount = 0,
+  motusLastRun = null,
+  onOpenMotusAutoCheck,
+}: AppNotificationsProps) {
   const { isPlatformAdmin } = useAuth();
   const [cancellationPopupOpen, setCancellationPopupOpen] = useState(false);
   const [newClientPopupOpen, setNewClientPopupOpen] = useState(false);
@@ -27,7 +38,7 @@ export function AppNotifications({ loans, clientInsurance, clients = [] }: AppNo
   // New-client review is team-only — never surface it on the Super Admin portal.
   const clientsForReview = isPlatformAdmin ? [] : clients;
 
-  if (!hasActiveNotifications(loans, clientInsurance, clientsForReview)) return null;
+  if (!hasActiveNotifications(loans, clientInsurance, clientsForReview, motusIssueCount)) return null;
 
   const visibleLoans = loans.filter((l) => !l.hidden);
   const activeLoans = visibleLoans.filter((l) => l.paidCount < l.totalInstallments);
@@ -53,6 +64,28 @@ export function AppNotifications({ loans, clientInsurance, clients = [] }: AppNo
   return (
     <>
       <div className="w-full flex-shrink-0 flex flex-col gap-[6px] px-6 py-[10px] bg-page border-b border-divider">
+        {motusIssueCount > 0 && (
+          <button
+            type="button"
+            onClick={onOpenMotusAutoCheck}
+            className="alert-banner-warn transition-colors"
+            role="alert"
+          >
+            <svg className="h-[14px] w-[14px] flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+            </svg>
+            <span className="flex-1 min-w-0 truncate">
+              <strong className="font-medium">MOTUS auto-check</strong>
+              {' — '}
+              {motusIssueCount} issue{motusIssueCount === 1 ? '' : 's'} found
+              {motusLastRun ? ` · last run ${new Date(motusLastRun).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}` : ''}
+            </span>
+            <svg className="w-[12px] h-[12px] flex-shrink-0 opacity-60" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+            </svg>
+          </button>
+        )}
+
         {showCancellation && (
           <button
             type="button"

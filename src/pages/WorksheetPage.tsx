@@ -8,7 +8,7 @@ import { WorksheetEntryForm } from '@/components/WorksheetEntryForm';
 
 import { fmtDateTime, getWeekBoundsDateOnly } from '@/lib/utils';
 
-import { isNewClientNeedsReview } from '@/lib/clientUtils';
+import { isNewClientNeedsReview, formatClientExpense } from '@/lib/clientUtils';
 
 import {
   findInsuranceForClient,
@@ -355,7 +355,7 @@ function WorksheetTable({
 
                 </td>
 
-                <td className="text-muted2">{client?.expenses ?? '—'}</td>
+                <td className="text-muted2">{client ? formatClientExpense(client) : '—'}</td>
 
                 <td className="align-middle py-2 max-w-[280px]">
 

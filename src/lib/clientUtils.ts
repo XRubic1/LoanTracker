@@ -129,3 +129,23 @@ export function getClientAlwaysVerifyWorksheetMessage(c: Client): string | null 
   if (!isClientVerificationAlways(c)) return null;
   return 'Full Verification';
 }
+
+/** Parse a money input; blank or invalid becomes null. */
+export function parseExpenseAmountInput(value: string): number | null {
+  const n = value.trim() ? parseFloat(value) : NaN;
+  return Number.isFinite(n) && n >= 0 ? Math.round(n * 100) / 100 : null;
+}
+
+/** Amount configured for the client's chosen expense method (null if none). */
+export function getClientExpenseAmount(c: Client): number | null {
+  if (c.expenses === 'ACH') return c.ach_expense ?? null;
+  if (c.expenses === 'Wire') return c.wire_expense ?? null;
+  return null;
+}
+
+/** "ACH · $25.00", "ACH", or "—". */
+export function formatClientExpense(c: Client): string {
+  if (!c.expenses) return '—';
+  const amt = getClientExpenseAmount(c);
+  return amt != null ? `${c.expenses} · $${amt.toFixed(2)}` : c.expenses;
+}

@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { CopyButton } from '@/components/CopyButton';
 import { Modal } from '@/components/Modal';
 import type { ClientInsurance, ClientInsuranceCancellationAudit } from '@/types';
 import {
@@ -62,11 +63,17 @@ export function ClientInsuranceDetailModal({
         </div>
         <div className="flex justify-between items-center py-1.5 border-b border-border text-[13px]">
           <span className="text-muted2">MC</span>
-          <span className="font-mono">{clientInsurance.mc}</span>
+          <span className="inline-flex items-center gap-1.5 font-mono">
+            {clientInsurance.mc}
+            <CopyButton text={clientInsurance.mc} label="Copy MC" />
+          </span>
         </div>
         <div className="flex justify-between items-center py-1.5 border-b border-border text-[13px]">
           <span className="text-muted2">DOT</span>
-          <span className="font-mono">{clientInsurance.dot?.trim() || '—'}</span>
+          <span className="inline-flex items-center gap-1.5 font-mono">
+            {clientInsurance.dot?.trim() || '—'}
+            {clientInsurance.dot?.trim() ? <CopyButton text={clientInsurance.dot.trim()} label="Copy DOT" /> : null}
+          </span>
         </div>
         <div className="flex justify-between items-center py-1.5 border-b border-border text-[13px]">
           <span className="text-muted2">Status</span>

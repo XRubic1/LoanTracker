@@ -12,3 +12,7 @@ verify_jwt = false
 verify_jwt = false
 # Weekly schedule also set in migration 036 (pg_cron: Monday 06:00 UTC).
 # Dashboard: Integrations → Cron → brokersnapshot-sync → 0 6 * * 1
+
+# Daily MOTUS check. Runs from pg_cron (see migration 20260826130000) or a signed-in platform admin.
+[functions.motus-daily-sync]
+verify_jwt = false

@@ -39,6 +39,10 @@ import { EditAaaPaymentModal } from '@/components/modals/EditAaaPaymentModal';
 import type { Client, Loan } from '@/types';
 import { buildPostInstallmentPayment } from '@/lib/loanPaymentActions';
 import { useAuth } from '@/contexts/AuthContext';
+import { MotusAutoCheckContext } from '@/contexts/MotusAutoCheckContext';
+import { useMotusAutoCheck } from '@/hooks/useMotusAutoCheck';
+import { countMotusIssues } from '@/lib/motusAutoCheck';
+import type { MotusTab } from '@/pages/MotusInsurancePage';
 import { useData } from '@/hooks/useData';
 import {
   getNotificationsHidden,
@@ -144,6 +148,9 @@ export default function App() {
     removeWorksheetEntry,
     clearWorksheetActivityInRange,
   } = useData(effectiveOwnerId ?? null, user?.id ?? null);
+  const motusAuto = useMotusAutoCheck(effectiveOwnerId ?? null);
+  const [motusTab, setMotusTab] = useState<MotusTab>('check');
+  const motusIssueCount = countMotusIssues(motusAuto.data, clientInsurance);
 
   const tabAccess = useMemo(
     () => ({
@@ -491,7 +498,16 @@ export default function App() {
   }
 
   return (
-    <>
+    <MotusAutoCheckContext.Provider
+      value={{
+        userId: user?.id ?? '',
+        data: motusAuto.data,
+        loading: motusAuto.loading,
+        error: motusAuto.error,
+        reload: motusAuto.reload,
+        onRefreshInsurance: () => void refetch(),
+      }}
+    >
       <Sidebar
         page={page}
         onPage={setPage}
@@ -516,7 +532,17 @@ export default function App() {
           Super Admin fills the viewport — skip banners so they don't push the layout down. */}
       <div className="flex-1 min-w-0 min-h-0 flex flex-col">
         {!notificationsHidden && !(page === 'admin' && showAdminNav) && (
-          <AppNotifications loans={loans} clientInsurance={clientInsurance} clients={clients} />
+          <AppNotifications
+            loans={loans}
+            clientInsurance={clientInsurance}
+            clients={clients}
+            motusIssueCount={motusIssueCount}
+            motusLastRun={motusAuto.data.runs[0]?.started_at ?? null}
+            onOpenMotusAutoCheck={() => {
+              setMotusTab('auto');
+              setPage('motus');
+            }}
+          />
         )}
         <main
           className={`main flex-1 min-h-0 px-5 ${
@@ -614,6 +640,8 @@ export default function App() {
         )}
         {page === 'motus' && (
           <MotusInsurancePage
+            tab={motusTab}
+            onTabChange={setMotusTab}
             clientInsurance={clientInsurance}
             onUpdateCancellation={updateClientInsuranceCancellationById}
           />
@@ -828,6 +856,6 @@ export default function App() {
           }
         }}
       />
-    </>
+    </MotusAutoCheckContext.Provider>
   );
 }

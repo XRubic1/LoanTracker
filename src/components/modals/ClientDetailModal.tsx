@@ -1,6 +1,6 @@
 import { Modal } from '@/components/Modal';
 import { NewClientReviewPanel } from '@/components/NewClientReviewPanel';
-import { isClientVerificationTracked } from '@/lib/clientUtils';
+import { isClientVerificationTracked, formatClientExpense } from '@/lib/clientUtils';
 import type { Client } from '@/types';
 
 interface ClientDetailModalProps {
@@ -20,7 +20,7 @@ export function ClientDetailModal({ open, client, onClose, onEdit, onSave }: Cli
         <div className="grid grid-cols-2 gap-3 text-[13px]">
           <div>
             <p className="text-[10px] uppercase tracking-wider text-muted mb-0.5">Expenses</p>
-            <p className="text-ink">{client.expenses ?? '—'}</p>
+            <p className="text-ink">{formatClientExpense(client)}</p>
           </div>
           <div>
             <p className="text-[10px] uppercase tracking-wider text-muted mb-0.5">Email</p>

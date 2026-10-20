@@ -1,8 +1,9 @@
 import { useState } from 'react';
 import { Modal } from '@/components/Modal';
-import { parseVerificationPeriodInput } from '@/lib/clientUtils';
+import { ClientExpenseFields } from '@/components/ClientExpenseFields';
+import { parseVerificationPeriodInput, parseExpenseAmountInput } from '@/lib/clientUtils';
 import { isValidClientEmail, normalizeClientEmail } from '@/lib/clientEmails';
-import { CLIENT_EXPENSE_OPTIONS, type Client, type ClientExpenseType } from '@/types';
+import type { Client, ClientExpenseType } from '@/types';
 
 interface AddClientModalProps {
   open: boolean;
@@ -14,6 +15,8 @@ export function AddClientModal({ open, onClose, onAdd }: AddClientModalProps) {
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [expenses, setExpenses] = useState<ClientExpenseType | ''>('');
+  const [achExpense, setAchExpense] = useState('');
+  const [wireExpense, setWireExpense] = useState('');
   const [warningNote, setWarningNote] = useState('');
   const [isNewClient, setIsNewClient] = useState(false);
   const [startedDate, setStartedDate] = useState(() => new Date().toISOString().split('T')[0]);
@@ -41,6 +44,8 @@ export function AddClientModal({ open, onClose, onAdd }: AddClientModalProps) {
         name: name.trim(),
         email: normalizeClientEmail(email),
         expenses: expenses || null,
+        ach_expense: parseExpenseAmountInput(achExpense),
+        wire_expense: parseExpenseAmountInput(wireExpense),
         warning_note: warningNote.trim() || null,
         is_new_client: isNewClient || verificationAlways,
         started_date: isNewClient && startedDate.trim() ? startedDate.trim() : null,
@@ -86,21 +91,14 @@ export function AddClientModal({ open, onClose, onAdd }: AddClientModalProps) {
           />
           <p className="text-[11px] text-muted2 mt-1">Separate multiple addresses with a semicolon (;).</p>
         </div>
-        <div>
-          <label className="block text-[11px] text-muted uppercase tracking-wider mb-1.5">Expenses</label>
-          <select
-            value={expenses}
-            onChange={(e) => setExpenses(e.target.value as ClientExpenseType | '')}
-            className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-[13px] text-ink"
-          >
-            <option value="">—</option>
-            {CLIENT_EXPENSE_OPTIONS.map((opt) => (
-              <option key={opt} value={opt}>
-                {opt}
-              </option>
-            ))}
-          </select>
-        </div>
+        <ClientExpenseFields
+          method={expenses}
+          achAmount={achExpense}
+          wireAmount={wireExpense}
+          onMethodChange={setExpenses}
+          onAchChange={setAchExpense}
+          onWireChange={setWireExpense}
+        />
         <div>
           <label className="block text-[11px] text-muted uppercase tracking-wider mb-1.5">Warning note</label>
           <textarea

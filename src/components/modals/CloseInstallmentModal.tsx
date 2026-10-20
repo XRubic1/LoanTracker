@@ -126,6 +126,19 @@ export function CloseInstallmentModal({
               {fmt(creatingNextWeek ? loan.installment : remainingDue)}
             </span>
           </div>
+          {alreadyPartial > 0 && !creatingNextWeek && installmentDueLabel > 0 && (
+            <div className="pt-1">
+              <div className="h-[4px] rounded-full bg-border overflow-hidden">
+                <div
+                  className="h-full bg-green"
+                  style={{ width: `${Math.min(100, (alreadyPartial / installmentDueLabel) * 100)}%` }}
+                />
+              </div>
+              <div className="mt-1 text-[11px] text-green">
+                Partially paid — {fmt(remainingDue)} still left on this installment
+              </div>
+            </div>
+          )}
           {loan.factoringFee != null && loan.factoringFee > 0 && (
             <div className="mt-1.5 text-[12px] text-muted2 space-y-0.5">
               <div className="flex justify-between">

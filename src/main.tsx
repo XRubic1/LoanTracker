@@ -4,6 +4,9 @@ import { AuthProvider } from '@/contexts/AuthContext';
 import { ThemeProvider } from '@/contexts/ThemeContext';
 import App from './App';
 import './index.css';
+import { installTableSort } from '@/lib/tableSort';
+
+installTableSort();
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>

@@ -722,3 +722,22 @@ body {
 .scrollable::-webkit-scrollbar-thumb:hover {
   background: var(--color-scrollbar-hover);
 }
+
+/* Click-to-sort headers (see lib/tableSort.ts) */
+th[data-sortable] {
+  cursor: pointer;
+  user-select: none;
+}
+th[data-sortable]:hover {
+  color: var(--color-ink);
+}
+th[data-sortable][data-sort='asc']::after {
+  content: ' ▲';
+  font-size: 8px;
+  color: var(--color-accent);
+}
+th[data-sortable][data-sort='desc']::after {
+  content: ' ▼';
+  font-size: 8px;
+  color: var(--color-accent);
+}

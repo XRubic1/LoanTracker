@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { CopyButton } from '@/components/CopyButton';
 import { Section } from '@/components/Section';
 import { Modal } from '@/components/Modal';
 import {
@@ -393,13 +394,6 @@ function InsuranceTableRow({
   const isCancellationSoon = isClientInsuranceCancellationSoon(c, 10);
   const statusLabel = getClientInsuranceStatusLabel(c);
   const statusFilterValue = getFilterValueFromRecord(c.status);
-  const copyMc = () => {
-    navigator.clipboard.writeText(c.mc).then(() => {}, () => {});
-  };
-  const copyDot = () => {
-    if (!c.dot.trim()) return;
-    navigator.clipboard.writeText(c.dot).then(() => {}, () => {});
-  };
   const applyClientFilter = () => {
     onSearchQuery(
       searchQuery.trim().toLowerCase() === c.client.toLowerCase() ? '' : c.client
@@ -424,46 +418,14 @@ function InsuranceTableRow({
       </td>
       <td className="py-1.5 pr-2 border-b border-divider align-middle">
         <div className="flex items-center gap-1.5 font-mono text-[13px]">
-          <button
-            type="button"
-            onClick={(e) => {
-              e.stopPropagation();
-              copyMc();
-            }}
-            className="p-0.5 rounded text-muted2 hover:text-accent hover:bg-accent/10"
-            title="Copy MC"
-            aria-label="Copy"
-          >
-            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path
-                strokeWidth={2}
-                d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"
-              />
-            </svg>
-          </button>
+          <CopyButton text={c.mc} label="Copy MC" />
           {c.mc}
         </div>
       </td>
       <td className="py-1.5 pr-2 border-b border-divider align-middle">
         {c.dot.trim() ? (
           <div className="flex items-center gap-1.5 font-mono text-[13px]">
-            <button
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation();
-                copyDot();
-              }}
-              className="p-0.5 rounded text-muted2 hover:text-accent hover:bg-accent/10"
-              title="Copy DOT"
-              aria-label="Copy DOT"
-            >
-              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path
-                  strokeWidth={2}
-                  d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"
-                />
-              </svg>
-            </button>
+            <CopyButton text={c.dot.trim()} label="Copy DOT" />
             {c.dot}
           </div>
         ) : (

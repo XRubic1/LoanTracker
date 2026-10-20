@@ -26,7 +26,8 @@ export function setNotificationsHidden(hidden: boolean): void {
 export function hasActiveNotifications(
   loans: Loan[],
   clientInsurance: ClientInsurance[],
-  clients: Client[] = []
+  clients: Client[] = [],
+  motusIssueCount = 0
 ): boolean {
   const visibleLoans = loans.filter((l) => !l.hidden);
   const activeLoans = visibleLoans.filter((l) => l.paidCount < l.totalInstallments);
@@ -34,6 +35,7 @@ export function hasActiveNotifications(
   const cancellationWithDate = clientInsurance.filter(isClientInsuranceCancellationWithDate);
   const newClientsNeedReview = getNewClientsNeedingReview(clients);
   return (
+    motusIssueCount > 0 ||
     cancellationWithDate.length > 0 ||
     newLoans.length > 0 ||
     newClientsNeedReview.length > 0

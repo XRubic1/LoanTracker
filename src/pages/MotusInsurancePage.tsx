@@ -1,4 +1,7 @@
 import { FormEvent, useMemo, useRef, useState } from 'react';
+import { MotusAutoCheckTab } from '@/components/MotusAutoCheckTab';
+import { countMotusIssues } from '@/lib/motusAutoCheck';
+import { useMotusAutoCheckContext } from '@/contexts/MotusAutoCheckContext';
 import * as XLSX from 'xlsx';
 import { lookupMotusInsurance } from '@/lib/motusInsuranceClient';
 import { parseMotusDotSheet, type MotusSheetEntry } from '@/lib/motusDotSheet';
@@ -232,6 +235,57 @@ function CancellationUpdate({ row, onUpdate }: { row: BatchRow; onUpdate?: (row:
   );
 }
 
+function BatchCards({
+  rows,
+  onUpdate,
+}: {
+  rows: BatchRow[];
+  onUpdate?: (row: BatchRow) => void;
+}) {
+  if (rows.length === 0) return <p className="px-3 py-4 text-sm text-muted">None</p>;
+  return (
+    <ul>
+      {rows.map((row) => (
+        <li key={row.rowKey} className="border-b border-divider px-4 py-3 last:border-b-0 hover:bg-surface">
+          <div className="flex items-start justify-between gap-2">
+            <span className="min-w-0 text-sm font-semibold text-ink">
+              {row.legalName || row.sheetName || '—'}
+            </span>
+            {row.accountUrl ? (
+              <a
+                href={row.accountUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="flex-shrink-0 font-mono text-[13px] text-accent hover:underline"
+              >
+                {row.dotNumber}
+              </a>
+            ) : (
+              <span className="flex-shrink-0 font-mono text-[13px] text-muted">{row.dotNumber}</span>
+            )}
+          </div>
+          {(row.storedCancellationIso || row.cancellationDates) && (
+            <div className="mt-1.5 flex flex-wrap gap-x-5 text-xs text-muted">
+              <span>
+                On file: <span className="text-ink">{displayIso(row.storedCancellationIso)}</span>
+              </span>
+              <span>
+                MOTUS: <span className="text-ink">{row.cancellationDates || '—'}</span>
+              </span>
+            </div>
+          )}
+          {row.summary && row.verdict !== 'good' && row.verdict !== 'cancellation' ? (
+            <p className="mt-1.5 text-xs text-muted">{row.summary}</p>
+          ) : null}
+          <div className="mt-1.5 empty:hidden">
+            <CancellationUpdate row={row} onUpdate={onUpdate} />
+          </div>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
 function BatchTable({
   rows,
   onUpdate,
@@ -422,6 +476,7 @@ function MotusDotImport({
     const haystack = `${record.client} ${record.dot} ${record.mc}`.toLowerCase();
     return haystack.includes(clientQuery.trim().toLowerCase());
   });
+  const clientColumns = [visibleClients];
   const checkableVisible = visibleClients.filter((record) => motusQueryForClient(record));
   const visibleAllSelected =
     checkableVisible.length > 0 && checkableVisible.every((record) => selectedIds.includes(record.id));
@@ -517,37 +572,85 @@ function MotusDotImport({
           {running ? passLabel || `Checking ${finished} of ${rows.length}` : `Check selected (${selectedCount})`}
         </button>
       </div>
-      <div className="max-h-72 overflow-y-auto rounded-lg border border-border">
-        <div className="sticky top-0 flex items-center gap-3 border-b border-border bg-panel px-3 py-1.5 text-[10px] uppercase tracking-widest text-label">
-          <span className="w-4" />
-          <span className="min-w-0 flex-1">Client</span>
-          <span>DOT</span>
-          <span className="w-24 text-right">On file</span>
+      {running ? (
+        <div className="rounded-lg border border-border bg-surface px-3 py-2.5" role="status" aria-live="polite">
+          <div className="mb-1.5 flex items-center justify-between text-xs text-muted">
+            <span className="font-medium text-ink">
+              {passLabel || `Checking clients on MOTUS · ${finished} of ${rows.length}`}
+            </span>
+            <span className="flex items-center gap-3">
+              <span className="tabular-nums">
+                {rows.length ? Math.round((finished / rows.length) * 100) : 0}%
+              </span>
+              <button
+                type="button"
+                onClick={() => {
+                  stopRef.current = true;
+                }}
+                className="rounded-md border border-border px-2 py-0.5 text-[11px] font-medium text-ink hover:border-accent"
+              >
+                Stop
+              </button>
+            </span>
+          </div>
+          <div className="h-2 overflow-hidden rounded-full bg-border">
+            <div
+              className="h-full rounded-full bg-accent transition-[width] duration-300"
+              style={{ width: `${rows.length ? Math.max(3, (finished / rows.length) * 100) : 0}%` }}
+            />
+          </div>
         </div>
+      ) : null}
+      <div className="max-h-[26rem] overflow-y-auto rounded-lg border border-border">
         {visibleClients.length === 0 ? (
           <p className="px-3 py-4 text-sm text-muted">No client insurance records yet.</p>
         ) : (
-          <ul>
-            {visibleClients.map((record) => {
-              const checked = selectedIds.includes(record.id);
-              const onFile = /cancel/i.test(record.status) ? displayIso(calendarIso(record.expiration_date)) : '—';
-              return (
-                <li key={record.id} className="border-b border-divider last:border-b-0">
-                  <label className="flex cursor-pointer items-center gap-3 px-3 py-2 text-sm hover:bg-surface">
-                    <input
-                      type="checkbox"
-                      checked={checked}
-                      disabled={running || !motusQueryForClient(record)}
-                      onChange={() => toggleClient(record.id)}
-                    />
-                    <span className="min-w-0 flex-1 truncate text-ink">{record.client}</span>
-                    <span className="font-mono text-muted">{record.dot.trim() || '—'}</span>
-                    <span className="w-24 text-right text-muted">{onFile}</span>
-                  </label>
-                </li>
-              );
-            })}
-          </ul>
+          <div className="grid grid-cols-1">
+            {clientColumns.map((column, colIndex) => (
+              <div key={colIndex} className="min-w-0">
+                <div className="sticky top-0 z-10 flex items-center gap-3 border-b border-border bg-panel px-3 py-1.5 text-[10px] uppercase tracking-widest text-label">
+                  <span className="w-4" />
+                  <span className="min-w-0 flex-1">Client</span>
+                  <span className="w-20 text-right">On file</span>
+                </div>
+                <ul>
+                  {column.map((record) => {
+                    const checked = selectedIds.includes(record.id);
+                    const cancelling = /cancel/i.test(record.status);
+                    const onFile = cancelling ? displayIso(calendarIso(record.expiration_date)) : '—';
+                    const disabled = running || !motusQueryForClient(record);
+                    return (
+                      <li key={record.id} className="border-b border-divider last:border-b-0">
+                        <label
+                          className={`flex items-center gap-3 px-3 py-2 hover:bg-surface ${
+                            disabled ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'
+                          } ${checked ? 'bg-accent/10' : ''}`}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={checked}
+                            disabled={disabled}
+                            onChange={() => toggleClient(record.id)}
+                          />
+                          <span className="min-w-0 flex-1">
+                            <span className="block truncate text-[13px] font-medium text-ink">{record.client}</span>
+                            <span className="block font-mono text-[11px] text-muted">
+                              {record.dot.trim() ? `DOT ${record.dot.trim()}` : 'No DOT'}
+                            </span>
+                          </span>
+                          <span
+                            className={`w-20 text-right text-xs ${cancelling ? 'font-medium text-red' : 'text-muted'}`}
+                          >
+                            {onFile}
+                          </span>
+                        </label>
+                      </li>
+                    );
+                  })}
+                </ul>
+              </div>
+            ))}
+          </div>
         )}
       </div>
       <div>
@@ -611,21 +714,25 @@ function MotusDotImport({
       {fileError ? <p className="text-sm text-red">{fileError}</p> : null}
       {rows.some((row) => row.state === 'done' || row.state === 'error') ? (
         <div className="space-y-4">
-          {VERDICT_ORDER.map((verdict) => {
-            const group = rows.filter((row) => row.verdict === verdict);
-            const copy = VERDICT_COPY[verdict];
-            return (
-              <div key={verdict} className="space-y-2">
-                <div className={`rounded-lg border border-border px-3 py-2 ${copy.tone}`}>
-                  <p className="text-sm font-semibold">
-                    {copy.title} · {group.length}
-                  </p>
-                  <p className="text-xs">{copy.detail}</p>
+          <div className="grid grid-cols-1 items-start gap-3 lg:grid-cols-3">
+            {VERDICT_ORDER.map((verdict) => {
+              const group = rows.filter((row) => row.verdict === verdict);
+              const copy = VERDICT_COPY[verdict];
+              return (
+                <div key={verdict} className="min-w-0 overflow-hidden rounded-lg border border-border">
+                  <div className={`px-3 py-2 ${copy.tone}`}>
+                    <p className="text-sm font-semibold">
+                      {copy.title} · {group.length}
+                    </p>
+                    <p className="text-xs">{copy.detail}</p>
+                  </div>
+                  <div className="max-h-[32rem] overflow-y-auto">
+                    <BatchCards rows={group} onUpdate={(row) => void applyCancellation(row)} />
+                  </div>
                 </div>
-                {group.length > 0 ? <BatchTable rows={group} onUpdate={(row) => void applyCancellation(row)} /> : null}
-              </div>
-            );
-          })}
+              );
+            })}
+          </div>
           {rows.some((row) => row.state === 'error') ? (
             <div className="space-y-2">
               <p className="text-sm font-semibold text-red">
@@ -641,13 +748,28 @@ function MotusDotImport({
 }
 
 /** Signed-in MOTUS insurance lookup. Clients come from client insurance. */
+export type MotusTab = 'check' | 'auto';
+
 export function MotusInsurancePage({
   clientInsurance,
   onUpdateCancellation,
+  tab: controlledTab,
+  onTabChange,
 }: {
   clientInsurance: ClientInsurance[];
   onUpdateCancellation: UpdateCancellation;
+  /** Optional: lets the app open the Auto check tab from the notification banner. */
+  tab?: MotusTab;
+  onTabChange?: (tab: MotusTab) => void;
 }) {
+  const autoCheck = useMotusAutoCheckContext();
+  const [localTab, setLocalTab] = useState<MotusTab>('check');
+  const tab = controlledTab ?? localTab;
+  const setTab = (next: MotusTab) => {
+    setLocalTab(next);
+    onTabChange?.(next);
+  };
+  const issueCount = autoCheck ? countMotusIssues(autoCheck.data, clientInsurance) : 0;
   const [query, setQuery] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -673,7 +795,7 @@ export function MotusInsurancePage({
   }
 
   return (
-    <div className="mx-auto max-w-5xl space-y-5">
+    <div className="mx-auto max-w-7xl space-y-5">
       <div className="page-header">
         <div>
           <h1 className="page-title">MOTUS insurance</h1>
@@ -684,6 +806,45 @@ export function MotusInsurancePage({
         </div>
       </div>
 
+      <div className="flex gap-1 border-b border-border" role="tablist">
+        {(
+          [
+            ['check', 'Check clients'],
+            ['auto', 'Auto check'],
+          ] as const
+        ).map(([id, label]) => (
+          <button
+            key={id}
+            type="button"
+            role="tab"
+            aria-selected={tab === id}
+            onClick={() => setTab(id)}
+            className={`-mb-px flex items-center gap-2 border-b-2 px-4 py-2 text-sm font-medium transition-colors ${
+              tab === id ? 'border-accent text-ink' : 'border-transparent text-muted hover:text-ink'
+            }`}
+          >
+            {label}
+            {id === 'auto' && issueCount > 0 ? (
+              <span className="rounded-full bg-red px-1.5 py-px text-[10px] font-semibold text-white">
+                {issueCount}
+              </span>
+            ) : null}
+          </button>
+        ))}
+      </div>
+
+      {tab === 'auto' && autoCheck ? (
+        <MotusAutoCheckTab
+          userId={autoCheck.userId}
+          data={autoCheck.data}
+          loading={autoCheck.loading}
+          error={autoCheck.error}
+          clientInsurance={clientInsurance}
+          onReload={autoCheck.reload}
+          onRefreshInsurance={autoCheck.onRefreshInsurance}
+        />
+      ) : (
+        <>
       <form onSubmit={(event) => void onSubmit(event)} className="flex flex-col gap-2 sm:flex-row">
         <input
           value={query}
@@ -728,6 +889,8 @@ export function MotusInsurancePage({
           ))}
         </div>
       ) : null}
+        </>
+      )}
     </div>
   );
 }

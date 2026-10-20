@@ -168,6 +168,10 @@ export interface Client {
   name: string;
   /** Wire or ACH. */
   expenses: ClientExpenseType | null;
+  /** Expense amount when paid by ACH. */
+  ach_expense?: number | null;
+  /** Expense amount when paid by Wire. */
+  wire_expense?: number | null;
   /** Contact email address(es), semicolon-separated when multiple. */
   email: string | null;
   warning_note: string | null;
@@ -185,6 +189,8 @@ export interface ClientRow {
   owner_id: string | null;
   name: string;
   expenses: string | null;
+  ach_expense?: number | string | null;
+  wire_expense?: number | string | null;
   email?: string | null;
   warning_note: string | null;
   is_new_client?: boolean;

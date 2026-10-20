@@ -1,3 +1,4 @@
+import { formatClientExpense } from '@/lib/clientUtils';
 import { useState, useEffect, useMemo } from 'react';
 import { WorksheetClientAlerts } from '@/components/WorksheetClientAlerts';
 import { WorksheetUnknownClientNotice } from '@/components/WorksheetUnknownClientNotice';
@@ -336,7 +337,7 @@ export function WorksheetEntryForm({
         {selectedClient && (
           <p className="text-[12px] text-muted2">
             <span className="text-muted">Expenses: </span>
-            <span className="text-ink font-medium">{selectedClient.expenses ?? '—'}</span>
+            <span className="text-ink font-medium">{formatClientExpense(selectedClient)}</span>
           </p>
         )}
       </form>
@@ -397,7 +398,7 @@ export function WorksheetEntryForm({
       {selectedClient && (
         <p className="text-[12px] text-muted2">
           <span className="text-muted">Expenses: </span>
-          <span className="text-ink font-medium">{selectedClient.expenses ?? '—'}</span>
+          <span className="text-ink font-medium">{formatClientExpense(selectedClient)}</span>
         </p>
       )}
       <div>

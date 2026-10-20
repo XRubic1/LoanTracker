@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { CopyButton } from '@/components/CopyButton';
 import { Section } from '@/components/Section';
 import { Badge } from '@/components/Badge';
 import { AaaPaymentForm } from '@/components/AaaPaymentForm';
@@ -91,7 +92,10 @@ export function ClosedPage({
                       <div className="font-medium text-ink">{l.client}</div>
                     </td>
                     <td className="py-1.5 pr-2 border-b border-divider align-middle font-mono text-[11px] text-muted">
-                      {l.ref}
+                      <span className="inline-flex items-center gap-1.5">
+                        {l.ref}
+                        <CopyButton text={l.ref} label="Copy loan ID" />
+                      </span>
                     </td>
                     <td className="py-1.5 pr-2 border-b border-divider align-middle font-mono font-medium text-green">
                       {fmt(l.total)}
