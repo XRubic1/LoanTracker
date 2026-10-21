@@ -149,3 +149,8 @@ export function formatClientExpense(c: Client): string {
   const amt = getClientExpenseAmount(c);
   return amt != null ? `${c.expenses} · $${amt.toFixed(2)}` : c.expenses;
 }
+
+/** "$18.00", or "—" when no amount is set. */
+export function formatExpenseFee(amount: number | null | undefined): string {
+  return amount == null ? '—' : `$${amount.toFixed(2)}`;
+}

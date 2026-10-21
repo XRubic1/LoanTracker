@@ -11,7 +11,8 @@ import {
   isClientVerificationTracked,
   isNewClientInVerificationPeriod,
   isNewClientNeedsReview,
-  formatClientExpense,
+  formatExpenseFee,
+  getClientExpenseAmount,
 } from '@/lib/clientUtils';
 import type { UseDataResult } from '@/hooks/useData';
 
@@ -159,6 +160,7 @@ export function ClientsPage({
                 <th>Client</th>
                 <th>Email</th>
                 <th className="text-center">Expenses</th>
+                <th className="text-center">Fee</th>
                 <th>Warning</th>
                 <th className="text-center">Verification</th>
                 <th></th>
@@ -174,7 +176,10 @@ export function ClientsPage({
                     <td className="text-muted2 text-[12px] max-w-[220px] truncate">
                       {c.email?.trim() || '—'}
                     </td>
-                    <td className="text-muted2 text-center">{formatClientExpense(c)}</td>
+                    <td className="text-muted2 text-center">{c.expenses ?? '—'}</td>
+                    <td className="text-ink text-center font-medium tabular-nums">
+                      {formatExpenseFee(getClientExpenseAmount(c))}
+                    </td>
                     <td className={c.warning_note?.trim() ? 'text-accent text-[12px] max-w-[200px] truncate' : 'text-muted2'}>
                       {c.warning_note?.trim() || '—'}
                     </td>
