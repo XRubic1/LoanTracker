@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { Fragment, useCallback, useEffect, useMemo, useState } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { ThemeToggle } from '@/components/ThemeToggle';
 import { Badge } from '@/components/Badge';
@@ -8,14 +8,28 @@ import {
   aaaDuePaid,
   aaaDueRemaining,
   aaaDueStatus,
-  dayLabel,
-  sortedDeductions,
   weekLabel,
   weekStartOf,
 } from '@/lib/aaaDues';
-import { createAaaFuelDue, fetchAaaFuelData, matchTruClient, type AaaFuelData } from '@/lib/aaaFuel';
+import { AaaDueModal } from '@/components/modals/AaaDueModal';
+import { AaaFuelInvoicePanel } from '@/components/AaaFuelInvoicePanel';
+import {
+  createAaaFuelDue,
+  deleteAaaFuelDue,
+  fetchAaaFuelData,
+  matchTruClient,
+  postAaaFuelDeduction,
+  ALLOW_TWO_DAYS_MESSAGE,
+  canMarkNotReceived,
+  groupPaymentsByInvoice,
+  invoiceReceiptState,
+  setAaaFuelInvoiceReceipt,
+  setAaaFuelReceipt,
+  type AaaFuelData,
+  type AaaReceiptStatus,
+  type InvoiceGroup,
+} from '@/lib/aaaFuel';
 import { fmt, fmtDate } from '@/lib/utils';
-import type { AaaDue } from '@/types';
 
 const EMPTY: AaaFuelData = { openDues: [], closedPayments: [], clients: [] };
 const REFRESH_MS = 60_000;
@@ -192,62 +206,6 @@ function AddFuelPaymentModal({
   );
 }
 
-/** Read-only view of every deduction (by day) posted against one payment. */
-function DueDetailModal({ due, onClose }: { due: AaaDue | null; onClose: () => void }) {
-  if (!due) return null;
-  const paid = aaaDuePaid(due);
-  const left = aaaDueRemaining(due);
-  const deductions = sortedDeductions(due.deductions);
-  return (
-    <Modal open onClose={onClose} title={`${due.client} — AAA Mega Fuel`}>
-      <div className="space-y-4">
-        <p className="text-[13px] text-muted2">
-          Week of {weekLabel(due.weekStart)}
-          {aaaDueStatus(due) === 'past_due' && <span className="ml-2 font-medium text-red">Past due</span>}
-        </p>
-        <div className="py-2 border-b border-border text-[13px] space-y-1.5">
-          <div className="flex justify-between">
-            <span className="text-muted2">Amount</span>
-            <span className="font-mono font-medium text-yellow">{fmt(due.amount)}</span>
-          </div>
-          <div className="flex justify-between">
-            <span className="text-muted2">Deducted so far</span>
-            <span className="font-mono text-green">{fmt(paid)}</span>
-          </div>
-          <div className="flex justify-between">
-            <span className="text-muted2">Left</span>
-            <span className="font-mono font-medium text-accent">{fmt(left)}</span>
-          </div>
-        </div>
-        <div>
-          <div className="text-[11px] text-muted uppercase tracking-wider mb-1.5">Deductions by day</div>
-          {deductions.length === 0 ? (
-            <p className="text-[12px] text-muted2">Nothing has been deducted yet.</p>
-          ) : (
-            <ul className="border border-border divide-y divide-border">
-              {deductions.map((d, i) => (
-                <li key={`${d.date}-${i}`} className="flex items-center justify-between px-3 py-2 text-[12px]">
-                  <span className="text-ink">{dayLabel(d.date)}</span>
-                  <span className="font-mono font-medium text-green">{fmt(d.amount)}</span>
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
-        <div className="flex justify-end">
-          <button
-            type="button"
-            onClick={onClose}
-            className="py-1.5 px-3.5 border border-border text-muted2 text-xs font-medium hover:border-accent hover:text-accent"
-          >
-            Close
-          </button>
-        </div>
-      </div>
-    </Modal>
-  );
-}
-
 function Tile({ label, value, sub, tone }: { label: string; value: string; sub: string; tone: string }) {
   return (
     <div className="panel-surface relative overflow-hidden px-4 py-4 pl-5">
@@ -259,7 +217,34 @@ function Tile({ label, value, sub, tone }: { label: string; value: string; sub: 
   );
 }
 
-/** The only screen AAA Fuel sees: AAA Mega Fuel payments, when they are deducted, and what is past due. */
+/** Small receipt summary for a whole invoice. */
+function InvoiceReceiptBadge({ group }: { group: InvoiceGroup }) {
+  if (group.payments.length === 0) return <span className="text-[11px] text-muted">No payments yet</span>;
+  const state = invoiceReceiptState(group);
+  if (state === 'received') return <Badge variant="ok">All received</Badge>;
+  if (state === 'not_received') {
+    return (
+      <div className="flex flex-col items-start gap-0.5">
+        <Badge variant="overdue">Not received</Badge>
+        <span className="text-[10px] text-muted">
+          {group.notReceived} of {group.payments.length} payment{group.payments.length === 1 ? '' : 's'}
+        </span>
+      </div>
+    );
+  }
+  return (
+    <div className="flex flex-col items-start gap-0.5">
+      <Badge variant="closed">Awaiting</Badge>
+      {group.received > 0 && (
+        <span className="text-[10px] text-muted">
+          {group.received} of {group.payments.length} received
+        </span>
+      )}
+    </div>
+  );
+}
+
+/** The only screen AAA Fuel sees: AAA Mega Fuel invoices, the payments posted on them, and what is past due. */
 export function AaaFuelPortal() {
   const { user, signOut } = useAuth();
   const [data, setData] = useState<AaaFuelData>(EMPTY);
@@ -267,6 +252,13 @@ export function AaaFuelPortal() {
   const [error, setError] = useState<string | null>(null);
   const [addOpen, setAddOpen] = useState(false);
   const [openId, setOpenId] = useState<number | null>(null);
+  const [tab, setTab] = useState<'payments' | 'history'>('payments');
+  const [historyQuery, setHistoryQuery] = useState('');
+  const [receivedFilter, setReceivedFilter] = useState<'all' | 'waiting' | 'received' | 'not_received'>('all');
+  const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  const [busy, setBusy] = useState(false);
+  /** Inline notice under one payment or invoice (e.g. the 2-day rule). */
+  const [notice, setNotice] = useState<{ key: string; text: string } | null>(null);
 
   const reload = useCallback(async () => {
     try {
@@ -290,6 +282,95 @@ export function AaaFuelPortal() {
   const pastDueLeft = pastDue.reduce((sum, d) => sum + aaaDueRemaining(d), 0);
   const selected = openId != null ? data.openDues.find((d) => d.id === openId) ?? null : null;
 
+  const groups = useMemo(() => groupPaymentsByInvoice(data.closedPayments), [data.closedPayments]);
+  const groupByDue = useMemo(() => {
+    const map = new Map<number, InvoiceGroup>();
+    for (const g of groups) if (g.dueId != null) map.set(g.dueId, g);
+    return map;
+  }, [groups]);
+  const openDueIds = useMemo(() => new Set(data.openDues.map((d) => d.id)), [data.openDues]);
+
+  /** History = invoices that are fully deducted, plus older stand-alone records. Open invoices live on Payments. */
+  const historyGroups = useMemo(() => {
+    const q = historyQuery.trim().toLowerCase();
+    return groups.filter((g) => {
+      if (g.dueId != null && openDueIds.has(g.dueId)) return false;
+      if (q && !g.client.toLowerCase().includes(q)) return false;
+      const state = invoiceReceiptState(g);
+      return receivedFilter === 'all' || state === receivedFilter || (receivedFilter === 'waiting' && state === 'waiting');
+    });
+  }, [groups, openDueIds, historyQuery, receivedFilter]);
+  const allHistory = useMemo(
+    () => groups.filter((g) => g.dueId == null || !openDueIds.has(g.dueId)),
+    [groups, openDueIds]
+  );
+  const countState = (state: 'received' | 'not_received' | 'waiting') =>
+    allHistory.filter((g) => invoiceReceiptState(g) === state).length;
+  const historyTotal = historyGroups.reduce((sum, g) => sum + g.deducted, 0);
+
+  const toggle = (key: string) =>
+    setExpanded((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+
+  const setPaymentReceipt = async (id: number, paymentDate: string, status: AaaReceiptStatus) => {
+    setNotice(null);
+    if (status === 'not_received' && !canMarkNotReceived(paymentDate)) {
+      setNotice({ key: `p-${id}`, text: ALLOW_TWO_DAYS_MESSAGE });
+      return;
+    }
+    setBusy(true);
+    try {
+      await setAaaFuelReceipt(id, status);
+      await reload();
+    } catch (err) {
+      setNotice({ key: `p-${id}`, text: err instanceof Error ? err.message : String(err) });
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const setInvoiceReceipt = async (group: InvoiceGroup, status: AaaReceiptStatus) => {
+    const key = `inv-${group.key}`;
+    setNotice(null);
+    if (status === 'not_received' && !group.payments.every((p) => canMarkNotReceived(p.paymentDate))) {
+      setNotice({ key, text: ALLOW_TWO_DAYS_MESSAGE });
+      return;
+    }
+    setBusy(true);
+    try {
+      if (group.dueId != null) {
+        await setAaaFuelInvoiceReceipt(group.dueId, status);
+      } else {
+        for (const p of group.payments) await setAaaFuelReceipt(p.id, status);
+      }
+      await reload();
+    } catch (err) {
+      setNotice({ key, text: err instanceof Error ? err.message : String(err) });
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const g_dueOpen = (group: InvoiceGroup) => group.dueId != null && openDueIds.has(group.dueId);
+
+  const panelFor = (group: InvoiceGroup) => (
+    <AaaFuelInvoicePanel
+      group={group}
+      busy={busy}
+      notice={notice}
+      onPayment={(id, date, status) => void setPaymentReceipt(id, date, status)}
+      onInvoice={(g, status) => void setInvoiceReceipt(g, status)}
+      onPostPayment={g_dueOpen(group) ? () => setOpenId(group.dueId) : undefined}
+    />
+  );
+
+  const thClass =
+    'border-b border-border px-4 py-2 text-left text-[10px] font-normal uppercase tracking-[0.05em] text-label';
+
   return (
     <div className="flex h-full w-full flex-col">
       <header className="topbar flex flex-shrink-0 items-center justify-between gap-3 px-6 py-3">
@@ -299,11 +380,7 @@ export function AaaFuelPortal() {
         </div>
         <div className="flex items-center gap-2">
           <ThemeToggle />
-          <button
-            type="button"
-            onClick={() => void signOut()}
-            className="theme-toggle"
-          >
+          <button type="button" onClick={() => void signOut()} className="theme-toggle">
             Sign out
           </button>
         </div>
@@ -328,172 +405,308 @@ export function AaaFuelPortal() {
             </p>
           )}
 
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-            <Tile
-              label="Open payments"
-              value={String(data.openDues.length)}
-              sub="Waiting to be deducted"
-              tone="bg-accent"
-            />
-            <Tile label="Left to be deducted" value={fmt(totalLeft)} sub="Across all open payments" tone="bg-yellow" />
-            <Tile
-              label="Past due"
-              value={String(pastDue.length)}
-              sub={pastDue.length ? `${fmt(pastDueLeft)} not yet deducted` : 'Nothing past due'}
-              tone={pastDue.length ? 'bg-red' : 'bg-label'}
-            />
+          <div className="flex gap-1 border-b border-border" role="tablist">
+            {(
+              [
+                ['payments', 'Payments', data.openDues.length],
+                ['history', 'History', allHistory.length],
+              ] as const
+            ).map(([id, label, count]) => (
+              <button
+                key={id}
+                type="button"
+                role="tab"
+                aria-selected={tab === id}
+                onClick={() => setTab(id)}
+                className={`-mb-px flex items-center gap-2 border-b-2 px-4 py-2 text-sm font-medium transition-colors ${
+                  tab === id ? 'border-accent text-ink' : 'border-transparent text-muted hover:text-ink'
+                }`}
+              >
+                {label}
+                <span className="count-badge">{count}</span>
+              </button>
+            ))}
           </div>
 
-          <Section title="Open payments" count={data.openDues.length} noPadding>
-            <table className="w-full table-fixed border-collapse" data-default-sort="1:asc">
-              <colgroup>
-                <col style={{ width: '30%' }} />
-                <col style={{ width: '20%' }} />
-                <col style={{ width: '30%' }} />
-                <col style={{ width: '20%' }} />
-              </colgroup>
-              <thead>
-                <tr>
-                  {['Client', 'Week', 'Amount', 'Status'].map((h) => (
-                    <th
-                      key={h}
-                      className="border-b border-border px-4 py-2 text-left text-[10px] font-normal uppercase tracking-[0.05em] text-label"
-                    >
-                      {h}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {data.openDues.length === 0 ? (
-                  <tr>
-                    <td colSpan={4} className="py-8 text-center text-[12px] text-muted">
-                      {loading ? 'Loading…' : 'No open payments. Use “Add payment” to create one.'}
-                    </td>
-                  </tr>
-                ) : (
-                  data.openDues.map((d) => {
-                    const status = aaaDueStatus(d);
-                    const paid = aaaDuePaid(d);
-                    const left = aaaDueRemaining(d);
-                    return (
-                      <tr
-                        key={d.id}
-                        role="button"
-                        tabIndex={0}
-                        onClick={() => setOpenId(d.id)}
-                        onKeyDown={(e) => e.key === 'Enter' && setOpenId(d.id)}
-                        className="row-hover cursor-pointer transition-colors"
-                      >
-                        <td className="overflow-hidden border-b border-border px-4 py-[11px] align-middle">
-                          <div className="truncate text-[12px] font-medium text-ink">{d.client}</div>
-                        </td>
-                        <td className="border-b border-border px-4 py-[11px] align-middle">
-                          <span className="whitespace-nowrap text-[11px] text-muted2">{weekLabel(d.weekStart)}</span>
-                        </td>
-                        <td className="border-b border-border px-4 py-[11px] align-middle">
-                          {paid > 0 ? (
-                            <div className="max-w-[210px]">
-                              <div className="flex items-baseline gap-1.5 whitespace-nowrap">
-                                <span className="text-[13px] font-semibold text-yellow">{fmt(left)}</span>
-                                <span className="text-[10px] text-muted">left</span>
-                              </div>
-                              <div className="mt-1.5 h-[4px] overflow-hidden bg-border">
-                                <div
-                                  className="h-full bg-green"
-                                  style={{ width: `${Math.min(100, (paid / d.amount) * 100)}%` }}
-                                />
-                              </div>
-                              <div className="mt-1 flex justify-between gap-3 whitespace-nowrap text-[10px] text-muted">
-                                <span className="text-green">{fmt(paid)} deducted</span>
-                                <span>of {fmt(d.amount)}</span>
-                              </div>
-                            </div>
-                          ) : (
-                            <div className="text-[13px] font-medium text-yellow">{fmt(d.amount)}</div>
-                          )}
-                        </td>
-                        <td className="border-b border-border px-4 py-[11px] align-middle">
-                          <div className="flex flex-col items-start gap-1">
-                            {status === 'past_due' ? (
-                              <Badge variant="overdue">Past due</Badge>
-                            ) : status === 'upcoming' ? (
-                              <Badge variant="closed">Upcoming</Badge>
-                            ) : (
-                              <Badge variant="due">Due</Badge>
-                            )}
-                            {paid > 0 && <Badge variant="ok">Partial</Badge>}
-                          </div>
+          {tab === 'payments' && (
+            <>
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                <Tile
+                  label="Open payments"
+                  value={String(data.openDues.length)}
+                  sub="Waiting to be deducted"
+                  tone="bg-accent"
+                />
+                <Tile
+                  label="Left to be deducted"
+                  value={fmt(totalLeft)}
+                  sub="Across all open payments"
+                  tone="bg-yellow"
+                />
+                <Tile
+                  label="Past due"
+                  value={String(pastDue.length)}
+                  sub={pastDue.length ? `${fmt(pastDueLeft)} not yet deducted` : 'Nothing past due'}
+                  tone={pastDue.length ? 'bg-red' : 'bg-label'}
+                />
+              </div>
+
+              <Section title="Open payments" count={data.openDues.length} noPadding>
+                <table className="w-full table-fixed border-collapse" data-no-sort>
+                  <colgroup>
+                    <col style={{ width: '27%' }} />
+                    <col style={{ width: '16%' }} />
+                    <col style={{ width: '27%' }} />
+                    <col style={{ width: '17%' }} />
+                    <col style={{ width: '13%' }} />
+                  </colgroup>
+                  <thead>
+                    <tr>
+                      {['Client', 'Week', 'Amount', 'Received?', 'Status'].map((h) => (
+                        <th key={h} className={thClass}>
+                          {h}
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {data.openDues.length === 0 ? (
+                      <tr>
+                        <td colSpan={5} className="py-8 text-center text-[12px] text-muted">
+                          {loading ? 'Loading…' : 'No open payments. Use “Add payment” to create one.'}
                         </td>
                       </tr>
-                    );
-                  })
-                )}
-              </tbody>
-            </table>
-          </Section>
+                    ) : (
+                      data.openDues.map((d) => {
+                        const status = aaaDueStatus(d);
+                        const paid = aaaDuePaid(d);
+                        const left = aaaDueRemaining(d);
+                        const group: InvoiceGroup =
+                          groupByDue.get(d.id) ??
+                          ({
+                            key: `due-${d.id}`,
+                            dueId: d.id,
+                            client: d.client,
+                            weekStart: d.weekStart,
+                            total: d.amount,
+                            deducted: 0,
+                            payments: [],
+                            latestDate: d.weekStart,
+                            received: 0,
+                            notReceived: 0,
+                          } as InvoiceGroup);
+                        const isOpen = expanded.has(group.key);
+                        return (
+                          <Fragment key={d.id}>
+                            <tr
+                              role="button"
+                              tabIndex={0}
+                              onClick={() => toggle(group.key)}
+                              onKeyDown={(e) => e.key === 'Enter' && toggle(group.key)}
+                              className="row-hover cursor-pointer transition-colors"
+                            >
+                              <td className="overflow-hidden border-b border-border px-4 py-[11px] align-middle">
+                                <div className="truncate text-[12px] font-medium text-ink">{d.client}</div>
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    toggle(group.key);
+                                  }}
+                                  aria-expanded={isOpen}
+                                  className={`mt-0.5 inline-flex items-center gap-1 text-[11px] hover:underline ${
+                                    group.payments.length === 0 ? 'text-muted' : 'text-accent'
+                                  }`}
+                                >
+                                  <span className="inline-block w-2">{isOpen ? '▾' : '▸'}</span>
+                                  {group.payments.length} payment{group.payments.length === 1 ? '' : 's'}
+                                </button>
+                              </td>
+                              <td className="border-b border-border px-4 py-[11px] align-middle">
+                                <span className="whitespace-nowrap text-[11px] text-muted2">
+                                  {weekLabel(d.weekStart)}
+                                </span>
+                              </td>
+                              <td className="border-b border-border px-4 py-[11px] align-middle">
+                                {paid > 0 ? (
+                                  <div className="max-w-[210px]">
+                                    <div className="flex items-baseline gap-1.5 whitespace-nowrap">
+                                      <span className="text-[13px] font-semibold text-yellow">{fmt(left)}</span>
+                                      <span className="text-[10px] text-muted">left</span>
+                                    </div>
+                                    <div className="mt-1.5 h-[4px] overflow-hidden bg-border">
+                                      <div
+                                        className="h-full bg-green"
+                                        style={{ width: `${Math.min(100, (paid / d.amount) * 100)}%` }}
+                                      />
+                                    </div>
+                                    <div className="mt-1 flex justify-between gap-3 whitespace-nowrap text-[10px] text-muted">
+                                      <span className="text-green">{fmt(paid)} deducted</span>
+                                      <span>of {fmt(d.amount)}</span>
+                                    </div>
+                                  </div>
+                                ) : (
+                                  <div className="text-[13px] font-medium text-yellow">{fmt(d.amount)}</div>
+                                )}
+                              </td>
+                              <td className="border-b border-border px-4 py-[11px] align-middle">
+                                <InvoiceReceiptBadge group={group} />
+                              </td>
+                              <td className="border-b border-border px-4 py-[11px] align-middle">
+                                <div className="flex flex-col items-start gap-1">
+                                  {status === 'past_due' ? (
+                                    <Badge variant="overdue">Past due</Badge>
+                                  ) : status === 'upcoming' ? (
+                                    <Badge variant="closed">Upcoming</Badge>
+                                  ) : (
+                                    <Badge variant="due">Due</Badge>
+                                  )}
+                                  {paid > 0 && <Badge variant="ok">Partial</Badge>}
+                                </div>
+                              </td>
+                            </tr>
+                            {isOpen && (
+                              <tr>
+                                <td colSpan={5} className="border-b border-border p-0">
+                                  {panelFor(group)}
+                                </td>
+                              </tr>
+                            )}
+                          </Fragment>
+                        );
+                      })
+                    )}
+                  </tbody>
+                </table>
+              </Section>
+            </>
+          )}
 
-          <Section title="Deducted (closed)" count={data.closedPayments.length} noPadding>
-            <table className="w-full table-fixed border-collapse" data-no-sort>
-              <colgroup>
-                <col style={{ width: '14%' }} />
-                <col style={{ width: '30%' }} />
-                <col style={{ width: '22%' }} />
-                <col style={{ width: '34%' }} />
-              </colgroup>
-              <thead>
-                <tr>
-                  {['Closed', 'Client', 'Week', 'Amount'].map((h) => (
-                    <th
-                      key={h}
-                      className="border-b border-border px-4 py-2 text-left text-[10px] font-normal uppercase tracking-[0.05em] text-label"
+          {tab === 'history' && (
+            <>
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <input
+                  type="search"
+                  value={historyQuery}
+                  onChange={(e) => setHistoryQuery(e.target.value)}
+                  placeholder="Search client"
+                  className="min-w-[220px] flex-1 border border-border bg-surface px-3 py-2 text-[13px] text-ink outline-none sm:max-w-sm"
+                />
+                <div className="flex gap-1" role="group" aria-label="Filter by received">
+                  {(
+                    [
+                      ['all', 'All', allHistory.length],
+                      ['waiting', 'Awaiting', countState('waiting')],
+                      ['received', 'Received', countState('received')],
+                      ['not_received', 'Not received', countState('not_received')],
+                    ] as const
+                  ).map(([id, label, count]) => (
+                    <button
+                      key={id}
+                      type="button"
+                      onClick={() => setReceivedFilter(id)}
+                      className={`filter-btn ${receivedFilter === id ? 'filter-btn-active' : ''}`}
                     >
-                      {h}
-                    </th>
+                      {label} <span className="text-muted">{count}</span>
+                    </button>
                   ))}
-                </tr>
-              </thead>
-              <tbody>
-                {data.closedPayments.length === 0 ? (
-                  <tr>
-                    <td colSpan={4} className="py-8 text-center text-[12px] text-muted">
-                      {loading ? 'Loading…' : 'Nothing has been fully deducted yet.'}
-                    </td>
-                  </tr>
-                ) : (
-                  data.closedPayments.map((p) => (
-                    <tr key={p.id}>
-                      <td className="border-b border-border px-4 py-[11px] align-top text-[11px] text-muted2">
-                        {fmtDate(p.paymentDate)}
-                      </td>
-                      <td className="border-b border-border px-4 py-[11px] align-top text-[12px] font-medium text-ink">
-                        {p.client}
-                      </td>
-                      <td className="border-b border-border px-4 py-[11px] align-top text-[11px] text-muted2">
-                        {p.weekStart ? weekLabel(p.weekStart) : '—'}
-                      </td>
-                      <td className="border-b border-border px-4 py-[11px] align-top">
-                        <div className="text-[13px] font-medium text-green">{fmt(p.amount)}</div>
-                        {(p.deductions?.length ?? 0) > 0 && (
-                          <ul className="mt-1 space-y-0.5">
-                            {sortedDeductions(p.deductions ?? []).map((d, i) => (
-                              <li
-                                key={`${d.date}-${i}`}
-                                className="flex items-center justify-between gap-3 text-[10px] text-muted"
-                              >
-                                <span>{dayLabel(d.date)}</span>
-                                <span className="text-muted2">{fmt(d.amount)}</span>
-                              </li>
-                            ))}
-                          </ul>
-                        )}
-                      </td>
+                </div>
+                <span className="text-[12px] text-muted2">
+                  {historyGroups.length} invoice{historyGroups.length === 1 ? '' : 's'} · Total{' '}
+                  <span className="font-medium text-green">{fmt(historyTotal)}</span>
+                </span>
+              </div>
+
+              <Section title="Deducted invoices" count={historyGroups.length} noPadding>
+                <table className="w-full table-fixed border-collapse" data-no-sort>
+                  <colgroup>
+                    <col style={{ width: '12%' }} />
+                    <col style={{ width: '28%' }} />
+                    <col style={{ width: '20%' }} />
+                    <col style={{ width: '22%' }} />
+                    <col style={{ width: '18%' }} />
+                  </colgroup>
+                  <thead>
+                    <tr>
+                      {['Last payment', 'Client', 'Week', 'Amount', 'Received?'].map((h) => (
+                        <th key={h} className={thClass}>
+                          {h}
+                        </th>
+                      ))}
                     </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </Section>
+                  </thead>
+                  <tbody>
+                    {historyGroups.length === 0 ? (
+                      <tr>
+                        <td colSpan={5} className="py-8 text-center text-[12px] text-muted">
+                          {loading
+                            ? 'Loading…'
+                            : historyQuery.trim() || receivedFilter !== 'all'
+                              ? 'No invoices match that search.'
+                              : 'Nothing has been fully deducted yet.'}
+                        </td>
+                      </tr>
+                    ) : (
+                      historyGroups.map((g) => {
+                        const isOpen = expanded.has(g.key);
+                        return (
+                          <Fragment key={g.key}>
+                            <tr
+                              role="button"
+                              tabIndex={0}
+                              onClick={() => toggle(g.key)}
+                              onKeyDown={(e) => e.key === 'Enter' && toggle(g.key)}
+                              className="row-hover cursor-pointer transition-colors"
+                            >
+                              <td className="border-b border-border px-4 py-[11px] align-top text-[11px] text-muted2">
+                                {fmtDate(g.latestDate)}
+                              </td>
+                              <td className="border-b border-border px-4 py-[11px] align-top">
+                                <div className="text-[12px] font-medium text-ink">{g.client}</div>
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    toggle(g.key);
+                                  }}
+                                  aria-expanded={isOpen}
+                                  className={`mt-0.5 inline-flex items-center gap-1 text-[11px] hover:underline ${
+                                    g.payments.length === 0 ? 'text-muted' : 'text-accent'
+                                  }`}
+                                >
+                                  <span className="inline-block w-2">{isOpen ? '▾' : '▸'}</span>
+                                  {g.payments.length} payment{g.payments.length === 1 ? '' : 's'}
+                                </button>
+                              </td>
+                              <td className="border-b border-border px-4 py-[11px] align-top text-[11px] text-muted2">
+                                {g.weekStart ? weekLabel(g.weekStart) : '—'}
+                              </td>
+                              <td className="border-b border-border px-4 py-[11px] align-top">
+                                <div className="text-[13px] font-medium text-green">{fmt(g.deducted)}</div>
+                                {g.total - g.deducted > 0.001 && (
+                                  <div className="text-[10px] text-muted">of {fmt(g.total)}</div>
+                                )}
+                              </td>
+                              <td className="border-b border-border px-4 py-[11px] align-top">
+                                <InvoiceReceiptBadge group={g} />
+                              </td>
+                            </tr>
+                            {isOpen && (
+                              <tr>
+                                <td colSpan={5} className="border-b border-border p-0">
+                                  {panelFor(g)}
+                                </td>
+                              </tr>
+                            )}
+                          </Fragment>
+                        );
+                      })
+                    )}
+                  </tbody>
+                </table>
+              </Section>
+            </>
+          )}
         </div>
       </main>
 
@@ -503,7 +716,20 @@ export function AaaFuelPortal() {
         onClose={() => setAddOpen(false)}
         onCreated={reload}
       />
-      <DueDetailModal due={selected} onClose={() => setOpenId(null)} />
+      <AaaDueModal
+        due={selected}
+        open={selected != null}
+        onClose={() => setOpenId(null)}
+        onPost={async (due, deduction) => {
+          const result = await postAaaFuelDeduction(due, deduction);
+          await reload();
+          return result;
+        }}
+        onDelete={async (id) => {
+          await deleteAaaFuelDue(id);
+          await reload();
+        }}
+      />
     </div>
   );
 }

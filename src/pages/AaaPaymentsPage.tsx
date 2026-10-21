@@ -7,6 +7,7 @@ interface AaaPaymentsPageProps
   extends Pick<UseDataResult, 'aaaPayments' | 'addAaaPayment' | 'clientInsurance'> {
   onEditPayment: (id: number) => void;
   onDeletePayment?: (id: number) => Promise<void>;
+  onDismissNotReceived?: (ids: number[]) => void;
 }
 
 export function AaaPaymentsPage({
@@ -15,6 +16,7 @@ export function AaaPaymentsPage({
   clientInsurance,
   onEditPayment,
   onDeletePayment,
+  onDismissNotReceived,
 }: AaaPaymentsPageProps) {
   return (
     <>
@@ -37,6 +39,7 @@ export function AaaPaymentsPage({
         payments={aaaPayments}
         onEdit={onEditPayment}
         onDelete={onDeletePayment}
+        onDismissNotReceived={onDismissNotReceived}
       />
     </>
   );

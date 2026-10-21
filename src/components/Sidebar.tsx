@@ -44,6 +44,8 @@ interface SidebarProps {
   adminTab?: SuperAdminTab;
   /** Switch Super Admin section and open the admin page. */
   onAdminTab?: (tab: SuperAdminTab) => void;
+  /** Red count bubbles shown on nav items (e.g. unread alerts), keyed by page. */
+  badges?: Partial<Record<PageId, number>>;
 }
 
 interface NavItem {
@@ -216,6 +218,7 @@ export function Sidebar({
   memberAllowedPages = null,
   adminTab = 'dashboard',
   onAdminTab,
+  badges = {},
 }: SidebarProps) {
   const accessOptions = { isOwner, showAdmin, allowedPages: memberAllowedPages };
   const visibleNav = navItems.filter((item) => {
@@ -367,6 +370,18 @@ export function Sidebar({
                     {icon}
                   </span>
                   {!collapsed && <span className="truncate">{itemLabel}</span>}
+                  {(badges[id] ?? 0) > 0 && (
+                    <span
+                      className={`flex items-center justify-center bg-red text-white text-[10px] font-semibold leading-none ${
+                        collapsed ? 'absolute right-1 top-1 h-[15px] min-w-[15px] px-[3px]' : 'ml-auto h-[18px] min-w-[18px] px-1'
+                      }`}
+                      style={{ borderRadius: 9999 }}
+                      aria-label={`${badges[id]} unread`}
+                      title={`${badges[id]} payment${badges[id] === 1 ? '' : 's'} marked not received`}
+                    >
+                      {(badges[id] ?? 0) > 99 ? '99+' : badges[id]}
+                    </span>
+                  )}
                 </button>
               ))}
             </div>

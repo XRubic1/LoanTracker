@@ -1,14 +1,14 @@
 import { useState } from 'react';
 import type { ClientInsurance, Loan } from '@/types';
 import { Modal } from '@/components/Modal';
-import { getDateWeekLabel } from '@/lib/utils';
+import { fmt, getDateWeekLabel } from '@/lib/utils';
 import {
   getDaysUntilCancellation,
   isClientInsuranceCancellationSoon,
   isClientInsuranceCancellationWithDate,
 } from '@/lib/clientInsuranceUtils';
 import { getNewClientsNeedingReview } from '@/lib/clientUtils';
-import type { Client } from '@/types';
+import type { AaaPayment, Client } from '@/types';
 import { hasActiveNotifications } from '@/lib/notificationsBanner';
 import { isNewLoan } from '@/lib/utils';
 import { useAuth } from '@/contexts/AuthContext';
@@ -21,6 +21,10 @@ interface AppNotificationsProps {
   motusIssueCount?: number;
   motusLastRun?: string | null;
   onOpenMotusAutoCheck?: () => void;
+  /** AAA Mega Fuel payments AAA Fuel marked as not received that this team has not dismissed yet. */
+  aaaNotReceived?: AaaPayment[];
+  onOpenAaaPayments?: () => void;
+  onDismissAaaNotReceived?: (ids: number[]) => void;
 }
 
 export function AppNotifications({
@@ -30,6 +34,9 @@ export function AppNotifications({
   motusIssueCount = 0,
   motusLastRun = null,
   onOpenMotusAutoCheck,
+  aaaNotReceived = [],
+  onOpenAaaPayments,
+  onDismissAaaNotReceived,
 }: AppNotificationsProps) {
   const { isPlatformAdmin } = useAuth();
   const [cancellationPopupOpen, setCancellationPopupOpen] = useState(false);
@@ -38,7 +45,9 @@ export function AppNotifications({
   // New-client review is team-only — never surface it on the Super Admin portal.
   const clientsForReview = isPlatformAdmin ? [] : clients;
 
-  if (!hasActiveNotifications(loans, clientInsurance, clientsForReview, motusIssueCount)) return null;
+  if (!hasActiveNotifications(loans, clientInsurance, clientsForReview, motusIssueCount, aaaNotReceived.length)) {
+    return null;
+  }
 
   const visibleLoans = loans.filter((l) => !l.hidden);
   const activeLoans = visibleLoans.filter((l) => l.paidCount < l.totalInstallments);
@@ -64,6 +73,37 @@ export function AppNotifications({
   return (
     <>
       <div className="w-full flex-shrink-0 flex flex-col gap-[6px] px-6 py-[10px] bg-page border-b border-divider">
+        {aaaNotReceived.length > 0 && (
+          <div className="alert-banner-warn" role="alert">
+            <svg className="h-[14px] w-[14px] flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+            </svg>
+            <button
+              type="button"
+              onClick={onOpenAaaPayments}
+              className="flex-1 min-w-0 truncate text-left"
+              style={{ background: 'transparent', border: 'none', color: 'inherit', cursor: 'pointer' }}
+            >
+              <strong className="font-medium">AAA payment not received</strong>
+              {' — '}
+              {aaaNotReceived
+                .slice(0, 2)
+                .map((p) => `${p.client} · ${fmt(p.amount)}`)
+                .join(' / ')}
+              {aaaNotReceived.length > 2 ? ` +${aaaNotReceived.length - 2} more` : ''}
+              {' · marked by AAA Mega Fuel'}
+            </button>
+            <button
+              type="button"
+              onClick={() => onDismissAaaNotReceived?.(aaaNotReceived.map((p) => p.id))}
+              className="flex-shrink-0 text-[11px] underline opacity-80 hover:opacity-100"
+              style={{ background: 'transparent', border: 'none', color: 'inherit', cursor: 'pointer' }}
+            >
+              Dismiss
+            </button>
+          </div>
+        )}
+
         {motusIssueCount > 0 && (
           <button
             type="button"

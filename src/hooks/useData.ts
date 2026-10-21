@@ -31,6 +31,7 @@ import {
   insertAaaPayment,
   updateAaaPayment,
   deleteAaaPaymentById,
+  acknowledgeAaaNotReceived,
   fetchClients,
   fetchWorksheetClientRegistry,
   fetchWorksheetInsuranceLookup,
@@ -85,6 +86,8 @@ export interface UseDataResult {
   addAaaPayment: (payload: Omit<AaaPayment, 'id' | 'createdAt'>) => Promise<AaaPayment>;
   updateAaaPaymentById: (id: number, payment: AaaPayment) => Promise<AaaPayment>;
   removeAaaPayment: (id: number) => Promise<void>;
+  /** Dismiss the "not received" alert for these AAA payments. */
+  dismissAaaNotReceived: (ids: number[]) => Promise<void>;
   addAaaDue: (payload: { client: string; payee: AaaPayee; amount: number; weekStart: string }) => Promise<AaaDue>;
   postAaaDeduction: (due: AaaDue, deduction: AaaDeduction) => Promise<{ closed: boolean }>;
   removeAaaDue: (id: number) => Promise<void>;
@@ -422,6 +425,11 @@ export function useData(ownerId: string | null, userId: string | null = null): U
     setAaaPayments((prev) => prev.filter((p) => p.id !== id));
   }, []);
 
+  const dismissAaaNotReceived = useCallback(async (ids: number[]) => {
+    const at = await acknowledgeAaaNotReceived(ids);
+    setAaaPayments((prev) => prev.map((p) => (ids.includes(p.id) ? { ...p, notReceivedAckAt: at } : p)));
+  }, []);
+
   const addAaaDue = useCallback(
     async (payload: { client: string; payee: AaaPayee; amount: number; weekStart: string }) => {
       const added = await insertAaaDue(payload, ownerId);
@@ -433,11 +441,11 @@ export function useData(ownerId: string | null, userId: string | null = null): U
 
   const postAaaDeduction = useCallback(
     async (due: AaaDue, deduction: AaaDeduction) => {
-      const { due: updated, closedPayment } = await postAaaDueDeduction(due, deduction, ownerId);
+      const { due: updated, payment } = await postAaaDueDeduction(due, deduction, ownerId);
       setAaaDues((prev) =>
         updated.closedAt ? prev.filter((d) => d.id !== due.id) : prev.map((d) => (d.id === due.id ? updated : d))
       );
-      if (closedPayment) setAaaPayments((prev) => [closedPayment, ...prev]);
+      setAaaPayments((prev) => [payment, ...prev]);
       return { closed: Boolean(updated.closedAt) };
     },
     [ownerId]
@@ -540,6 +548,7 @@ export function useData(ownerId: string | null, userId: string | null = null): U
     addAaaPayment,
     updateAaaPaymentById,
     removeAaaPayment,
+    dismissAaaNotReceived,
     addAaaDue,
     postAaaDeduction,
     removeAaaDue,

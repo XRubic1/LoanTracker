@@ -137,6 +137,7 @@ export default function App() {
     addAaaDue,
     postAaaDeduction,
     removeAaaDue,
+    dismissAaaNotReceived,
     addAaaPayment,
     updateAaaPaymentById,
     removeAaaPayment,
@@ -531,6 +532,7 @@ export default function App() {
         isOwner={isOwner}
         showAdmin={showAdminNav}
         memberAllowedPages={memberAllowedPages}
+        badges={{ aaaPayments: aaaPayments.filter((p) => p.notReceivedAt && !p.notReceivedAckAt).length }}
         adminTab={adminTab}
         onAdminTab={showAdminNav ? setAdminTab : undefined}
         onReplayTour={() => setTutorialReplay((n) => n + 1)}
@@ -550,6 +552,9 @@ export default function App() {
             clients={clients}
             motusIssueCount={motusIssueCount}
             motusLastRun={motusAuto.data.runs[0]?.started_at ?? null}
+            aaaNotReceived={aaaPayments.filter((p) => p.notReceivedAt && !p.notReceivedAckAt)}
+            onOpenAaaPayments={() => setPage('aaaPayments')}
+            onDismissAaaNotReceived={(ids) => void dismissAaaNotReceived(ids)}
             onOpenMotusAutoCheck={() => {
               setMotusTab('auto');
               setPage('motus');
@@ -652,6 +657,7 @@ export default function App() {
             clientInsurance={clientInsurance}
             onEditPayment={setEditAaaPaymentId}
             onDeletePayment={isOwner ? removeAaaPayment : undefined}
+            onDismissNotReceived={(ids) => void dismissAaaNotReceived(ids)}
           />
         )}
         {page === 'motus' && (

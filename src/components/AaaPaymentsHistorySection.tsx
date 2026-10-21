@@ -10,16 +10,24 @@ import {
   describeAaaPaymentFilters,
   filterAaaPayments,
   getAaaPaymentClients,
+  aaaReceiptState,
   type AaaPaymentFilterState,
 } from '@/lib/aaaPaymentFilters';
 import { printAaaPaymentsByPayee, printAaaPaymentsFiltered } from '@/lib/printAaaPayments';
 
 const PAGE_SIZE_OPTIONS = [10, 20, 50, 100] as const;
 
+/** A deduction that is only part of what was owed for its week. */
+function isPartialDeduction(p: AaaPayment): boolean {
+  return p.dueAmount != null && p.dueAmount > p.amount + 0.001;
+}
+
 interface AaaPaymentsHistorySectionProps {
   payments: AaaPayment[];
   onEdit: (id: number) => void;
   onDelete?: (id: number) => Promise<void>;
+  /** Dismiss the "not received" alert for these payments. */
+  onDismissNotReceived?: (ids: number[]) => void;
   title?: string;
 }
 
@@ -27,6 +35,7 @@ export function AaaPaymentsHistorySection({
   payments,
   onEdit,
   onDelete,
+  onDismissNotReceived,
   title = 'Payment history',
 }: AaaPaymentsHistorySectionProps) {
   const [filters, setFilters] = useState<AaaPaymentFilterState>(defaultAaaPaymentFilters);
@@ -39,6 +48,12 @@ export function AaaPaymentsHistorySection({
   const filtered = filterAaaPayments(payments, filters);
   const filterDescription = describeAaaPaymentFilters(filters);
   const filteredTotal = filtered.reduce((s, p) => s + p.amount, 0);
+  const receiptCounts = {
+    received: payments.filter((p) => aaaReceiptState(p) === 'received').length,
+    not_received: payments.filter((p) => aaaReceiptState(p) === 'not_received').length,
+    awaiting: payments.filter((p) => aaaReceiptState(p) === 'awaiting').length,
+  };
+  const openAlerts = payments.filter((p) => p.notReceivedAt && !p.notReceivedAckAt);
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
   const currentPage = Math.min(page, totalPages);
@@ -81,6 +96,31 @@ export function AaaPaymentsHistorySection({
           : `${filtered.length} / ${payments.length}`
       }
     >
+      {openAlerts.length > 0 && (
+        <div className="alert-banner-warn mb-3 text-[12px]" role="alert">
+          <span className="min-w-0 flex-1">
+            <strong className="font-medium">
+              {openAlerts.length} payment{openAlerts.length === 1 ? '' : 's'} marked not received by AAA Fuel
+            </strong>
+            {' — '}
+            {openAlerts
+              .slice(0, 3)
+              .map((p) => p.client)
+              .join(', ')}
+            {openAlerts.length > 3 ? ` +${openAlerts.length - 3} more` : ''}
+          </span>
+          {onDismissNotReceived && (
+            <button
+              type="button"
+              onClick={() => onDismissNotReceived(openAlerts.map((p) => p.id))}
+              className="flex-shrink-0 text-[11px] underline opacity-80 hover:opacity-100"
+              style={{ background: 'transparent', border: 'none', color: 'inherit', cursor: 'pointer' }}
+            >
+              Dismiss alert
+            </button>
+          )}
+        </div>
+      )}
       <div className="flex flex-col gap-3 mb-4">
         <div className="flex flex-wrap items-end gap-2">
           <div className="flex-1 min-w-[140px]">
@@ -116,7 +156,18 @@ export function AaaPaymentsHistorySection({
               </option>
             ))}
           </select>
-          {(filters.search || filters.payee !== 'all' || filters.client !== 'all') && (
+          <select
+            value={filters.receipt}
+            onChange={(e) => updateFilter('receipt', e.target.value as AaaPaymentFilterState['receipt'])}
+            className="select-field min-w-[150px]"
+            aria-label="Filter by receipt status"
+          >
+            <option value="all">All receipt status</option>
+            <option value="received">Received ({receiptCounts.received})</option>
+            <option value="not_received">Not received ({receiptCounts.not_received})</option>
+            <option value="awaiting">Awaiting ({receiptCounts.awaiting})</option>
+          </select>
+          {(filters.search || filters.payee !== 'all' || filters.client !== 'all' || filters.receipt !== 'all') && (
             <button
               type="button"
               onClick={() => {
@@ -207,6 +258,9 @@ export function AaaPaymentsHistorySection({
               <th className="text-[10px] text-label uppercase tracking-widest py-0 pb-1.5 pr-2 text-left border-b border-border">
                 Amount
               </th>
+              <th className="text-[10px] text-label uppercase tracking-widest py-0 pb-1.5 pr-2 text-left border-b border-border">
+                Received?
+              </th>
               <th className="text-[10px] text-label uppercase tracking-widest py-0 pb-2.5 text-right border-b border-border w-28">
                 
               </th>
@@ -226,10 +280,20 @@ export function AaaPaymentsHistorySection({
                 </td>
                 <td className="py-1.5 pr-2 border-b border-divider align-middle">
                   <Badge variant="closed">{p.payee}</Badge>
+                  {isPartialDeduction(p) && (
+                    <div className="mt-1">
+                      <Badge variant="due">Partial</Badge>
+                    </div>
+                  )}
                 </td>
                 <td className="py-1.5 pr-2 border-b border-divider align-middle font-mono font-medium text-green">
                   {fmt(p.amount)}
-                  {(p.deductions?.length ?? 0) > 0 && (
+                  {isPartialDeduction(p) && (
+                    <div className="font-sans text-[10px] font-normal text-muted">
+                      toward {fmt(p.dueAmount ?? 0)} for the week
+                    </div>
+                  )}
+                  {(p.deductions?.length ?? 0) > 1 && (
                     <ul className="mt-1 space-y-0.5 font-sans font-normal">
                       {sortedDeductions(p.deductions ?? []).map((d, i) => (
                         <li key={`${d.date}-${i}`} className="flex items-center justify-between gap-3 text-[10px] text-muted">
@@ -238,6 +302,23 @@ export function AaaPaymentsHistorySection({
                         </li>
                       ))}
                     </ul>
+                  )}
+                </td>
+                <td className="py-1.5 pr-2 border-b border-divider align-middle">
+                  {p.receivedAt ? (
+                    <div className="flex flex-col items-start gap-0.5">
+                      <Badge variant="ok">Received</Badge>
+                      <span className="text-[10px] text-muted">by AAA Fuel · {fmtDate(p.receivedAt)}</span>
+                    </div>
+                  ) : p.notReceivedAt ? (
+                    <div className="flex flex-col items-start gap-0.5">
+                      <Badge variant="overdue">Not received</Badge>
+                      <span className="text-[10px] text-muted">by AAA Fuel · {fmtDate(p.notReceivedAt)}</span>
+                    </div>
+                  ) : aaaReceiptState(p) === 'awaiting' ? (
+                    <Badge variant="closed">Awaiting AAA Fuel</Badge>
+                  ) : (
+                    <span className="text-[11px] text-muted">—</span>
                   )}
                 </td>
                 <td className="py-1.5 pr-2 border-b border-divider align-middle text-right whitespace-nowrap">

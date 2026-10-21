@@ -4,6 +4,7 @@ import {
   useState,
   useEffect,
   useCallback,
+  useRef,
   type ReactNode,
 } from 'react';
 import type { User, Session } from '@supabase/supabase-js';
@@ -36,6 +37,17 @@ interface AuthContextValue {
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
+
+/** AAA Fuel sister-company check. Retries once because a missed check would show the normal app. */
+async function fetchIsAaaFuel(supabase: NonNullable<ReturnType<typeof getSupabase>>): Promise<boolean> {
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    const { data, error } = await supabase.rpc('is_aaa_fuel_user');
+    if (!error) return Boolean(data);
+    console.warn('is_aaa_fuel_user:', error.message);
+    await new Promise((resolve) => setTimeout(resolve, 400));
+  }
+  return false;
+}
 
 /** Claim pending team_members invites by email. */
 async function claimInvite(supabase: NonNullable<ReturnType<typeof getSupabase>>, userId: string, email: string) {
@@ -94,12 +106,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [isPlatformAdmin, setIsPlatformAdmin] = useState(false);
   const [isAaaFuel, setIsAaaFuel] = useState(false);
   const [loading, setLoading] = useState(true);
+  /** Signed-in user the profile was last resolved for; token refreshes for the same user are not a new login. */
+  const profileUserIdRef = useRef<string | null>(null);
 
   const supabase = getSupabase();
 
   const refreshProfile = useCallback(
     async (uid: string, email: string) => {
       if (!supabase) return;
+      // AAA Fuel is checked first: that account only ever gets its own portal, no team or company setup.
+      const fuel = await fetchIsAaaFuel(supabase);
+      setIsAaaFuel(fuel);
+      if (fuel) {
+        setEffectiveOwnerId(uid);
+        setIsPlatformAdmin(false);
+        setUserRole('standalone');
+        setCompany(null);
+        setMemberAllowedPages(null);
+        return;
+      }
       await claimInvite(supabase, uid, email);
       try {
         await claimCompanyInvites();
@@ -110,12 +135,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setEffectiveOwnerId(ownerId);
       const platformAdmin = await resolveIsPlatformAdmin(email);
       setIsPlatformAdmin(platformAdmin);
-      try {
-        const { data: fuel } = await supabase.rpc('is_aaa_fuel_user');
-        setIsAaaFuel(Boolean(fuel));
-      } catch {
-        setIsAaaFuel(false);
-      }
       const { role, company: co } = await resolveUserRole(uid, ownerId, platformAdmin);
       setUserRole(role);
       setCompany(co);
@@ -147,10 +166,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const setAuthState = async (session: Session | null) => {
       setSession(session);
       setUser(session?.user ?? null);
+      // A different person just signed in: hold the loading screen until their role is known.
+      if (session?.user && session.user.id !== profileUserIdRef.current) setLoading(true);
       try {
         if (session?.user) {
           await refreshProfile(session.user.id, session.user.email ?? '');
+          profileUserIdRef.current = session.user.id;
         } else {
+          profileUserIdRef.current = null;
           setEffectiveOwnerId(null);
           setMemberAllowedPages(null);
           setUserRole('standalone');

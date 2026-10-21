@@ -27,6 +27,7 @@ export function AaaDueModal({ due, open, onClose, onPost, onDelete }: AaaDueModa
   const [note, setNote] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [confirmingRemove, setConfirmingRemove] = useState(false);
 
   const dueId = due?.id;
   const remaining = due ? aaaDueRemaining(due) : 0;
@@ -37,6 +38,7 @@ export function AaaDueModal({ due, open, onClose, onPost, onDelete }: AaaDueModa
     setDate(todayStr());
     setNote('');
     setError(null);
+    setConfirmingRemove(false);
     // Reset the form whenever a different payment is opened or its remaining balance changes.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, dueId, remaining]);
@@ -72,7 +74,6 @@ export function AaaDueModal({ due, open, onClose, onPost, onDelete }: AaaDueModa
 
   const remove = async () => {
     if (!onDelete) return;
-    if (!window.confirm(`Remove this AAA payment for ${due.client}? Deductions already posted are lost.`)) return;
     setSubmitting(true);
     try {
       await onDelete(due.id);
@@ -122,7 +123,10 @@ export function AaaDueModal({ due, open, onClose, onPost, onDelete }: AaaDueModa
             <ul className="border border-border divide-y divide-border">
               {deductions.map((d, i) => (
                 <li key={`${d.date}-${i}`} className="flex items-center justify-between gap-3 px-3 py-2 text-[12px]">
-                  <span className="text-ink">{dayLabel(d.date)}</span>
+                  <span className="text-ink">
+                    {dayLabel(d.date)}
+                    {d.by === 'fuel' && <span className="ml-2 text-[10px] text-accent">AAA Fuel</span>}
+                  </span>
                   {d.note && <span className="min-w-0 flex-1 truncate text-muted">{d.note}</span>}
                   <span className="font-mono font-medium text-green">{fmt(d.amount)}</span>
                 </li>
@@ -130,11 +134,6 @@ export function AaaDueModal({ due, open, onClose, onPost, onDelete }: AaaDueModa
             </ul>
           )}
         </div>
-
-        <p className="text-[12px] text-muted2 leading-relaxed">
-          Enter less than what is left to take a partial deduction. When the full amount has been deducted the
-          payment closes and moves to AAA Payments.
-        </p>
 
         <div className="grid grid-cols-2 gap-3">
           <div>
@@ -171,16 +170,39 @@ export function AaaDueModal({ due, open, onClose, onPost, onDelete }: AaaDueModa
         )}
 
         <div className="flex flex-wrap gap-2 justify-end pt-1">
-          {onDelete && (
-            <button
-              type="button"
-              onClick={() => void remove()}
-              disabled={submitting}
-              className="mr-auto py-1.5 px-3 text-xs text-muted2 hover:text-red disabled:opacity-50"
-            >
-              Remove
-            </button>
-          )}
+          {onDelete &&
+            (confirmingRemove ? (
+              <div className="mr-auto flex w-full flex-wrap items-center gap-2 border border-red/40 bg-red/10 px-3 py-2">
+                <span className="min-w-0 flex-1 text-[12px] text-red">
+                  Remove this payment for {due.client}?{paid > 0 ? ' Deductions already posted stay in AAA Payments.' : ''}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setConfirmingRemove(false)}
+                  disabled={submitting}
+                  className="py-1 px-3 border border-border text-muted2 text-xs hover:text-ink disabled:opacity-50"
+                >
+                  Keep
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void remove()}
+                  disabled={submitting}
+                  className="py-1 px-3 bg-red text-white text-xs font-medium disabled:opacity-50"
+                >
+                  {submitting ? 'Removing…' : 'Yes, remove'}
+                </button>
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={() => setConfirmingRemove(true)}
+                disabled={submitting}
+                className="mr-auto py-1.5 px-3 text-xs text-muted2 hover:text-red disabled:opacity-50"
+              >
+                Remove
+              </button>
+            ))}
           <button
             type="button"
             onClick={onClose}

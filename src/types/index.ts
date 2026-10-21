@@ -128,6 +128,8 @@ export interface AaaDeduction {
   /** Day it was deducted (YYYY-MM-DD). */
   date: string;
   note?: string;
+  /** 'fuel' when AAA Fuel posted it from their portal. */
+  by?: string;
 }
 
 /** App model: a weekly AAA payment that is owed (camelCase). */
@@ -175,6 +177,15 @@ export interface AaaPayment {
   deductions?: AaaDeduction[];
   /** Monday of the week it was for, when closed from a weekly AAA payment. */
   weekStart?: string | null;
+  /** When AAA Fuel marked this Mega Fuel payment as received (null = not yet). */
+  receivedAt?: string | null;
+  /** When AAA Fuel marked it as NOT received (null = not marked). */
+  notReceivedAt?: string | null;
+  /** When the owning team dismissed the "not received" alert (null = alert still showing). */
+  notReceivedAckAt?: string | null;
+  /** Weekly AAA payment this deduction was posted against, and the total owed on it (null for older records). */
+  dueId?: number | null;
+  dueAmount?: number | null;
 }
 
 /** Supabase row: aaa_payments table (snake_case) */
@@ -188,6 +199,11 @@ export interface AaaPaymentRow {
   created_at: string;
   deductions?: AaaDeduction[] | null;
   week_start?: string | null;
+  received_at?: string | null;
+  not_received_at?: string | null;
+  not_received_ack_at?: string | null;
+  due_id?: number | null;
+  due_amount?: number | string | null;
 }
 
 export type PageId =
