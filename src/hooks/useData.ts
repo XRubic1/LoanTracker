@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import type { Loan, Reserve, Client, ClientInsurance, InsuranceVerification, AaaPayment, WorksheetEntry } from '@/types';
+import type { Loan, Reserve, Client, ClientInsurance, InsuranceVerification, AaaPayment, AaaDue, AaaDeduction, AaaPayee, WorksheetEntry } from '@/types';
 import { isConfigMissing, getSupabase } from '@/lib/supabase';
 import {
   buildCloseLoanFully,
@@ -24,6 +24,10 @@ import {
   fetchInsuranceVerification,
   upsertInsuranceVerification,
   fetchAaaPayments,
+  fetchOpenAaaDues,
+  insertAaaDue,
+  postAaaDueDeduction,
+  deleteAaaDueById,
   insertAaaPayment,
   updateAaaPayment,
   deleteAaaPaymentById,
@@ -44,6 +48,8 @@ export interface UseDataResult {
   loans: Loan[];
   reserves: Reserve[];
   aaaPayments: AaaPayment[];
+  /** Weekly AAA payments still owed (open). */
+  aaaDues: AaaDue[];
   clients: Client[];
   /** Global client registry for worksheet (all provisioned teams). */
   worksheetClients: Client[];
@@ -79,6 +85,9 @@ export interface UseDataResult {
   addAaaPayment: (payload: Omit<AaaPayment, 'id' | 'createdAt'>) => Promise<AaaPayment>;
   updateAaaPaymentById: (id: number, payment: AaaPayment) => Promise<AaaPayment>;
   removeAaaPayment: (id: number) => Promise<void>;
+  addAaaDue: (payload: { client: string; payee: AaaPayee; amount: number; weekStart: string }) => Promise<AaaDue>;
+  postAaaDeduction: (due: AaaDue, deduction: AaaDeduction) => Promise<{ closed: boolean }>;
+  removeAaaDue: (id: number) => Promise<void>;
   addClient: (payload: Omit<Client, 'id'>) => Promise<Client>;
   updateClientById: (id: number, record: Client) => Promise<Client>;
   removeClient: (id: number) => Promise<void>;
@@ -98,6 +107,7 @@ export function useData(ownerId: string | null, userId: string | null = null): U
   const [loans, setLoans] = useState<Loan[]>([]);
   const [reserves, setReserves] = useState<Reserve[]>([]);
   const [aaaPayments, setAaaPayments] = useState<AaaPayment[]>([]);
+  const [aaaDues, setAaaDues] = useState<AaaDue[]>([]);
   const [clients, setClients] = useState<Client[]>([]);
   const [worksheetClients, setWorksheetClients] = useState<Client[]>([]);
   const [worksheetEntries, setWorksheetEntries] = useState<WorksheetEntry[]>([]);
@@ -144,6 +154,11 @@ export function useData(ownerId: string | null, userId: string | null = null): U
         setAaaPayments(aaaData);
       } catch {
         setAaaPayments([]);
+      }
+      try {
+        setAaaDues(await fetchOpenAaaDues());
+      } catch {
+        setAaaDues([]);
       }
       try {
         const clientsData = await fetchClients();
@@ -215,6 +230,7 @@ export function useData(ownerId: string | null, userId: string | null = null): U
       .on('postgres_changes', { event: '*', schema: 'public', table: 'client_insurance' }, onChange)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'insurance_verification' }, onChange)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'aaa_payments' }, onChange)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'aaa_dues' }, onChange)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'clients' }, onChange)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'worksheet_entries' }, onChange)
       .subscribe((status, err) => {
@@ -406,6 +422,32 @@ export function useData(ownerId: string | null, userId: string | null = null): U
     setAaaPayments((prev) => prev.filter((p) => p.id !== id));
   }, []);
 
+  const addAaaDue = useCallback(
+    async (payload: { client: string; payee: AaaPayee; amount: number; weekStart: string }) => {
+      const added = await insertAaaDue(payload, ownerId);
+      setAaaDues((prev) => [...prev, added]);
+      return added;
+    },
+    [ownerId]
+  );
+
+  const postAaaDeduction = useCallback(
+    async (due: AaaDue, deduction: AaaDeduction) => {
+      const { due: updated, closedPayment } = await postAaaDueDeduction(due, deduction, ownerId);
+      setAaaDues((prev) =>
+        updated.closedAt ? prev.filter((d) => d.id !== due.id) : prev.map((d) => (d.id === due.id ? updated : d))
+      );
+      if (closedPayment) setAaaPayments((prev) => [closedPayment, ...prev]);
+      return { closed: Boolean(updated.closedAt) };
+    },
+    [ownerId]
+  );
+
+  const removeAaaDue = useCallback(async (id: number) => {
+    await deleteAaaDueById(id);
+    setAaaDues((prev) => prev.filter((d) => d.id !== id));
+  }, []);
+
   const addClientRecord = useCallback(
     async (payload: Omit<Client, 'id'>) => {
       const added = await insertClient(payload, ownerId);
@@ -467,6 +509,7 @@ export function useData(ownerId: string | null, userId: string | null = null): U
     loans,
     reserves,
     aaaPayments,
+    aaaDues,
     clients,
     worksheetClients,
     worksheetEntries,
@@ -497,6 +540,9 @@ export function useData(ownerId: string | null, userId: string | null = null): U
     addAaaPayment,
     updateAaaPaymentById,
     removeAaaPayment,
+    addAaaDue,
+    postAaaDeduction,
+    removeAaaDue,
     addClient: addClientRecord,
     updateClientById,
     removeClient,

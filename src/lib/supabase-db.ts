@@ -16,6 +16,9 @@ import type {
   InsuranceVerificationRow,
   AaaPayment,
   AaaPaymentRow,
+  AaaDue,
+  AaaDueRow,
+  AaaDeduction,
   AaaPayee,
   WorksheetEntry,
   WorksheetEntryRow,
@@ -1456,7 +1459,18 @@ function isAaaPayee(value: string): value is AaaPayee {
   return (AAA_PAYEES as readonly string[]).includes(value);
 }
 
-function aaaPaymentFromRow(row: AaaPaymentRow | null): AaaPayment | null {
+function parseAaaDeductions(value: unknown): AaaDeduction[] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .map((d) => ({
+      amount: Number((d as AaaDeduction).amount) || 0,
+      date: String((d as AaaDeduction).date ?? ''),
+      note: (d as AaaDeduction).note ? String((d as AaaDeduction).note) : undefined,
+    }))
+    .filter((d) => d.amount > 0 && d.date);
+}
+
+export function aaaPaymentFromRow(row: AaaPaymentRow | null): AaaPayment | null {
   if (!row) return null;
   const payee = isAaaPayee(row.payee) ? row.payee : 'AAA Lease';
   const paymentDate =
@@ -1469,6 +1483,8 @@ function aaaPaymentFromRow(row: AaaPaymentRow | null): AaaPayment | null {
     amount: Number(row.amount),
     paymentDate,
     createdAt: row.created_at,
+    deductions: parseAaaDeductions(row.deductions),
+    weekStart: row.week_start ?? null,
   };
 }
 
@@ -1496,6 +1512,8 @@ export async function insertAaaPayment(
     payee: payload.payee,
     amount: payload.amount,
     payment_date: payload.paymentDate,
+    deductions: payload.deductions ?? [],
+    week_start: payload.weekStart ?? null,
   };
   const { data, error } = await supabase.from('aaa_payments').insert(row).select('*').single();
   if (error) throw error;
@@ -1521,6 +1539,112 @@ export async function deleteAaaPaymentById(id: number): Promise<void> {
   const supabase = getSupabase();
   if (!supabase) throw new Error('Supabase not configured');
   const { error } = await supabase.from('aaa_payments').delete().eq('id', id);
+  if (error) throw error;
+}
+
+// --- Weekly AAA payments owed (aaa_dues) ---
+
+export function aaaDueFromRow(row: AaaDueRow): AaaDue {
+  return {
+    id: row.id,
+    owner_id: row.owner_id ?? undefined,
+    client: row.client,
+    payee: isAaaPayee(row.payee) ? row.payee : 'AAA Lease',
+    amount: Number(row.amount),
+    weekStart: row.week_start,
+    deductions: parseAaaDeductions(row.deductions),
+    closedAt: row.closed_at ?? null,
+    createdAt: row.created_at,
+    source: row.source === 'fuel' ? 'fuel' : 'team',
+  };
+}
+
+/** Weekly AAA payments that are still open (not fully paid). */
+export async function fetchOpenAaaDues(): Promise<AaaDue[]> {
+  const supabase = getSupabase();
+  if (!supabase) throw new Error('Supabase not configured');
+  const { data, error } = await supabase
+    .from('aaa_dues')
+    .select('*')
+    .is('closed_at', null)
+    .order('week_start', { ascending: true })
+    .order('created_at', { ascending: true });
+  if (error) throw error;
+  return ((data as AaaDueRow[]) || []).map(aaaDueFromRow);
+}
+
+export async function insertAaaDue(
+  payload: { client: string; payee: AaaPayee; amount: number; weekStart: string },
+  ownerId?: string | null
+): Promise<AaaDue> {
+  const supabase = getSupabase();
+  if (!supabase) throw new Error('Supabase not configured');
+  const { data, error } = await supabase
+    .from('aaa_dues')
+    .insert({
+      owner_id: ownerId ?? null,
+      client: payload.client.trim(),
+      payee: payload.payee,
+      amount: payload.amount,
+      week_start: payload.weekStart,
+    })
+    .select('*')
+    .single();
+  if (error) throw error;
+  return aaaDueFromRow(data as AaaDueRow);
+}
+
+/**
+ * Post a deduction against a weekly AAA payment. Once the total reaches the amount owed it is closed:
+ * a normal AAA payment (with the per-day deductions) is recorded and the due leaves the dashboard.
+ */
+export async function postAaaDueDeduction(
+  due: AaaDue,
+  deduction: AaaDeduction,
+  ownerId?: string | null
+): Promise<{ due: AaaDue; closedPayment: AaaPayment | null }> {
+  const supabase = getSupabase();
+  if (!supabase) throw new Error('Supabase not configured');
+  const deductions = [...due.deductions, deduction];
+  const paid = Math.round(deductions.reduce((n, d) => n + d.amount, 0) * 100) / 100;
+  if (paid > due.amount + 0.001) throw new Error('That is more than is still owed for this week.');
+  const closes = paid >= due.amount - 0.001;
+
+  let closedPayment: AaaPayment | null = null;
+  if (closes) {
+    const latest = [...deductions].sort((a, b) => a.date.localeCompare(b.date)).pop()!.date;
+    closedPayment = await insertAaaPayment(
+      {
+        client: due.client,
+        payee: due.payee,
+        amount: due.amount,
+        paymentDate: latest,
+        deductions,
+        weekStart: due.weekStart,
+        owner_id: due.owner_id ?? ownerId ?? null,
+      },
+      due.owner_id ?? ownerId
+    );
+  }
+
+  const { data, error } = await supabase
+    .from('aaa_dues')
+    .update({ deductions, closed_at: closes ? new Date().toISOString() : null })
+    .eq('id', due.id)
+    .select('*')
+    .single();
+  if (error) {
+    // Don't leave a closed payment behind when the due could not be updated.
+    if (closedPayment) await deleteAaaPaymentById(closedPayment.id).catch(() => undefined);
+    throw error;
+  }
+  return { due: aaaDueFromRow(data as AaaDueRow), closedPayment };
+}
+
+export async function deleteAaaDueById(id: number): Promise<void> {
+  const supabase = getSupabase();
+  if (!supabase) throw new Error('Supabase not configured');
+  const { error } = await supabase.from('aaa_dues').delete().eq('id', id);
   if (error) throw error;
 }
 

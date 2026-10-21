@@ -26,6 +26,8 @@ interface AuthContextValue {
   userRole: UserRole;
   company: CompanyContext | null;
   isPlatformAdmin: boolean;
+  /** AAA Fuel sister-company account: sees only the AAA Mega Fuel portal. */
+  isAaaFuel: boolean;
   loading: boolean;
   signIn: (email: string, password: string) => Promise<{ error: Error | null }>;
   signUp: (email: string, password: string) => Promise<{ error: Error | null }>;
@@ -90,6 +92,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [userRole, setUserRole] = useState<UserRole>('standalone');
   const [company, setCompany] = useState<CompanyContext | null>(null);
   const [isPlatformAdmin, setIsPlatformAdmin] = useState(false);
+  const [isAaaFuel, setIsAaaFuel] = useState(false);
   const [loading, setLoading] = useState(true);
 
   const supabase = getSupabase();
@@ -107,6 +110,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setEffectiveOwnerId(ownerId);
       const platformAdmin = await resolveIsPlatformAdmin(email);
       setIsPlatformAdmin(platformAdmin);
+      try {
+        const { data: fuel } = await supabase.rpc('is_aaa_fuel_user');
+        setIsAaaFuel(Boolean(fuel));
+      } catch {
+        setIsAaaFuel(false);
+      }
       const { role, company: co } = await resolveUserRole(uid, ownerId, platformAdmin);
       setUserRole(role);
       setCompany(co);
@@ -147,6 +156,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           setUserRole('standalone');
           setCompany(null);
           setIsPlatformAdmin(false);
+          setIsAaaFuel(false);
         }
       } finally {
         setLoading(false);
@@ -176,6 +186,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setUserRole('standalone');
         setCompany(null);
         setIsPlatformAdmin(false);
+          setIsAaaFuel(false);
         setLoading(false);
       });
 
@@ -209,6 +220,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUserRole('standalone');
     setCompany(null);
     setIsPlatformAdmin(false);
+          setIsAaaFuel(false);
   }, [supabase]);
 
   const refreshProfilePublic = useCallback(async () => {
@@ -227,6 +239,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     userRole,
     company,
     isPlatformAdmin,
+    isAaaFuel,
     loading,
     signIn,
     signUp,

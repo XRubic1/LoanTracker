@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { Section } from '@/components/Section';
 import { Badge } from '@/components/Badge';
 import { fmt, fmtDate } from '@/lib/utils';
+import { dayLabel, sortedDeductions, weekLabel } from '@/lib/aaaDues';
 import type { AaaPayment } from '@/types';
 import {
   AAA_PAYEES,
@@ -219,12 +220,25 @@ export function AaaPaymentsHistorySection({
                 </td>
                 <td className="py-1.5 pr-2 border-b border-divider align-middle font-medium text-ink">
                   {p.client}
+                  {p.weekStart && (
+                    <div className="text-[10px] font-normal text-muted">Week of {weekLabel(p.weekStart)}</div>
+                  )}
                 </td>
                 <td className="py-1.5 pr-2 border-b border-divider align-middle">
                   <Badge variant="closed">{p.payee}</Badge>
                 </td>
                 <td className="py-1.5 pr-2 border-b border-divider align-middle font-mono font-medium text-green">
                   {fmt(p.amount)}
+                  {(p.deductions?.length ?? 0) > 0 && (
+                    <ul className="mt-1 space-y-0.5 font-sans font-normal">
+                      {sortedDeductions(p.deductions ?? []).map((d, i) => (
+                        <li key={`${d.date}-${i}`} className="flex items-center justify-between gap-3 text-[10px] text-muted">
+                          <span>{dayLabel(d.date)}</span>
+                          <span className="font-mono text-muted2">{fmt(d.amount)}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
                 </td>
                 <td className="py-1.5 pr-2 border-b border-divider align-middle text-right whitespace-nowrap">
                   <button

@@ -133,6 +133,10 @@ export default function App() {
     removeClientInsurance,
     updateInsuranceVerification,
     aaaPayments,
+    aaaDues,
+    addAaaDue,
+    postAaaDeduction,
+    removeAaaDue,
     addAaaPayment,
     updateAaaPaymentById,
     removeAaaPayment,
@@ -598,6 +602,10 @@ export default function App() {
             clientInsurance={clientInsurance}
             insuranceVerification={insuranceVerification}
             addAaaPayment={addAaaPayment}
+            aaaDues={aaaDues}
+            addAaaDue={addAaaDue}
+            postAaaDeduction={postAaaDeduction}
+            onDeleteAaaDue={isOwner ? removeAaaDue : undefined}
             onOpenCloseInstallment={setOverviewCloseInstallmentLoanId}
             onOpenCloseDeduction={setOverviewCloseDeductionReserveId}
           />

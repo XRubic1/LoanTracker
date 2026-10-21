@@ -122,6 +122,45 @@ export const AAA_PAYEES = [
 
 export type AaaPayee = (typeof AAA_PAYEES)[number];
 
+/** One deduction (full or partial payment) posted against a weekly AAA payment. */
+export interface AaaDeduction {
+  amount: number;
+  /** Day it was deducted (YYYY-MM-DD). */
+  date: string;
+  note?: string;
+}
+
+/** App model: a weekly AAA payment that is owed (camelCase). */
+export interface AaaDue {
+  id: number;
+  owner_id?: string | null;
+  /** Company / client the payment is for. */
+  client: string;
+  payee: AaaPayee;
+  amount: number;
+  /** Monday of the week it is due (YYYY-MM-DD). */
+  weekStart: string;
+  deductions: AaaDeduction[];
+  closedAt: string | null;
+  createdAt: string;
+  /** 'fuel' when AAA Fuel created it from their portal; otherwise a team user. */
+  source?: 'team' | 'fuel';
+}
+
+/** Supabase row: aaa_dues table (snake_case) */
+export interface AaaDueRow {
+  id: number;
+  owner_id: string | null;
+  client: string;
+  payee: string;
+  amount: number;
+  week_start: string;
+  deductions: AaaDeduction[] | null;
+  closed_at: string | null;
+  created_at: string;
+  source?: string | null;
+}
+
 /** App model: AAA payment (camelCase) */
 export interface AaaPayment {
   id: number;
@@ -132,6 +171,10 @@ export interface AaaPayment {
   /** Date the payment was made (YYYY-MM-DD). */
   paymentDate: string;
   createdAt: string;
+  /** Per-day deductions when this payment was closed from a weekly AAA payment. */
+  deductions?: AaaDeduction[];
+  /** Monday of the week it was for, when closed from a weekly AAA payment. */
+  weekStart?: string | null;
 }
 
 /** Supabase row: aaa_payments table (snake_case) */
@@ -143,6 +186,8 @@ export interface AaaPaymentRow {
   amount: number;
   payment_date?: string;
   created_at: string;
+  deductions?: AaaDeduction[] | null;
+  week_start?: string | null;
 }
 
 export type PageId =

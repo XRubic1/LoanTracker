@@ -30,6 +30,7 @@ import {
   getInsuranceCancelDateForDisplay,
 } from '@/lib/clientInsuranceUtils';
 import { AaaPaymentForm } from '@/components/AaaPaymentForm';
+import { AaaDuesSection } from '@/components/AaaDuesSection';
 
 /* Saturated palette that reads well on a white/light background */
 const CHART_COLORS = ['#7F77DD', '#D85A30', '#D4537E', '#BA7517', '#1D9E75', '#378ADD', '#534AB7', '#888780', '#E24B4A'];
@@ -40,12 +41,24 @@ export function OverviewPage({
   clientInsurance = [],
   insuranceVerification = null,
   addAaaPayment,
+  aaaDues = [],
+  addAaaDue,
+  postAaaDeduction,
+  onDeleteAaaDue,
   onOpenCloseInstallment,
   onOpenCloseDeduction,
 }: Pick<
   UseDataResult,
-  'loans' | 'reserves' | 'clientInsurance' | 'insuranceVerification' | 'addAaaPayment'
+  | 'loans'
+  | 'reserves'
+  | 'clientInsurance'
+  | 'insuranceVerification'
+  | 'addAaaPayment'
+  | 'aaaDues'
+  | 'addAaaDue'
+  | 'postAaaDeduction'
 > & {
+  onDeleteAaaDue?: (id: number) => Promise<void>;
   onOpenCloseInstallment: (loanId: number) => void;
   onOpenCloseDeduction: (reserveId: number) => void;
 }) {
@@ -236,18 +249,22 @@ export function OverviewPage({
                           </td>
                           <td className="px-4 py-[11px] border-b border-border align-middle">
                             {partialPaid > 0 ? (
-                              <>
-                                <div className="text-[13px] font-medium text-yellow">{fmt(openLeft)} left</div>
-                                <div className="text-[10px] text-green">
-                                  {fmt(partialPaid)} paid of {fmt(openDue)}
+                              <div className="max-w-[210px]">
+                                <div className="flex items-baseline gap-1.5 whitespace-nowrap">
+                                  <span className="text-[13px] font-semibold text-yellow">{fmt(openLeft)}</span>
+                                  <span className="text-[10px] text-muted">left</span>
                                 </div>
-                                <div className="mt-1 h-[3px] rounded-full bg-border overflow-hidden">
+                                <div className="mt-1.5 h-[4px] bg-border overflow-hidden">
                                   <div
                                     className="h-full bg-green"
                                     style={{ width: `${Math.min(100, (partialPaid / openDue) * 100)}%` }}
                                   />
                                 </div>
-                              </>
+                                <div className="mt-1 flex justify-between gap-3 whitespace-nowrap text-[10px] text-muted">
+                                  <span className="text-green">{fmt(partialPaid)} paid</span>
+                                  <span>of {fmt(openDue)}</span>
+                                </div>
+                              </div>
                             ) : (
                               <>
                                 <div className="text-[13px] font-medium text-yellow">{fmt(openDue)}</div>
@@ -285,6 +302,15 @@ export function OverviewPage({
                 </tbody>
               </table>
             </Section>
+
+            {/* Weekly AAA payments owed */}
+            <AaaDuesSection
+              dues={aaaDues}
+              clientInsurance={clientInsurance}
+              onAdd={addAaaDue}
+              onPostDeduction={postAaaDeduction}
+              onDelete={onDeleteAaaDue}
+            />
 
             {/* Upcoming loans + Reserves due this week */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 min-w-0">
