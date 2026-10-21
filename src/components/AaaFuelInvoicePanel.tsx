@@ -27,6 +27,13 @@ export function AaaFuelInvoicePanel({
   const anyMarked = group.received > 0 || group.notReceived > 0;
   const allReceived = group.payments.length > 0 && group.received === group.payments.length;
   const invoiceNotice = notice?.key === `inv-${group.key}` ? notice.text : null;
+  /** What is still owed on the invoice after each payment, in the order they were posted. */
+  const leftAfter = new Map<number, number>();
+  let running = group.total;
+  for (const p of group.payments) {
+    running = Math.max(0, Math.round((running - p.amount) * 100) / 100);
+    leftAfter.set(p.id, running);
+  }
 
   return (
     <div className="border-t border-border bg-surface px-4 py-3">
@@ -88,6 +95,13 @@ export function AaaFuelInvoicePanel({
       {group.payments.length === 0 ? (
         <p className="py-2 text-[12px] text-muted">No payments have been posted on this invoice yet.</p>
       ) : (
+        <>
+        <div className="mb-1 flex items-center gap-x-4 px-3 text-[10px] uppercase tracking-wider text-label">
+          <span className="w-[110px]">Day</span>
+          <span className="w-[110px]">Payment</span>
+          <span className="w-[130px]">Left on invoice</span>
+          <span className="flex-1">Received?</span>
+        </div>
         <ul className="divide-y divide-border border border-border bg-panel">
           {group.payments.map((p) => {
             const lineNotice = notice?.key === `p-${p.id}` ? notice.text : null;
@@ -95,10 +109,18 @@ export function AaaFuelInvoicePanel({
               <li key={p.id} className="flex flex-wrap items-center gap-x-4 gap-y-1 px-3 py-2">
                 <span className="w-[110px] text-[12px] text-ink">{dayLabel(p.paymentDate)}</span>
                 <span className="w-[110px] font-mono text-[12px] font-medium text-green">{fmt(p.amount)}</span>
-                <span className="min-w-0 flex-1 truncate text-[11px] text-muted">
-                  {p.deductions?.[0]?.note ?? ''}
+                <span className="w-[130px] font-mono text-[12px]">
+                  {(leftAfter.get(p.id) ?? 0) > 0 ? (
+                    <>
+                      <span className="text-muted">→ </span>
+                      <span className="font-medium text-yellow">{fmt(leftAfter.get(p.id) ?? 0)}</span>
+                      <span className="font-sans text-[10px] text-muted"> left</span>
+                    </>
+                  ) : (
+                    <span className="font-sans text-[11px] font-medium text-green">→ Paid in full</span>
+                  )}
                 </span>
-                <div className="flex items-center gap-2">
+                <div className="flex min-w-0 flex-1 items-center gap-2">
                   {p.receivedAt ? (
                     <>
                       <Badge variant="ok">Received {fmtDate(p.receivedAt)}</Badge>
@@ -161,6 +183,7 @@ export function AaaFuelInvoicePanel({
             );
           })}
         </ul>
+        </>
       )}
     </div>
   );
