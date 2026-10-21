@@ -101,7 +101,7 @@ export function AaaPaymentForm({
           <button
             type="submit"
             disabled={submitting}
-            className="btn-primary h-7 px-3 rounded-[3px] text-[11px] hover:opacity-85 disabled:opacity-50 shrink-0 whitespace-nowrap"
+            className="btn-primary h-7 px-3 text-[11px] hover:opacity-85 disabled:opacity-50 shrink-0 whitespace-nowrap"
           >
             {submitting ? '…' : 'Record'}
           </button>

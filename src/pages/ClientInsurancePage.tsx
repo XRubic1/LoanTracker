@@ -181,7 +181,7 @@ export function ClientInsurancePage({
             }`}
           >
             <span
-              className={`w-[14px] h-[14px] rounded-[4px] border flex items-center justify-center text-[10px] ${
+              className={`w-[14px] h-[14px] border flex items-center justify-center text-[10px] ${
                 hideInactive ? 'bg-accent border-accent text-white' : 'border-border'
               }`}
             >

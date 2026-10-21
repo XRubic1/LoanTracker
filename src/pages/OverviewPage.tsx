@@ -16,6 +16,7 @@ import {
   isReserveOverdue,
   isToday,
   getLoanProviderDisplay,
+  fmtDeductionDay,
   getLoanOpenInstallmentDue,
   getLoanOpenInstallmentRemaining,
   getLoanBasePerInstallment,
@@ -131,7 +132,7 @@ export function OverviewPage({
     <>
       {/* Insurance verification alert */}
       {showInsuranceNeedsVerification && (
-        <div className="alert-banner-warn mb-1 text-[11px] rounded-r-[3px]" role="alert">
+        <div className="alert-banner-warn mb-1 text-[11px]" role="alert">
           <svg className="h-[13px] w-[13px] flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
           </svg>
@@ -173,17 +174,18 @@ export function OverviewPage({
           <div className="flex flex-col gap-4 min-w-0">
             {/* Due this week — loans */}
             <Section title="Due This Week — Loans" count={dueLoans.length} noPadding>
-              <table className="w-full border-collapse table-fixed">
+              <table className="w-full border-collapse table-fixed" data-default-sort="0:asc">
                 <colgroup>
-                  <col style={{ width: '24%' }} />
-                  <col style={{ width: '24%' }} />
                   <col style={{ width: '22%' }} />
-                  <col style={{ width: '18%' }} />
-                  <col style={{ width: '12%' }} />
+                  <col style={{ width: '21%' }} />
+                  <col style={{ width: '20%' }} />
+                  <col style={{ width: '16%' }} />
+                  <col style={{ width: '8%' }} />
+                  <col style={{ width: '13%' }} />
                 </colgroup>
                 <thead>
                   <tr>
-                    {['Client', 'Provider', 'Installment', 'Remaining', 'Status'].map((h) => (
+                    {['Client', 'Provider', 'Installment', 'Remaining', 'Day', 'Status'].map((h) => (
                       <th
                         key={h}
                         className="text-[10px] text-label font-normal uppercase tracking-[0.05em] px-4 py-2 text-left border-b border-border"
@@ -196,7 +198,7 @@ export function OverviewPage({
                 <tbody>
                   {dueLoans.length === 0 ? (
                     <tr>
-                      <td colSpan={5} className="text-center py-8 text-muted text-[12px]">
+                      <td colSpan={6} className="text-center py-8 text-muted text-[12px]">
                         No loans due this week
                       </td>
                     </tr>
@@ -260,6 +262,15 @@ export function OverviewPage({
                           <td className="px-4 py-[11px] border-b border-border align-middle">
                             <div className="text-[12px] font-medium">{fmt(rem)}</div>
                             <div className="text-[10px] text-muted">{left} left</div>
+                          </td>
+                          <td className="px-4 py-[11px] border-b border-border align-middle">
+                            <span
+                              className={`text-[12px] font-medium ${
+                                l.deductionDay != null ? 'text-accent' : 'text-muted'
+                              }`}
+                            >
+                              {fmtDeductionDay(l.deductionDay)}
+                            </span>
                           </td>
                           <td className="px-4 py-[11px] border-b border-border align-middle">
                             <div className="flex flex-col items-start gap-1">
@@ -469,7 +480,7 @@ function KpiTile({
     <div className="panel-surface relative overflow-hidden px-4 py-4 pl-5">
       <div className={`absolute left-0 top-0 bottom-0 w-[3px] ${t.bar}`} />
       <div className="text-[10px] text-label uppercase tracking-[0.05em] mb-2">{label}</div>
-      <div className={`text-[24px] font-medium leading-none ${t.text}`}>{value}</div>
+      <div className={`kpi-value text-[26px] font-semibold leading-none ${t.text}`}>{value}</div>
       <div className="text-[11px] text-muted mt-2">{sub}</div>
     </div>
   );

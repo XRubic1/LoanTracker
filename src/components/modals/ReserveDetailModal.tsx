@@ -176,7 +176,7 @@ export function ReserveDetailModal({
                   tabIndex={0}
                   onClick={() => openDeductionPopup(i)}
                   onKeyDown={(e) => e.key === 'Enter' && openDeductionPopup(i)}
-                  className={`flex items-center justify-between gap-2 py-1.5 px-2.5 rounded-[10px] bg-surface text-[13px] cursor-pointer hover:bg-border/60 transition-colors ${paid ? 'opacity-90' : ''}`}
+                  className={`flex items-center justify-between gap-2 py-1.5 px-2.5 bg-surface text-[13px] cursor-pointer hover:bg-border/60 transition-colors ${paid ? 'opacity-90' : ''}`}
                 >
                   <div className="flex items-center gap-2 min-w-0">
                     <span className="text-muted2 text-[11px] shrink-0">
@@ -205,7 +205,7 @@ export function ReserveDetailModal({
             })}
           </div>
 
-          <div className="flex justify-between items-center py-3 px-3.5 bg-surface rounded-[10px] text-[13px] mt-1">
+          <div className="flex justify-between items-center py-3 px-3.5 bg-surface text-[13px] mt-1">
             <span className="text-muted2">Remaining</span>
             <span className="font-mono font-semibold text-accent2">{fmt(remaining)}</span>
           </div>
@@ -268,7 +268,7 @@ export function ReserveDetailModal({
           aria-labelledby="deduction-modal-title"
         >
           <div
-            className="bg-panel border border-border rounded-[20px] p-6 w-[400px] max-w-[95vw]"
+            className="bg-panel border border-border p-6 w-[400px] max-w-[95vw]"
             onClick={(e) => e.stopPropagation()}
           >
             <h3 id="deduction-modal-title" className="text-base font-semibold mb-1">

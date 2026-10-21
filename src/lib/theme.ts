@@ -1,15 +1,15 @@
-/** Theme preference: dark is the default. */
+/** Theme preference: light is the default. */
 export type Theme = 'dark' | 'light';
 
-export const THEME_STORAGE_KEY = 'loan-tracker-theme';
+export const THEME_STORAGE_KEY = 'loan-tracker-theme-v2';
 
-/** Read stored theme; invalid/missing values fall back to dark. */
+/** Read stored theme; invalid/missing values fall back to light. */
 export function getStoredTheme(): Theme {
   try {
     const stored = localStorage.getItem(THEME_STORAGE_KEY);
-    return stored === 'light' ? 'light' : 'dark';
+    return stored === 'dark' ? 'dark' : 'light';
   } catch {
-    return 'dark';
+    return 'light';
   }
 }
 

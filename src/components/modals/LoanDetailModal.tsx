@@ -3,7 +3,7 @@ import type { Loan } from '@/types';
 import { Modal } from '@/components/Modal';
 import { InstallmentPaymentsList } from '@/components/InstallmentPaymentsList';
 import { getInstallmentPayments } from '@/lib/loanPaymentActions';
-import { fmt, fmtDate, getLoanInstallmentAmount, getLoanOpenInstallmentRemaining, getLoanRemaining, getScheduleDueDateOnly } from '@/lib/utils';
+import { WEEKDAY_LABELS, WEEKDAY_ORDER, fmt, fmtDate, getLoanInstallmentAmount, getLoanOpenInstallmentRemaining, getLoanRemaining, getScheduleDueDateOnly } from '@/lib/utils';
 
 interface LoanDetailModalProps {
   loan: Loan | null;
@@ -28,7 +28,11 @@ interface LoanDetailModalProps {
   ) => Promise<void>;
   /** Update the paid date for an already-closed installment. */
   onUpdatePaymentDate?: (index: number, date: string) => Promise<void>;
+  /** Set (or clear with null) the weekday this loan is deducted. */
+  onUpdateDeductionDay?: (day: number | null) => Promise<void>;
 }
+
+const WEEKDAY_FULL = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 
 /** Small note icon (click to open installment popup) */
 function NoteIcon({ hasNote, onClick }: { hasNote: boolean; onClick: () => void }) {
@@ -70,6 +74,7 @@ export function LoanDetailModal({
   onUpdateInstallmentNote,
   onCloseInstallmentWithNote,
   onUpdatePaymentDate,
+  onUpdateDeductionDay,
 }: LoanDetailModalProps) {
   const [selectedInstallmentIndex, setSelectedInstallmentIndex] = useState<number | null>(null);
   const [popupNote, setPopupNote] = useState('');
@@ -318,6 +323,36 @@ export function LoanDetailModal({
             <span className="text-muted2">Paid</span>
             <span className="font-mono font-medium text-green">{loan.paidCount}</span>
           </div>
+          <div className="py-2 border-b border-border text-[13px]">
+            <div className="flex justify-between items-center mb-2">
+              <span className="text-muted2">Deduction day</span>
+              <span className="font-medium text-accent">
+                {loan.deductionDay != null ? WEEKDAY_FULL[loan.deductionDay] : 'Not set'}
+              </span>
+            </div>
+            {onUpdateDeductionDay && (
+              <div className="flex flex-wrap gap-1.5">
+                {WEEKDAY_ORDER.map((d) => {
+                  const active = loan.deductionDay === d;
+                  return (
+                    <button
+                      key={d}
+                      type="button"
+                      onClick={() => void onUpdateDeductionDay(active ? null : d)}
+                      className={`px-2.5 py-1 text-[11px] font-medium border transition-colors ${
+                        active
+                          ? 'border-accent bg-accent/15 text-accent'
+                          : 'border-border text-muted hover:text-ink hover:border-border-hover'
+                      }`}
+                      title={active ? 'Click to clear' : `Deduct on ${WEEKDAY_FULL[d]}`}
+                    >
+                      {WEEKDAY_LABELS[d]}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </div>
           {loan.note && (
             <div className="flex justify-between items-center py-1.5 border-b border-border text-[13px]">
               <span className="text-muted2">Note</span>
@@ -348,7 +383,7 @@ export function LoanDetailModal({
                   tabIndex={0}
                   onClick={() => openInstallmentPopup(i)}
                   onKeyDown={(e) => e.key === 'Enter' && openInstallmentPopup(i)}
-                  className={`flex items-center justify-between gap-2 py-1.5 px-2.5 rounded-[10px] bg-surface text-[13px] cursor-pointer hover:bg-border/60 transition-colors ${paid ? 'opacity-90' : ''}`}
+                  className={`flex items-center justify-between gap-2 py-1.5 px-2.5 bg-surface text-[13px] cursor-pointer hover:bg-border/60 transition-colors ${paid ? 'opacity-90' : ''}`}
                 >
                   <div className="flex items-center gap-2 min-w-0">
                     <span className="text-muted2 text-[11px] shrink-0">
@@ -389,7 +424,7 @@ export function LoanDetailModal({
             })}
           </div>
 
-          <div className="flex justify-between items-center py-3 px-3.5 bg-surface rounded-[10px] text-[13px]">
+          <div className="flex justify-between items-center py-3 px-3.5 bg-surface text-[13px]">
             <span className="text-muted2">Remaining Balance</span>
             <span className="font-mono font-semibold text-accent">{fmt(remaining)}</span>
           </div>
@@ -481,7 +516,7 @@ export function LoanDetailModal({
           aria-labelledby="installment-modal-title"
         >
           <div
-            className="bg-panel border border-border rounded-[20px] p-6 w-[400px] max-w-[95vw]"
+            className="bg-panel border border-border p-6 w-[400px] max-w-[95vw]"
             onClick={(e) => e.stopPropagation()}
           >
             <h3 id="installment-modal-title" className="text-base font-semibold mb-1">

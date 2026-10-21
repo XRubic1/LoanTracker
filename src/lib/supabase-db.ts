@@ -1008,6 +1008,10 @@ function loanFromRow(row: LoanRow | null): Loan | null {
     providerName: row.provider_name ?? '',
     factoringFee: Number(row.factoring_fee ?? 0),
     hidden: Boolean(row.hidden ?? false),
+    deductionDay:
+      row.deduction_day != null && row.deduction_day >= 0 && row.deduction_day <= 6
+        ? Number(row.deduction_day)
+        : null,
   };
 }
 
@@ -1071,6 +1075,7 @@ function loanToRow(loan: Loan, ownerId?: string | null): Omit<LoanRow, 'id'> {
     provider_name: loan.providerName || null,
     factoring_fee: loan.factoringFee ?? 0,
     hidden: loan.hidden ?? false,
+    deduction_day: loan.deductionDay ?? null,
   };
 }
 

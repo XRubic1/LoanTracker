@@ -49,6 +49,8 @@ export interface Loan {
   factoringFee: number;
   /** When true, loan is hidden from overview/loans lists (client inactive or cannot be completed). */
   hidden: boolean;
+  /** Weekday this loan is deducted (0 = Sunday ... 6 = Saturday); null when not set. */
+  deductionDay?: number | null;
 }
 
 /** App model: reserve (camelCase) */
@@ -92,6 +94,7 @@ export interface LoanRow {
   provider_name?: string | null;
   factoring_fee?: number;
   hidden?: boolean;
+  deduction_day?: number | null;
 }
 
 /** Supabase row: reserves table (snake_case) */

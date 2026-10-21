@@ -291,6 +291,14 @@ export default function App() {
     [selectedLoan, updateLoanById]
   );
 
+  const handleLoanUpdateDeductionDay = useCallback(
+    async (day: number | null) => {
+      if (selectedLoan == null) return;
+      await updateLoanById(selectedLoan.id, { ...selectedLoan, deductionDay: day });
+    },
+    [selectedLoan, updateLoanById]
+  );
+
   /** Post payment toward the open installment from LoanDetailModal (partial / full / overpay). */
   const handleLoanCloseInstallmentWithNote = useCallback(
     async (index: number, note: string, paidDate: string, paymentAmount: number) => {
@@ -725,6 +733,7 @@ export default function App() {
         onUpdateInstallmentNote={handleLoanUpdateInstallmentNote}
         onCloseInstallmentWithNote={handleLoanCloseInstallmentWithNote}
         onUpdatePaymentDate={handleLoanUpdatePaymentDate}
+        onUpdateDeductionDay={handleLoanUpdateDeductionDay}
       />
       <ReserveDetailModal
         reserve={selectedReserve}

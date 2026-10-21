@@ -440,3 +440,12 @@ export function getLoanOverdueStatusLabel(loan: Loan): string | null {
   return `Due ${count} weeks`;
 }
 
+
+export const WEEKDAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'] as const;
+/** Weekdays offered in the picker (Mon-Fri). */
+export const WEEKDAY_ORDER = [1, 2, 3, 4, 5] as const;
+
+/** "Mon", "Tue", ... or "—" when the loan has no deduction day. */
+export function fmtDeductionDay(day: number | null | undefined): string {
+  return day == null || day < 0 || day > 6 ? '—' : WEEKDAY_LABELS[day];
+}

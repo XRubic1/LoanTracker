@@ -322,7 +322,7 @@ export function Sidebar({
                   }`}
                 >
                   {active && (
-                    <span className="absolute left-0 top-1.5 bottom-1.5 w-[3px] rounded-full bg-ink" />
+                    <span className="absolute left-0 top-1.5 bottom-1.5 w-[3px] rounded-full bg-accent" />
                   )}
                   {!collapsed && <span className="truncate">{label}</span>}
                   {collapsed && (
@@ -361,7 +361,7 @@ export function Sidebar({
                   }`}
                 >
                   {page === id && (
-                    <span className="absolute left-0 top-1.5 bottom-1.5 w-[3px] rounded-full bg-ink" />
+                    <span className="absolute left-0 top-1.5 bottom-1.5 w-[3px] rounded-full bg-accent" />
                   )}
                   <span className="w-[16px] h-[16px] flex-shrink-0 [&>svg]:w-[16px] [&>svg]:h-[16px]">
                     {icon}

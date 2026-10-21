@@ -18,6 +18,11 @@ function cellText(cell: HTMLTableCellElement): string {
   return (cell.innerText ?? cell.textContent ?? '').trim();
 }
 
+/** Text a column is sorted on: the first line of the cell (a name, not its sub-line). */
+function sortText(cell: HTMLTableCellElement): string {
+  return cellText(cell).split(/\r?\n/)[0].trim();
+}
+
 /** Turn display text into something comparable: a number, a timestamp, or lowercase text. */
 function sortKey(raw: string): { n: number | null; s: string } {
   const text = raw.replace(/\s+/g, ' ').trim();
@@ -86,14 +91,25 @@ function markHeaders(table: HTMLTableElement): void {
   });
 }
 
+/** `data-default-sort="0:asc"` on a table sorts by that column until someone picks another. */
+function ensureDefaultSort(table: HTMLTableElement): void {
+  if (states.has(table) || !table.dataset.defaultSort) return;
+  const [col, dir] = table.dataset.defaultSort.split(':');
+  const index = Number(col);
+  if (Number.isInteger(index) && index >= 0) {
+    states.set(table, { col: index, dir: dir === 'desc' ? 'desc' : 'asc' });
+  }
+}
+
 function applySort(table: HTMLTableElement): void {
+  ensureDefaultSort(table);
   markHeaders(table);
   const state = states.get(table);
   if (!state || !isSortable(table)) return;
   const factor = state.dir === 'asc' ? 1 : -1;
   for (const body of Array.from(table.tBodies)) {
     const rows = Array.from(body.rows);
-    const keyed = rows.map((row, i) => ({ row, i, text: cellText(row.cells[state.col]) }));
+    const keyed = rows.map((row, i) => ({ row, i, text: sortText(row.cells[state.col]) }));
     keyed.sort((a, b) => {
       const ab = sortKey(a.text);
       const bb = sortKey(b.text);
