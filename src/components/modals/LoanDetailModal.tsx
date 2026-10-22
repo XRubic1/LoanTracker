@@ -111,7 +111,10 @@ export function LoanDetailModal({
 
   const remaining = getLoanRemaining(loan);
   const isFullyPaid = loan.paidCount >= loan.totalInstallments;
-  const canReverse = loan.paidCount > 0;
+  const canReverse =
+    loan.paidCount > 0 ||
+    (Number(loan.partialPaidAmount ?? 0) || 0) > 0 ||
+    (loan.installmentPayments?.[loan.paidCount]?.length ?? 0) > 0;
   const notes = loan.paymentNotes ?? [];
   const openPartial = Number(loan.partialPaidAmount ?? 0) || 0;
 

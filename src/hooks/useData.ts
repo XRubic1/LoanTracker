@@ -248,6 +248,23 @@ export function useData(ownerId: string | null, userId: string | null = null): U
     };
   }, [configMissing, ownerId]);
 
+  // Fallback for when Realtime events are missed (RLS, dropped socket, sleeping tab): poll while visible
+  // and resync as soon as the tab regains focus.
+  useEffect(() => {
+    if (configMissing || ownerId == null) return;
+    const sync = () => {
+      if (document.visibilityState === 'visible') scheduleSilentRefetchRef.current();
+    };
+    const timer = window.setInterval(sync, 30_000);
+    document.addEventListener('visibilitychange', sync);
+    window.addEventListener('focus', sync);
+    return () => {
+      window.clearInterval(timer);
+      document.removeEventListener('visibilitychange', sync);
+      window.removeEventListener('focus', sync);
+    };
+  }, [configMissing, ownerId]);
+
   const addLoan = useCallback(async (payload: Omit<Loan, 'id'>, forOwnerId?: string | null) => {
     const added = await insertLoan(payload, forOwnerId ?? ownerId);
     setLoans((prev) => [...prev, added]);
