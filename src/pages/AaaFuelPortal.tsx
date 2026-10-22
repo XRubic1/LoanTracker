@@ -8,6 +8,7 @@ import {
   aaaDuePaid,
   aaaDueRemaining,
   aaaDueStatus,
+  weekEndOf,
   weekLabel,
   weekStartOf,
 } from '@/lib/aaaDues';
@@ -38,6 +39,13 @@ const todayStr = () => {
   const t = new Date();
   return `${t.getFullYear()}-${String(t.getMonth() + 1).padStart(2, '0')}-${String(t.getDate()).padStart(2, '0')}`;
 };
+
+/** True when the query looks like a number ("13,255", "$13255.1") that appears in any of the amounts. */
+function amountMatches(query: string, amounts: number[]): boolean {
+  const digits = query.replace(/[$,\s]/g, '');
+  if (!/^\d*\.?\d+$|^\d+\.$/.test(digits)) return false;
+  return amounts.some((a) => a.toFixed(2).includes(digits));
+}
 
 const labelClass = 'block text-[11px] text-muted uppercase tracking-wider mb-1.5';
 const inputClass = 'w-full border border-border bg-surface px-3 py-2 text-[13px] text-ink outline-none';
@@ -254,6 +262,7 @@ export function AaaFuelPortal() {
   const [openId, setOpenId] = useState<number | null>(null);
   const [tab, setTab] = useState<'payments' | 'history'>('payments');
   const [historyQuery, setHistoryQuery] = useState('');
+  const [openQuery, setOpenQuery] = useState('');
   const [receivedFilter, setReceivedFilter] = useState<'all' | 'waiting' | 'received' | 'not_received'>('all');
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [busy, setBusy] = useState(false);
@@ -288,6 +297,28 @@ export function AaaFuelPortal() {
     for (const g of groups) if (g.dueId != null) map.set(g.dueId, g);
     return map;
   }, [groups]);
+
+  const openRows = useMemo(() => {
+    const q = openQuery.trim().toLowerCase();
+    if (!q) return data.openDues;
+    return data.openDues.filter((d) => {
+      const amounts = [d.amount, aaaDueRemaining(d), ...(groupByDue.get(d.id)?.payments.map((p) => p.amount) ?? [])];
+      return d.client.toLowerCase().includes(q) || amountMatches(q, amounts);
+    });
+  }, [data.openDues, groupByDue, openQuery]);
+
+  /** Every payment posted Mon–Sun of the current week, newest first (open or fully deducted invoices alike). */
+  const thisWeek = useMemo(() => {
+    const start = weekStartOf();
+    const end = weekEndOf(start);
+    const q = openQuery.trim().toLowerCase();
+    return data.closedPayments
+      .filter((p) => p.paymentDate >= start && p.paymentDate <= end)
+      .filter((p) => !q || p.client.toLowerCase().includes(q) || amountMatches(q, [p.amount]))
+      .sort((a, b) => b.paymentDate.localeCompare(a.paymentDate) || b.id - a.id);
+  }, [data.closedPayments, openQuery]);
+  const thisWeekTotal = thisWeek.reduce((sum, p) => sum + p.amount, 0);
+
   const openDueIds = useMemo(() => new Set(data.openDues.map((d) => d.id)), [data.openDues]);
 
   /** History = invoices that are fully deducted, plus older stand-alone records. Open invoices live on Payments. */
@@ -295,7 +326,8 @@ export function AaaFuelPortal() {
     const q = historyQuery.trim().toLowerCase();
     return groups.filter((g) => {
       if (g.dueId != null && openDueIds.has(g.dueId)) return false;
-      if (q && !g.client.toLowerCase().includes(q)) return false;
+      if (q && !g.client.toLowerCase().includes(q) && !amountMatches(q, [g.total, ...g.payments.map((p) => p.amount)]))
+        return false;
       const state = invoiceReceiptState(g);
       return receivedFilter === 'all' || state === receivedFilter || (receivedFilter === 'waiting' && state === 'waiting');
     });
@@ -451,7 +483,15 @@ export function AaaFuelPortal() {
                 />
               </div>
 
-              <Section title="Open payments" count={data.openDues.length} noPadding>
+              <input
+                type="search"
+                value={openQuery}
+                onChange={(e) => setOpenQuery(e.target.value)}
+                placeholder="Search client or amount"
+                className="w-full border border-border bg-surface px-3 py-2 text-[13px] text-ink outline-none sm:max-w-sm"
+              />
+
+              <Section title="Open payments" count={openRows.length} noPadding>
                 <table className="w-full table-fixed border-collapse" data-no-sort>
                   <colgroup>
                     <col style={{ width: '27%' }} />
@@ -470,14 +510,18 @@ export function AaaFuelPortal() {
                     </tr>
                   </thead>
                   <tbody>
-                    {data.openDues.length === 0 ? (
+                    {openRows.length === 0 ? (
                       <tr>
                         <td colSpan={5} className="py-8 text-center text-[12px] text-muted">
-                          {loading ? 'Loading…' : 'No open payments. Use “Add payment” to create one.'}
+                          {loading
+                            ? 'Loading…'
+                            : openQuery.trim()
+                              ? 'No open payments match that search.'
+                              : 'No open payments. Use “Add payment” to create one.'}
                         </td>
                       </tr>
                     ) : (
-                      data.openDues.map((d) => {
+                      openRows.map((d) => {
                         const status = aaaDueStatus(d);
                         const paid = aaaDuePaid(d);
                         const left = aaaDueRemaining(d);
@@ -579,6 +623,77 @@ export function AaaFuelPortal() {
                   </tbody>
                 </table>
               </Section>
+
+              <Section title="Deducted this week" count={thisWeek.length} noPadding>
+                <table className="w-full table-fixed border-collapse" data-no-sort>
+                  <colgroup>
+                    <col style={{ width: '14%' }} />
+                    <col style={{ width: '34%' }} />
+                    <col style={{ width: '20%' }} />
+                    <col style={{ width: '16%' }} />
+                    <col style={{ width: '16%' }} />
+                  </colgroup>
+                  <thead>
+                    <tr>
+                      {['Date', 'Client', 'Invoice', 'Amount', 'Received?'].map((h) => (
+                        <th key={h} className={thClass}>
+                          {h}
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {thisWeek.length === 0 ? (
+                      <tr>
+                        <td colSpan={5} className="py-8 text-center text-[12px] text-muted">
+                          {loading
+                            ? 'Loading…'
+                            : openQuery.trim()
+                              ? 'No payments this week match that search.'
+                              : 'No payments deducted yet this week.'}
+                        </td>
+                      </tr>
+                    ) : (
+                      thisWeek.map((p) => (
+                        <tr key={p.id}>
+                          <td className="border-b border-border px-4 py-[11px] text-[11px] text-muted2">
+                            {fmtDate(p.paymentDate)}
+                          </td>
+                          <td className="truncate border-b border-border px-4 py-[11px] text-[12px] font-medium text-ink">
+                            {p.client}
+                          </td>
+                          <td className="border-b border-border px-4 py-[11px] text-[11px] text-muted2">
+                            {p.weekStart ? weekLabel(p.weekStart) : '—'}
+                          </td>
+                          <td className="border-b border-border px-4 py-[11px] text-[13px] font-medium text-green">
+                            {fmt(p.amount)}
+                          </td>
+                          <td className="border-b border-border px-4 py-[11px]">
+                            {p.receivedAt ? (
+                              <Badge variant="ok">Received</Badge>
+                            ) : p.notReceivedAt ? (
+                              <Badge variant="overdue">Not received</Badge>
+                            ) : (
+                              <Badge variant="closed">Awaiting</Badge>
+                            )}
+                          </td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                  {thisWeek.length > 0 && (
+                    <tfoot>
+                      <tr>
+                        <td colSpan={3} className="px-4 py-2 text-right text-[11px] text-muted2">
+                          Total this week
+                        </td>
+                        <td className="px-4 py-2 text-[13px] font-semibold text-green">{fmt(thisWeekTotal)}</td>
+                        <td />
+                      </tr>
+                    </tfoot>
+                  )}
+                </table>
+              </Section>
             </>
           )}
 
@@ -589,7 +704,7 @@ export function AaaFuelPortal() {
                   type="search"
                   value={historyQuery}
                   onChange={(e) => setHistoryQuery(e.target.value)}
-                  placeholder="Search client"
+                  placeholder="Search client or amount"
                   className="min-w-[220px] flex-1 border border-border bg-surface px-3 py-2 text-[13px] text-ink outline-none sm:max-w-sm"
                 />
                 <div className="flex gap-1" role="group" aria-label="Filter by received">
