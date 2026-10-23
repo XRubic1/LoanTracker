@@ -152,7 +152,7 @@ export default function App() {
     updateWorksheetEntryById,
     removeWorksheetEntry,
     clearWorksheetActivityInRange,
-  } = useData(effectiveOwnerId ?? null, user?.id ?? null);
+  } = useData(effectiveOwnerId ?? null, user?.id ?? null, page === 'worksheet');
   const motusAuto = useMotusAutoCheck(effectiveOwnerId ?? null);
   const [motusTab, setMotusTab] = useState<MotusTab>('check');
   const motusIssueCount = countMotusIssues(motusAuto.data, clientInsurance);

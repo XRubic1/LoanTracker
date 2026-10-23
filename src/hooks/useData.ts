@@ -106,7 +106,15 @@ export interface UseDataResult {
   ) => Promise<void>;
 }
 
-export function useData(ownerId: string | null, userId: string | null = null): UseDataResult {
+/**
+ * `pauseBackgroundSync` stops silent refreshes (realtime, polling, focus) while true, e.g. on the worksheet
+ * where a reload would disturb typing. One catch-up refresh runs when it flips back to false.
+ */
+export function useData(
+  ownerId: string | null,
+  userId: string | null = null,
+  pauseBackgroundSync = false
+): UseDataResult {
   const [loans, setLoans] = useState<Loan[]>([]);
   const [reserves, setReserves] = useState<Reserve[]>([]);
   const [aaaPayments, setAaaPayments] = useState<AaaPayment[]>([]);
@@ -202,7 +210,10 @@ export function useData(ownerId: string | null, userId: string | null = null): U
   }, [configMissing, ownerId]);
 
   /** Debounced background sync used by Realtime — avoids loading flash and refetch storms. */
+  const pausedRef = useRef(pauseBackgroundSync);
+  pausedRef.current = pauseBackgroundSync;
   const scheduleSilentRefetch = useCallback(() => {
+    if (pausedRef.current) return;
     if (refetchTimerRef.current) clearTimeout(refetchTimerRef.current);
     refetchTimerRef.current = setTimeout(() => {
       refetchTimerRef.current = null;
@@ -213,6 +224,13 @@ export function useData(ownerId: string | null, userId: string | null = null): U
   useEffect(() => {
     void refetch();
   }, [refetch]);
+
+  // Catch up once after leaving a paused screen.
+  const wasPausedRef = useRef(pauseBackgroundSync);
+  useEffect(() => {
+    if (wasPausedRef.current && !pauseBackgroundSync) scheduleSilentRefetchRef.current();
+    wasPausedRef.current = pauseBackgroundSync;
+  }, [pauseBackgroundSync]);
 
   // Realtime: sync when loans/reserves/etc. change (other tabs/users) without a full page refresh
   const scheduleSilentRefetchRef = useRef(scheduleSilentRefetch);
