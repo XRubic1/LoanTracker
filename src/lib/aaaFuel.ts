@@ -192,3 +192,19 @@ export async function setAaaFuelInvoiceReceipt(dueId: number, status: AaaReceipt
   const { error } = await supabase.rpc('aaa_fuel_set_invoice_receipt', { p_due_id: dueId, p_status: status });
   if (error) throw new Error(error.message);
 }
+
+/** Correct what an invoice is for. Cannot go below what has already been deducted. */
+export async function editAaaFuelDueAmount(dueId: number, amount: number): Promise<void> {
+  const supabase = getSupabase();
+  if (!supabase) throw new Error('Supabase not configured');
+  const { error } = await supabase.rpc('aaa_fuel_edit_due_amount', { p_due_id: dueId, p_amount: amount });
+  if (error) throw new Error(error.message);
+}
+
+/** Correct the amount and day of a posted payment. */
+export async function editAaaFuelPayment(id: number, amount: number, date: string): Promise<void> {
+  const supabase = getSupabase();
+  if (!supabase) throw new Error('Supabase not configured');
+  const { error } = await supabase.rpc('aaa_fuel_edit_payment', { p_payment_id: id, p_amount: amount, p_date: date });
+  if (error) throw new Error(error.message);
+}

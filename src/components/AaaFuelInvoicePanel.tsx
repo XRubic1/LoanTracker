@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { Badge } from '@/components/Badge';
 import { dayLabel } from '@/lib/aaaDues';
 import type { InvoiceGroup } from '@/lib/aaaFuel';
@@ -13,7 +14,13 @@ interface AaaFuelInvoicePanelProps {
   onInvoice: (group: InvoiceGroup, status: AaaReceiptStatus) => void;
   /** Open the "post a payment" dialog (only offered for invoices that are still open). */
   onPostPayment?: () => void;
+  /** Save a corrected invoice total. Rejects with a readable message. */
+  onEditTotal?: (group: InvoiceGroup, amount: number) => Promise<void>;
+  /** Save a corrected payment amount / day. Rejects with a readable message. */
+  onEditPayment?: (id: number, amount: number, date: string) => Promise<void>;
 }
+
+const editInput = 'h-7 border border-border bg-surface px-2 text-[12px] text-ink outline-none focus:border-accent';
 
 /** Dropdown content for one invoice: every payment posted against it, plus whole-invoice actions. */
 export function AaaFuelInvoicePanel({
@@ -23,7 +30,68 @@ export function AaaFuelInvoicePanel({
   onPayment,
   onInvoice,
   onPostPayment,
+  onEditTotal,
+  onEditPayment,
 }: AaaFuelInvoicePanelProps) {
+  const [editing, setEditing] = useState<'total' | number | null>(null);
+  const [amountDraft, setAmountDraft] = useState('');
+  const [dateDraft, setDateDraft] = useState('');
+  const [editError, setEditError] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+
+  const startTotal = () => {
+    setEditing('total');
+    setAmountDraft(String(group.total));
+    setEditError(null);
+  };
+  const startPayment = (id: number, amount: number, date: string) => {
+    setEditing(id);
+    setAmountDraft(String(amount));
+    setDateDraft(date);
+    setEditError(null);
+  };
+  const save = async () => {
+    const amount = Math.round(parseFloat(amountDraft) * 100) / 100;
+    if (!Number.isFinite(amount) || amount <= 0) {
+      setEditError('Enter an amount greater than 0');
+      return;
+    }
+    if (typeof editing === 'number' && !dateDraft) {
+      setEditError('Pick a day');
+      return;
+    }
+    setSaving(true);
+    setEditError(null);
+    try {
+      if (editing === 'total') await onEditTotal?.(group, amount);
+      else if (typeof editing === 'number') await onEditPayment?.(editing, amount, dateDraft);
+      setEditing(null);
+    } catch (err) {
+      setEditError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setSaving(false);
+    }
+  };
+  const editButtons = (
+    <>
+      <button
+        type="button"
+        disabled={saving}
+        onClick={() => void save()}
+        className="btn-primary h-7 px-3 text-[11px] disabled:opacity-50"
+      >
+        {saving ? 'Saving…' : 'Save'}
+      </button>
+      <button
+        type="button"
+        disabled={saving}
+        onClick={() => setEditing(null)}
+        className="text-[11px] text-muted2 underline disabled:opacity-50"
+      >
+        Cancel
+      </button>
+    </>
+  );
   const anyMarked = group.received > 0 || group.notReceived > 0;
   const allReceived = group.payments.length > 0 && group.received === group.payments.length;
   const invoiceNotice = notice?.key === `inv-${group.key}` ? notice.text : null;
@@ -86,6 +154,42 @@ export function AaaFuelInvoicePanel({
           )}
         </div>
       </div>
+      {onEditTotal && group.dueId != null && (
+        <div className="mb-2 flex flex-wrap items-center gap-2 text-[12px]">
+          <span className="text-muted">Invoice total</span>
+          {editing === 'total' ? (
+            <>
+              <input
+                type="number"
+                min="0"
+                step="0.01"
+                value={amountDraft}
+                onChange={(e) => setAmountDraft(e.target.value)}
+                className={`${editInput} w-32 tabular-nums`}
+                aria-label="Invoice total"
+              />
+              {editButtons}
+            </>
+          ) : (
+            <>
+              <span className="font-mono font-medium text-ink">{fmt(group.total)}</span>
+              <button
+                type="button"
+                disabled={busy || editing != null}
+                onClick={startTotal}
+                className="text-[11px] text-accent underline disabled:opacity-50"
+              >
+                Edit
+              </button>
+            </>
+          )}
+        </div>
+      )}
+      {editError && (
+        <p className="mb-2 text-[11px] leading-snug text-red" role="alert">
+          {editError}
+        </p>
+      )}
       {invoiceNotice && (
         <p className="mb-2 text-[11px] leading-snug text-amber" role="alert">
           {invoiceNotice}
@@ -107,6 +211,28 @@ export function AaaFuelInvoicePanel({
             const lineNotice = notice?.key === `p-${p.id}` ? notice.text : null;
             return (
               <li key={p.id} className="flex flex-wrap items-center gap-x-4 gap-y-1 px-3 py-2">
+                {editing === p.id ? (
+                  <>
+                    <input
+                      type="date"
+                      value={dateDraft}
+                      onChange={(e) => setDateDraft(e.target.value)}
+                      className={`${editInput} w-[130px]`}
+                      aria-label="Payment day"
+                    />
+                    <input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={amountDraft}
+                      onChange={(e) => setAmountDraft(e.target.value)}
+                      className={`${editInput} w-28 tabular-nums`}
+                      aria-label="Payment amount"
+                    />
+                    {editButtons}
+                  </>
+                ) : (
+                <>
                 <span className="w-[110px] text-[12px] text-ink">{dayLabel(p.paymentDate)}</span>
                 <span className="w-[110px] font-mono text-[12px] font-medium text-green">{fmt(p.amount)}</span>
                 <span className="w-[130px] font-mono text-[12px]">
@@ -174,6 +300,18 @@ export function AaaFuelInvoicePanel({
                     </>
                   )}
                 </div>
+                {onEditPayment && (
+                  <button
+                    type="button"
+                    disabled={busy || editing != null}
+                    onClick={() => startPayment(p.id, p.amount, p.paymentDate)}
+                    className="text-[10px] text-accent underline disabled:opacity-50"
+                  >
+                    Edit
+                  </button>
+                )}
+                </>
+                )}
                 {lineNotice && (
                   <p className="basis-full text-[11px] leading-snug text-amber" role="alert">
                     {lineNotice}

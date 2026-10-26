@@ -17,6 +17,8 @@ import { AaaFuelInvoicePanel } from '@/components/AaaFuelInvoicePanel';
 import {
   createAaaFuelDue,
   deleteAaaFuelDue,
+  editAaaFuelDueAmount,
+  editAaaFuelPayment,
   fetchAaaFuelData,
   matchTruClient,
   postAaaFuelDeduction,
@@ -396,6 +398,15 @@ export function AaaFuelPortal() {
       notice={notice}
       onPayment={(id, date, status) => void setPaymentReceipt(id, date, status)}
       onInvoice={(g, status) => void setInvoiceReceipt(g, status)}
+      onEditTotal={async (g, amount) => {
+        if (g.dueId == null) return;
+        await editAaaFuelDueAmount(g.dueId, amount);
+        await reload();
+      }}
+      onEditPayment={async (id, amount, date) => {
+        await editAaaFuelPayment(id, amount, date);
+        await reload();
+      }}
       onPostPayment={g_dueOpen(group) ? () => setOpenId(group.dueId) : undefined}
     />
   );
