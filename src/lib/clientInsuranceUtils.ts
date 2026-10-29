@@ -222,3 +222,26 @@ export function getClientInsuranceStatusLabel(c: ClientInsurance): string {
   }
   return s;
 }
+
+/** True when the cancellation date is before today and the record is still marked as a cancellation. */
+export function isInsuranceCancellationPassed(c: ClientInsurance): boolean {
+  const days = getDaysUntilCancellation(c);
+  return isInsuranceCancellationStatus(c.status) && days != null && days < 0;
+}
+
+/** The record after the client confirmed the insurance was renewed and the COI received. The audit date stays. */
+export function markInsuranceRenewed(c: ClientInsurance): ClientInsurance {
+  return {
+    ...c,
+    status: 'OK',
+    expiration_date: null,
+    last_cancellation_date: c.last_cancellation_date ?? resolveInsuranceCancellationDate(c),
+  };
+}
+
+/** Ask the user to confirm renewal. Nothing changes unless they say yes. */
+export function confirmInsuranceRenewed(client: string): boolean {
+  return window.confirm(
+    `Confirm that ${client}'s insurance has been renewed and the COI was received?\n\nThis marks the insurance OK and clears the cancellation date.`
+  );
+}

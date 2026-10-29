@@ -12,12 +12,13 @@ import {
   currentMotusPolicies,
   isRetryableMotusFailure,
   latestCancellationIso,
-  parseMotusQuery,
+  motusQueryForRecord,
   type MotusAuthority,
   type MotusInsurancePolicy,
   type MotusInsuranceReport,
   type MotusListVerdict,
 } from '@/lib/motusInsurance';
+import { ConfirmRenewedButton, type SaveInsurance } from '@/components/InsuranceRenewalActions';
 import type { ClientInsurance } from '@/types';
 
 type BatchRow = {
@@ -43,14 +44,7 @@ type BatchRow = {
 
 type UpdateCancellation = (id: number, expirationDate: string) => Promise<ClientInsurance>;
 
-function motusQueryForClient(record: ClientInsurance): string | null {
-  const dot = parseMotusQuery(record.dot ?? '');
-  if (dot) return dot.kind === 'dot' ? dot.dot : `${dot.prefix}${dot.number}`;
-  const mcText = (record.mc ?? '').trim();
-  const mc = parseMotusQuery(/^(MC|FF|MX)/i.test(mcText) ? mcText : mcText.replace(/\D/g, '') ? `MC${mcText.replace(/\D/g, '')}` : '');
-  if (mc?.kind === 'docket') return `${mc.prefix}${mc.number}`;
-  return null;
-}
+const motusQueryForClient = motusQueryForRecord;
 
 function displayIso(iso: string | null): string {
   if (!iso) return '—';
@@ -214,7 +208,26 @@ function rowNeedsUpdate(row: BatchRow): boolean {
   });
 }
 
-function CancellationUpdate({ row, onUpdate }: { row: BatchRow; onUpdate?: (row: BatchRow) => void }) {
+function CancellationUpdate({
+  row,
+  onUpdate,
+  record,
+  onConfirmRenewed,
+}: {
+  row: BatchRow;
+  onUpdate?: (row: BatchRow) => void;
+  /** The client's insurance record, when MOTUS shows no cancellation for a cancellation on file. */
+  record?: ClientInsurance | null;
+  onConfirmRenewed?: SaveInsurance;
+}) {
+  if (record && onConfirmRenewed && row.state === 'done' && row.verdict === 'good' && /cancel/i.test(record.status)) {
+    return (
+      <div className="flex flex-col items-start gap-1">
+        <span className="text-xs text-muted">MOTUS shows no cancellation, but one is on file.</span>
+        <ConfirmRenewedButton record={record} onSave={onConfirmRenewed} />
+      </div>
+    );
+  }
   if (row.updateState === 'saving') return <span className="text-xs text-muted">Saving…</span>;
   if (row.updateState === 'saved') return <span className="text-xs text-tag-ok-fg">Updated</span>;
   if (row.updateState === 'error') return <span className="text-xs text-red">{row.updateError || 'Could not update'}</span>;
@@ -238,9 +251,13 @@ function CancellationUpdate({ row, onUpdate }: { row: BatchRow; onUpdate?: (row:
 function BatchCards({
   rows,
   onUpdate,
+  clientInsurance = [],
+  onConfirmRenewed,
 }: {
   rows: BatchRow[];
   onUpdate?: (row: BatchRow) => void;
+  clientInsurance?: ClientInsurance[];
+  onConfirmRenewed?: SaveInsurance;
 }) {
   if (rows.length === 0) return <p className="px-3 py-4 text-sm text-muted">None</p>;
   return (
@@ -278,7 +295,12 @@ function BatchCards({
             <p className="mt-1.5 text-xs text-muted">{row.summary}</p>
           ) : null}
           <div className="mt-1.5 empty:hidden">
-            <CancellationUpdate row={row} onUpdate={onUpdate} />
+            <CancellationUpdate
+              row={row}
+              onUpdate={onUpdate}
+              record={clientInsurance.find((c) => c.id === row.insuranceId) ?? null}
+              onConfirmRenewed={onConfirmRenewed}
+            />
           </div>
         </li>
       ))}
@@ -343,9 +365,11 @@ function BatchTable({
 function MotusDotImport({
   clientInsurance,
   onUpdateCancellation,
+  onConfirmRenewed,
 }: {
   clientInsurance: ClientInsurance[];
   onUpdateCancellation?: UpdateCancellation;
+  onConfirmRenewed?: SaveInsurance;
 }) {
   const stopRef = useRef(false);
   const [rows, setRows] = useState<BatchRow[]>([]);
@@ -727,7 +751,12 @@ function MotusDotImport({
                     <p className="text-xs">{copy.detail}</p>
                   </div>
                   <div className="max-h-[32rem] overflow-y-auto">
-                    <BatchCards rows={group} onUpdate={(row) => void applyCancellation(row)} />
+                    <BatchCards
+                      rows={group}
+                      onUpdate={(row) => void applyCancellation(row)}
+                      clientInsurance={clientInsurance}
+                      onConfirmRenewed={onConfirmRenewed}
+                    />
                   </div>
                 </div>
               );
@@ -753,11 +782,13 @@ export type MotusTab = 'check' | 'auto';
 export function MotusInsurancePage({
   clientInsurance,
   onUpdateCancellation,
+  onUpdateInsurance,
   tab: controlledTab,
   onTabChange,
 }: {
   clientInsurance: ClientInsurance[];
   onUpdateCancellation: UpdateCancellation;
+  onUpdateInsurance?: SaveInsurance;
   /** Optional: lets the app open the Auto check tab from the notification banner. */
   tab?: MotusTab;
   onTabChange?: (tab: MotusTab) => void;
@@ -842,6 +873,7 @@ export function MotusInsurancePage({
           clientInsurance={clientInsurance}
           onReload={autoCheck.reload}
           onRefreshInsurance={autoCheck.onRefreshInsurance}
+          onUpdateInsurance={onUpdateInsurance}
         />
       ) : (
         <>
@@ -862,7 +894,11 @@ export function MotusInsurancePage({
         </button>
       </form>
 
-      <MotusDotImport clientInsurance={clientInsurance} onUpdateCancellation={onUpdateCancellation} />
+      <MotusDotImport
+        clientInsurance={clientInsurance}
+        onUpdateCancellation={onUpdateCancellation}
+        onConfirmRenewed={onUpdateInsurance}
+      />
 
       {error ? (
         <p className="rounded-lg border border-red/30 bg-tag-overdue px-3 py-2 text-sm text-tag-overdue-fg">{error}</p>

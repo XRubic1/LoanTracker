@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { fetchMotusAutoCheck, type MotusAutoCheckData } from '@/lib/motusAutoCheck';
 
-const EMPTY: MotusAutoCheckData = { runs: [], suggestions: [], inactive: [] };
+const EMPTY: MotusAutoCheckData = { runs: [], suggestions: [], inactive: [], goodIds: [] };
 const REFRESH_MS = 5 * 60 * 1000;
 
 /** Latest automatic MOTUS check results; refreshes every few minutes and on demand. */

@@ -611,6 +611,7 @@ export default function App() {
             addAaaDue={addAaaDue}
             postAaaDeduction={postAaaDeduction}
             onDeleteAaaDue={isOwner ? removeAaaDue : undefined}
+            onUpdateClientInsurance={updateClientInsuranceById}
             onOpenCloseInstallment={setOverviewCloseInstallmentLoanId}
             onOpenCloseDeduction={setOverviewCloseDeductionReserveId}
           />
@@ -666,6 +667,7 @@ export default function App() {
             onTabChange={setMotusTab}
             clientInsurance={clientInsurance}
             onUpdateCancellation={updateClientInsuranceCancellationById}
+            onUpdateInsurance={updateClientInsuranceById}
           />
         )}
         {page === 'clientInsurance' && (

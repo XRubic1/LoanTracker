@@ -5,10 +5,12 @@ import { Section } from '@/components/Section';
 import { approveCancellationSuggestion, rejectCancellationSuggestion } from '@/lib/supabase-db';
 import {
   actionableInactive,
+  pendingRenewals,
   runMotusAutoCheckNow,
   type MotusAutoCheckData,
   type MotusRun,
 } from '@/lib/motusAutoCheck';
+import { ConfirmRenewedButton, type SaveInsurance } from '@/components/InsuranceRenewalActions';
 import { fmtDateTime } from '@/lib/utils';
 
 interface MotusAutoCheckTabProps {
@@ -19,6 +21,7 @@ interface MotusAutoCheckTabProps {
   clientInsurance: ClientInsurance[];
   onReload: () => Promise<void>;
   onRefreshInsurance?: () => void;
+  onUpdateInsurance?: SaveInsurance;
 }
 
 function displayDate(iso: string | null | undefined): string {
@@ -73,6 +76,7 @@ export function MotusAutoCheckTab({
   clientInsurance,
   onReload,
   onRefreshInsurance,
+  onUpdateInsurance,
 }: MotusAutoCheckTabProps) {
   const [running, setRunning] = useState(false);
   const [busyId, setBusyId] = useState<number | null>(null);
@@ -84,8 +88,9 @@ export function MotusAutoCheckTab({
     () => actionableInactive(data.inactive, clientInsurance),
     [data.inactive, clientInsurance]
   );
+  const renewals = useMemo(() => pendingRenewals(data, clientInsurance), [data, clientInsurance]);
   const onFile = (id: number) => clientInsurance.find((c) => c.id === id);
-  const issueCount = data.suggestions.length + inactive.length;
+  const issueCount = data.suggestions.length + inactive.length + renewals.length;
 
   async function runNow() {
     setRunning(true);
@@ -223,6 +228,27 @@ export function MotusAutoCheckTab({
               </div>
             );
           })
+        )}
+      </Section>
+
+      <Section title="Cancellation gone on MOTUS" count={renewals.length} noPadding>
+        {renewals.length === 0 ? (
+          <div className="px-4 py-8 text-center text-[12px] text-muted">
+            No client with a cancellation on file shows active insurance on MOTUS.
+          </div>
+        ) : (
+          renewals.map((record) => (
+            <div key={record.id} className="flex flex-wrap items-center gap-3 border-b border-border px-4 py-3 last:border-b-0">
+              <div className="min-w-0 flex-1">
+                <div className="text-sm font-semibold text-ink">{record.client}</div>
+                <div className="mt-0.5 text-xs text-muted">
+                  MOTUS shows active insurance with no cancellation. On file: cancellation{' '}
+                  {displayDate(record.expiration_date)}
+                </div>
+              </div>
+              {onUpdateInsurance && <ConfirmRenewedButton record={record} onSave={onUpdateInsurance} />}
+            </div>
+          ))
         )}
       </Section>
 

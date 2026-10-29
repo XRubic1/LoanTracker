@@ -1,5 +1,6 @@
 import { getSupabase } from '@/lib/supabase';
 import { fetchPendingCancellationSuggestions } from '@/lib/supabase-db';
+import { isInsuranceCancellationStatus } from '@/lib/clientInsuranceUtils';
 import type { BrokerSnapshotCancellationSuggestion, ClientInsurance } from '@/types';
 
 /** One automatic (or manual) MOTUS check run. */
@@ -30,6 +31,8 @@ export interface MotusAutoCheckData {
   suggestions: BrokerSnapshotCancellationSuggestion[];
   /** Inactive findings from the most recent day of runs. */
   inactive: MotusInactiveFinding[];
+  /** Clients MOTUS showed as good (active insurance, no cancellation) in the most recent day of runs. */
+  goodIds: number[];
 }
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -55,6 +58,7 @@ export async function fetchMotusAutoCheck(ownerId?: string): Promise<MotusAutoCh
   );
 
   let inactive: MotusInactiveFinding[] = [];
+  let goodIds: number[] = [];
   const newest = runs[0] ? new Date(runs[0].started_at).getTime() : 0;
   const latestIds = runs.filter((r) => newest - new Date(r.started_at).getTime() < DAY_MS).map((r) => r.id);
   if (latestIds.length) {
@@ -65,6 +69,20 @@ export async function fetchMotusAutoCheck(ownerId?: string): Promise<MotusAutoCh
       .eq('response_summary->>verdict', 'inactive')
       .limit(500);
     if (logError) throw logError;
+    const { data: goodLogs, error: goodError } = await supabase
+      .from('brokersnapshot_api_logs')
+      .select('client_insurance_id')
+      .in('sync_run_id', latestIds)
+      .eq('response_summary->>verdict', 'good')
+      .limit(2000);
+    if (goodError) throw goodError;
+    goodIds = [
+      ...new Set(
+        ((goodLogs ?? []) as { client_insurance_id: number | null }[])
+          .map((log) => log.client_insurance_id)
+          .filter((id): id is number => id != null)
+      ),
+    ];
     inactive = ((logs ?? []) as {
       client_insurance_id: number | null;
       client_name: string | null;
@@ -79,7 +97,7 @@ export async function fetchMotusAutoCheck(ownerId?: string): Promise<MotusAutoCh
       checked_at: log.created_at,
     }));
   }
-  return { runs, suggestions, inactive };
+  return { runs, suggestions, inactive, goodIds };
 }
 
 /** Inactive findings that matter: the app still shows the client as fine. */
@@ -95,9 +113,19 @@ export function actionableInactive(
   });
 }
 
+/** Clients still marked as cancelling in the app although MOTUS now shows active insurance with no cancellation. */
+export function pendingRenewals(data: MotusAutoCheckData, clientInsurance: ClientInsurance[]): ClientInsurance[] {
+  const good = new Set(data.goodIds);
+  return clientInsurance.filter((c) => good.has(c.id) && isInsuranceCancellationStatus(c.status));
+}
+
 /** How many issues the latest automatic check left open. */
 export function countMotusIssues(data: MotusAutoCheckData, clientInsurance: ClientInsurance[]): number {
-  return data.suggestions.length + actionableInactive(data.inactive, clientInsurance).length;
+  return (
+    data.suggestions.length +
+    actionableInactive(data.inactive, clientInsurance).length +
+    pendingRenewals(data, clientInsurance).length
+  );
 }
 
 /** Run the check now for the signed-in user's team. */

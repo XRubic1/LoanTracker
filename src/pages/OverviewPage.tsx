@@ -29,6 +29,7 @@ import {
   getDaysUntilCancellation,
   getInsuranceCancelDateForDisplay,
 } from '@/lib/clientInsuranceUtils';
+import { PastCancellationActions } from '@/components/InsuranceRenewalActions';
 import { AaaPaymentForm } from '@/components/AaaPaymentForm';
 import { AaaDuesSection } from '@/components/AaaDuesSection';
 
@@ -45,6 +46,7 @@ export function OverviewPage({
   addAaaDue,
   postAaaDeduction,
   onDeleteAaaDue,
+  onUpdateClientInsurance,
   onOpenCloseInstallment,
   onOpenCloseDeduction,
 }: Pick<
@@ -59,6 +61,7 @@ export function OverviewPage({
   | 'postAaaDeduction'
 > & {
   onDeleteAaaDue?: (id: number) => Promise<void>;
+  onUpdateClientInsurance?: UseDataResult['updateClientInsuranceById'];
   onOpenCloseInstallment: (loanId: number) => void;
   onOpenCloseDeduction: (reserveId: number) => void;
 }) {
@@ -96,8 +99,8 @@ export function OverviewPage({
     }))
     .sort(
       (a, b) =>
+        Number((b.days ?? 0) < 0) - Number((a.days ?? 0) < 0) ||
         Number(b.hasLoan) - Number(a.hasLoan) ||
-        Number((a.days ?? 0) < 0) - Number((b.days ?? 0) < 0) ||
         (a.days ?? Infinity) - (b.days ?? Infinity)
     );
 
@@ -389,11 +392,11 @@ export function OverviewPage({
                   {cancellations.map(({ c, days, date, hasLoan }) => {
                     const passed = days != null && days < 0;
                     const soon = days != null && days >= 0 && days <= 7;
-                    const bar = passed ? 'bg-label' : soon ? 'bg-red' : 'bg-accent';
+                    const bar = passed ? 'bg-red' : soon ? 'bg-red' : 'bg-accent';
                     return (
                       <div
                         key={c.id}
-                        className="flex items-stretch gap-3 pr-4 border-b border-border last:border-b-0"
+                        className={`flex items-stretch gap-3 pr-4 border-b border-border last:border-b-0 ${passed ? 'bg-red/5' : ''}`}
                       >
                         <div className={`w-[3px] flex-shrink-0 ${bar}`} />
                         <div className="flex-1 min-w-0 py-[10px]">
@@ -415,11 +418,12 @@ export function OverviewPage({
                           {hasLoan && (
                             <div className="mt-1"><Badge variant="due">Active loan</Badge></div>
                           )}
+                          {passed && <PastCancellationActions record={c} onSave={onUpdateClientInsurance} />}
                         </div>
                         <div className="flex flex-col items-end justify-center gap-1 flex-shrink-0">
                           {days != null &&
                             (passed ? (
-                              <Badge variant="closed">{Math.abs(days)}d ago</Badge>
+                              <Badge variant="overdue">Attention · {Math.abs(days)}d past</Badge>
                             ) : soon ? (
                               <Badge variant="overdue">{days === 0 ? 'Today' : `in ${days}d`}</Badge>
                             ) : (

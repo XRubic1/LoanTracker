@@ -401,3 +401,13 @@ export function cancellationDateNeedsUpdate(input: {
   if (!alreadyCancellation) return true;
   return calendarIso(input.expirationDate) !== input.motusIso;
 }
+
+/** The MOTUS query for a client insurance record: its DOT, otherwise its MC docket. */
+export function motusQueryForRecord(record: { dot?: string | null; mc?: string | null }): string | null {
+  const dot = parseMotusQuery(record.dot ?? '');
+  if (dot) return dot.kind === 'dot' ? dot.dot : `${dot.prefix}${dot.number}`;
+  const mcText = (record.mc ?? '').trim();
+  const digits = mcText.replace(/\D/g, '');
+  const mc = parseMotusQuery(/^(MC|FF|MX)/i.test(mcText) ? mcText : digits ? `MC${digits}` : '');
+  return mc?.kind === 'docket' ? `${mc.prefix}${mc.number}` : null;
+}
