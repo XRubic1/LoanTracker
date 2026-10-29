@@ -33,10 +33,17 @@ interface AuthContextValue {
   signIn: (email: string, password: string) => Promise<{ error: Error | null }>;
   signUp: (email: string, password: string) => Promise<{ error: Error | null }>;
   signOut: () => Promise<void>;
+  /** True after someone opened a password-reset link: they must choose a new password. */
+  passwordRecovery: boolean;
+  updatePassword: (password: string) => Promise<{ error: Error | null }>;
   refreshProfile: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
+
+/** Read before the Supabase client clears the link from the address bar. */
+const OPENED_FROM_RESET_LINK =
+  typeof window !== 'undefined' && /type=recovery/.test(window.location.hash + window.location.search);
 
 /** AAA Fuel sister-company check. Retries once because a missed check would show the normal app. */
 async function fetchIsAaaFuel(supabase: NonNullable<ReturnType<typeof getSupabase>>): Promise<boolean> {
@@ -105,7 +112,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [company, setCompany] = useState<CompanyContext | null>(null);
   const [isPlatformAdmin, setIsPlatformAdmin] = useState(false);
   const [isAaaFuel, setIsAaaFuel] = useState(false);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(true);
+  const [passwordRecovery, setPasswordRecovery] = useState(OPENED_FROM_RESET_LINK);
   /** Signed-in user the profile was last resolved for; token refreshes for the same user are not a new login. */
   const profileUserIdRef = useRef<string | null>(null);
 
@@ -188,7 +196,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange((_, session) => {
+    } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === 'PASSWORD_RECOVERY') setPasswordRecovery(true);
       setAuthState(session);
     });
 
@@ -234,7 +243,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     [supabase]
   );
 
+  const updatePassword = useCallback(
+    async (password: string) => {
+      if (!supabase) return { error: new Error('Supabase not configured') };
+      const { error } = await supabase.auth.updateUser({ password });
+      if (!error) setPasswordRecovery(false);
+      return { error: error ?? null };
+    },
+    [supabase]
+  );
+
   const signOut = useCallback(async () => {
+    setPasswordRecovery(false);
     if (supabase) await supabase.auth.signOut();
     setUser(null);
     setSession(null);
@@ -267,6 +287,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     signIn,
     signUp,
     signOut,
+    passwordRecovery,
+    updatePassword,
     refreshProfile: refreshProfilePublic,
   };
 

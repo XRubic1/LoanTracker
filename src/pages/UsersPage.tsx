@@ -5,6 +5,7 @@ import {
   addTeamMember,
   removeTeamMember,
   updateTeamMemberAllowedPages,
+  sendPasswordResetEmail,
 } from '@/lib/supabase-db';
 import { TeamMemberTabsModal } from '@/components/modals/TeamMemberTabsModal';
 import { ASSIGNABLE_PAGE_IDS, PAGE_LABELS, normalizeAllowedPages } from '@/lib/tabPermissions';
@@ -27,6 +28,8 @@ export function UsersPage() {
   const [removing, setRemoving] = useState<string | null>(null);
   const [tabsMember, setTabsMember] = useState<TeamMember | null>(null);
   const [savingTabs, setSavingTabs] = useState(false);
+  const [resetting, setResetting] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     if (!effectiveOwnerId || !isOwner) {
@@ -76,6 +79,21 @@ export function UsersPage() {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
       setRemoving(null);
+    }
+  };
+
+  const handleResetPassword = async (memberEmail: string) => {
+    if (!window.confirm(`Send a password reset email to ${memberEmail}?`)) return;
+    setResetting(memberEmail);
+    setError(null);
+    setNotice(null);
+    try {
+      await sendPasswordResetEmail(memberEmail);
+      setNotice(`Password reset email sent to ${memberEmail}.`);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setResetting(null);
     }
   };
 
@@ -140,6 +158,12 @@ export function UsersPage() {
         </div>
       )}
 
+      {notice && (
+        <div className="mb-4 py-2 px-3 rounded-lg text-sm text-green bg-green/10 border border-green/20">
+          {notice}
+        </div>
+      )}
+
       {loading ? (
         <p className="text-muted2 text-sm">Loading…</p>
       ) : members.length === 0 ? (
@@ -158,7 +182,7 @@ export function UsersPage() {
                 <th className="text-[10px] text-label uppercase tracking-widest py-3 px-4 text-left border-b border-border">
                   Tabs
                 </th>
-                <th className="text-[10px] text-label uppercase tracking-widest py-3 px-4 text-left border-b border-border w-40">
+                <th className="text-[10px] text-label uppercase tracking-widest py-3 px-4 text-left border-b border-border w-64">
                   Actions
                 </th>
               </tr>
@@ -190,6 +214,16 @@ export function UsersPage() {
                       >
                         Manage tabs
                       </button>
+                      {m.member_id && (
+                        <button
+                          type="button"
+                          onClick={() => void handleResetPassword(m.email)}
+                          disabled={resetting === m.email}
+                          className="text-accent hover:text-accent/80 text-sm disabled:opacity-50"
+                        >
+                          {resetting === m.email ? 'Sending…' : 'Reset password'}
+                        </button>
+                      )}
                       <button
                         type="button"
                         onClick={() => handleRemove(m.email)}

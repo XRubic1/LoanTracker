@@ -1251,6 +1251,16 @@ export async function updateClientInsuranceCancellation(
   return clientInsuranceFromRow(data as ClientInsuranceRow)!;
 }
 
+/** Email a team member a link to choose a new password. */
+export async function sendPasswordResetEmail(email: string): Promise<void> {
+  const supabase = getSupabase();
+  if (!supabase) throw new Error('Supabase not configured');
+  const { error } = await supabase.auth.resetPasswordForEmail(email.trim().toLowerCase(), {
+    redirectTo: window.location.origin,
+  });
+  if (error) throw new Error(error.message);
+}
+
 export async function updateClientInsurance(id: number, record: ClientInsurance): Promise<ClientInsurance> {
   const supabase = getSupabase();
   if (!supabase) throw new Error('Supabase not configured');

@@ -26,6 +26,7 @@ import { WorksheetEntryModal } from '@/components/modals/WorksheetEntryModal';
 import { ImportClientsModal } from '@/components/modals/ImportClientsModal';
 import { normalizeClientName } from '@/lib/importClients';
 import { AuthPage } from '@/pages/AuthPage';
+import { SetPasswordPage } from '@/pages/SetPasswordPage';
 import { LoanDetailModal } from '@/components/modals/LoanDetailModal';
 import { ReserveDetailModal } from '@/components/modals/ReserveDetailModal';
 import { CloseInstallmentModal } from '@/components/modals/CloseInstallmentModal';
@@ -63,6 +64,7 @@ export default function App() {
     userRole,
     isPlatformAdmin: showAdminNav,
     loading: authLoading,
+    passwordRecovery,
     signOut,
   } = useAuth();
   const [page, setPage] = useState<PageId>('overview');
@@ -496,6 +498,10 @@ export default function App() {
 
   if (!session) {
     return <AuthPage />;
+  }
+
+  if (passwordRecovery) {
+    return <SetPasswordPage />;
   }
 
   // Don't render dashboard until we have effectiveOwnerId (set after claimInvite / resolveEffectiveOwner)
