@@ -20,7 +20,13 @@ import { fetchMotusReport } from '../_shared/motusLookup.ts';
 
 const CONCURRENCY = 3;
 /** Stop starting new lookups after this long so the function can still write its results. */
-const TIME_BUDGET_MS = 110_000;
+const TIME_BUDGET_MS = 90_000;
+/** One client's lookup can chain several slow MOTUS calls; give up on it so the run still finishes. */
+const LOOKUP_TIMEOUT_MS = 40_000;
+/** Save progress this often so a run that is cut off still shows how far it got. */
+const PROGRESS_EVERY = 10;
+/** A run still "running" after this long was killed before it could finish. */
+const STALE_RUN_MS = 10 * 60_000;
 
 interface ClientInsuranceRow {
   id: number;
@@ -97,6 +103,18 @@ Deno.serve(async (req) => {
     }
     if (!authenticated) return json({ error: 'Unauthorized.' }, 401);
 
+    // Earlier runs that were killed mid-way never got to close themselves.
+    await supabase
+      .from('brokersnapshot_sync_runs')
+      .update({
+        status: 'failed',
+        error_summary: 'MOTUS: run was interrupted before it finished',
+        finished_at: new Date().toISOString(),
+      })
+      .eq('source', 'motus')
+      .eq('status', 'running')
+      .lt('started_at', new Date(Date.now() - STALE_RUN_MS).toISOString());
+
     const { data: run, error: runError } = await supabase
       .from('brokersnapshot_sync_runs')
       .insert({ status: 'running', trigger_source: source, source: 'motus' })
@@ -149,8 +167,19 @@ Deno.serve(async (req) => {
         if (!row) return;
         const query = parseMotusQuery(queryForRow(row)!)!;
         const t0 = Date.now();
-        const result = await fetchMotusReport(query);
+        const result: Awaited<ReturnType<typeof fetchMotusReport>> = await Promise.race([
+          fetchMotusReport(query),
+          new Promise<never>((_, reject) =>
+            setTimeout(() => reject(new Error('timeout')), LOOKUP_TIMEOUT_MS)
+          ),
+        ]).catch(() => ({ ok: false as const, status: 0, error: 'MOTUS lookup timeout' }));
         checked++;
+        if (checked % PROGRESS_EVERY === 0) {
+          await supabase
+            .from('brokersnapshot_sync_runs')
+            .update({ clients_checked: checked, cancellations_found: suggested, errors_count: errors })
+            .eq('id', runId);
+        }
 
         if (!result.ok) {
           // A missing MOTUS account is a result, not a failure.
