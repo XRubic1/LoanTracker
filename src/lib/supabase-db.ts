@@ -1251,12 +1251,15 @@ export async function updateClientInsuranceCancellation(
   return clientInsuranceFromRow(data as ClientInsuranceRow)!;
 }
 
+/** Where password-reset links open, even when the reset is sent from localhost. */
+const LIVE_APP_URL = 'https://xrubic1.github.io/LoanTracker/';
+
 /** Email a team member a link to choose a new password. */
 export async function sendPasswordResetEmail(email: string): Promise<void> {
   const supabase = getSupabase();
   if (!supabase) throw new Error('Supabase not configured');
   const { error } = await supabase.auth.resetPasswordForEmail(email.trim().toLowerCase(), {
-    redirectTo: window.location.origin,
+    redirectTo: (import.meta.env.VITE_APP_URL as string | undefined)?.trim() || LIVE_APP_URL,
   });
   if (error) throw new Error(error.message);
 }
