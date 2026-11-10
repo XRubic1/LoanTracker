@@ -10,6 +10,7 @@ import { ClosedPage } from '@/pages/ClosedPage';
 import { AaaPaymentsPage } from '@/pages/AaaPaymentsPage';
 import { ClientInsurancePage } from '@/pages/ClientInsurancePage';
 import { MotusInsurancePage } from '@/pages/MotusInsurancePage';
+import { UploadPage } from '@/pages/UploadPage';
 import { ClientsPage } from '@/pages/ClientsPage';
 import { WorksheetPage } from '@/pages/WorksheetPage';
 import { UserActivityPage } from '@/pages/UserActivityPage';
@@ -676,6 +677,7 @@ export default function App() {
             onUpdateInsurance={updateClientInsuranceById}
           />
         )}
+        {page === 'upload' && <UploadPage />}
         {page === 'clientInsurance' && (
           <ClientInsurancePage
             clientInsurance={clientInsurance}

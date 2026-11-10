@@ -11,6 +11,7 @@ export const ASSIGNABLE_PAGE_IDS: PageId[] = [
   'clients',
   'clientInsurance',
   'motus',
+  'upload',
   'api',
 ];
 
@@ -25,6 +26,7 @@ export const PAGE_LABELS: Record<PageId, string> = {
   clients: 'Clients',
   clientInsurance: 'Client Insurance',
   motus: 'MOTUS',
+  upload: 'Upload',
   api: 'API',
   userActivity: 'User Activity',
   users: 'Users',
