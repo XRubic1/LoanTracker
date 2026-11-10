@@ -589,7 +589,7 @@ function RecentUploads({ entries }: { entries: PortalUploadLogEntry[] }) {
 }
 
 export function UploadPage() {
-  const [tab, setTab] = useState<'revised' | 'invoice'>('revised');
+  const [tab, setTab] = useState<'revised' | 'invoice'>('invoice');
   const [overview, setOverview] = useState<PortalUploadOverview | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [editing, setEditing] = useState<PortalAccount | 'new' | null>(null);
@@ -680,8 +680,8 @@ export function UploadPage() {
       <div className="flex gap-1 border-b border-border" role="tablist">
         {(
           [
-            ['revised', 'Revised invoices'],
             ['invoice', 'Invoice documents'],
+            ['revised', 'Revised invoices'],
           ] as const
         ).map(([id, label]) => (
           <button
