@@ -14,6 +14,7 @@ import {
   type PortalAccount,
   type PortalBatchOption,
   type PortalInvoice,
+  type PortalUploadLogEntry,
   type PortalUploadOverview,
 } from '@/lib/portalUpload';
 
@@ -529,7 +530,66 @@ function InvoiceUploadPanel({ accounts, onUploaded }: { accounts: PortalAccount[
   );
 }
 
+/** Past uploads, folded away until opened. Each shows who uploaded it. */
+function RecentUploads({ entries }: { entries: PortalUploadLogEntry[] }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <section className="panel-surface">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        aria-expanded={open}
+        className="flex w-full items-center justify-between px-4 py-[11px] text-left"
+      >
+        <span className="flex items-center gap-2 text-[11px] font-medium uppercase tracking-[0.04em] text-ink">
+          <span className="inline-block w-2">{open ? '▾' : '▸'}</span>
+          Recent uploads
+          <span className="count-badge">{entries.length}</span>
+        </span>
+      </button>
+      {open && (
+        <div className="border-t border-border">
+          {entries.length === 0 ? (
+            <div className="px-4 py-6 text-center text-[12px] text-muted">Nothing uploaded yet.</div>
+          ) : (
+            entries.map((entry) => (
+              <div key={entry.id} className="flex flex-wrap items-start gap-3 border-b border-border px-4 py-3 last:border-b-0">
+                <div className="min-w-0 flex-1">
+                  <div className="text-sm font-semibold text-ink">
+                    {entry.account_label}
+                    {entry.batch_no ? (
+                      <span className="font-normal text-muted">
+                        {' '}
+                        · {/^\d+$/.test(entry.batch_no) ? `Batch ${entry.batch_no}` : entry.batch_no}
+                      </span>
+                    ) : null}
+                  </div>
+                  <div className="mt-0.5 truncate text-xs text-muted" title={entry.file_names.join(', ')}>
+                    {entry.file_names.join(', ')}
+                  </div>
+                  {entry.message && <div className="mt-0.5 text-xs text-muted">{entry.message}</div>}
+                </div>
+                <div className="flex flex-col items-end gap-1 text-xs text-muted">
+                  <div className="flex gap-1.5">
+                    {entry.processed && <Badge variant="ok">Processed</Badge>}
+                    <Badge variant={entry.status === 'success' ? 'ok' : 'overdue'}>
+                      {entry.status === 'success' ? 'Uploaded' : 'Failed'}
+                    </Badge>
+                  </div>
+                  <span className="text-ink">By {entry.uploaded_by || 'unknown'}</span>
+                  <span>{fmtDateTime(entry.created_at)}</span>
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+      )}
+    </section>
+  );
+}
+
 export function UploadPage() {
+  const [tab, setTab] = useState<'revised' | 'invoice'>('revised');
   const [overview, setOverview] = useState<PortalUploadOverview | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [editing, setEditing] = useState<PortalAccount | 'new' | null>(null);
@@ -559,6 +619,7 @@ export function UploadPage() {
 
   const accounts = overview?.accounts ?? [];
   const canManage = overview?.canManage ?? false;
+  const log = overview?.log ?? [];
 
   return (
     <div className="space-y-4">
@@ -616,51 +677,43 @@ export function UploadPage() {
         )}
       </Section>
 
-      <Section title="Upload invoices" noPadding>
-        <UploadPanel accounts={accounts} onUploaded={() => void load()} />
-      </Section>
+      <div className="flex gap-1 border-b border-border" role="tablist">
+        {(
+          [
+            ['revised', 'Revised invoices'],
+            ['invoice', 'Invoice documents'],
+          ] as const
+        ).map(([id, label]) => (
+          <button
+            key={id}
+            type="button"
+            role="tab"
+            aria-selected={tab === id}
+            onClick={() => setTab(id)}
+            className={`-mb-px border-b-2 px-4 py-2 text-sm font-medium transition-colors ${
+              tab === id ? 'border-accent text-ink' : 'border-transparent text-muted hover:text-ink'
+            }`}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
 
-      <Section title="Upload to an invoice" noPadding>
-        <InvoiceUploadPanel accounts={accounts} onUploaded={() => void load()} />
-      </Section>
-
-      <Section title="Recent uploads" count={overview?.log.length ?? 0} noPadding>
-        {!overview || overview.log.length === 0 ? (
-          <div className="px-4 py-6 text-center text-[12px] text-muted">Nothing uploaded yet.</div>
-        ) : (
-          overview.log.map((entry) => (
-            <div key={entry.id} className="flex flex-wrap items-start gap-3 border-b border-border px-4 py-3 last:border-b-0">
-              <div className="min-w-0 flex-1">
-                <div className="text-sm font-semibold text-ink">
-                  {entry.account_label}
-                  {entry.batch_no ? (
-                    <span className="font-normal text-muted">
-                      {' '}
-                      · {/^\d+$/.test(entry.batch_no) ? `Batch ${entry.batch_no}` : entry.batch_no}
-                    </span>
-                  ) : null}
-                </div>
-                <div className="mt-0.5 truncate text-xs text-muted" title={entry.file_names.join(', ')}>
-                  {entry.file_names.join(', ')}
-                </div>
-                {entry.message && <div className="mt-0.5 text-xs text-muted">{entry.message}</div>}
-              </div>
-              <div className="flex flex-col items-end gap-1 text-xs text-muted">
-                <div className="flex gap-1.5">
-                  {entry.processed && <Badge variant="ok">Processed</Badge>}
-                  <Badge variant={entry.status === 'success' ? 'ok' : 'overdue'}>
-                    {entry.status === 'success' ? 'Uploaded' : 'Failed'}
-                  </Badge>
-                </div>
-                <span>
-                  {fmtDateTime(entry.created_at)}
-                  {entry.uploaded_by ? ` · ${entry.uploaded_by}` : ''}
-                </span>
-              </div>
-            </div>
-          ))
-        )}
-      </Section>
+      {tab === 'revised' ? (
+        <>
+          <Section title="Upload revised invoices" noPadding>
+            <UploadPanel accounts={accounts} onUploaded={() => void load()} />
+          </Section>
+          <RecentUploads entries={log.filter((e) => /^\d+$/.test(e.batch_no ?? ''))} />
+        </>
+      ) : (
+        <>
+          <Section title="Upload to an invoice" noPadding>
+            <InvoiceUploadPanel accounts={accounts} onUploaded={() => void load()} />
+          </Section>
+          <RecentUploads entries={log.filter((e) => !/^\d+$/.test(e.batch_no ?? ''))} />
+        </>
+      )}
     </div>
   );
 }
