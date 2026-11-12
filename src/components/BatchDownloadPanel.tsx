@@ -228,13 +228,42 @@ export function BatchDownloadPanel({ accounts, onDownloaded }: { accounts: Porta
 
       // One PDF for the whole batch: every invoice's pages, in batch order.
       if (singlePdf) {
-        const everything = await mergeIntoOnePdf(
-          collected.flatMap((files) => files.map((file) => ({ fileName: file.path, blob: file.data as Blob })))
+        const invoicePdfs = collected.flatMap((files, index) =>
+          files.map((file) => ({ fileName: file.path, blob: file.data as Blob, invoiceNo: invoices[index].invoice_no }))
         );
-        saveBlob(everything.blob, `Batch_${info.batch_no}.pdf`);
-        const text = `Exported ${invoicesWithDocs} of ${invoices.length} invoices, ${amountNote} (${documents} documents, ${everything.pages} pages) as one PDF, Batch_${info.batch_no}.pdf.`;
+
+        // Build one PDF, or (when asked) several that each stay under the limit. Invoices are never cut in half.
+        const buildParts = async (group: typeof invoicePdfs): Promise<{ blob: Blob; pages: number }[]> => {
+          const merged = await mergeIntoOnePdf(group.map(({ fileName, blob }) => ({ fileName, blob })));
+          if (!splitFolders || merged.blob.size <= FOLDER_LIMIT_BYTES || group.length < 2) {
+            if (splitFolders && merged.blob.size > FOLDER_LIMIT_BYTES) {
+              problems.push(`Invoice ${group[0].invoiceNo}: its documents alone are over 90 MB, so it is a part by itself`);
+            }
+            return [{ blob: merged.blob, pages: merged.pages }];
+          }
+          const middle = Math.ceil(group.length / 2);
+          return [...(await buildParts(group.slice(0, middle))), ...(await buildParts(group.slice(middle)))];
+        };
+        const parts = await buildParts(invoicePdfs);
+        const pages = parts.reduce((n, part) => n + part.pages, 0);
+
+        const detail = `${invoicesWithDocs} of ${invoices.length} invoices, ${amountNote} (${documents} documents, ${pages} pages)`;
+        let text: string;
+        if (parts.length === 1) {
+          saveBlob(parts[0].blob, `Batch_${info.batch_no}.pdf`);
+          text = `Exported ${detail} as one PDF, Batch_${info.batch_no}.pdf.`;
+        } else {
+          const bundle = new JSZip();
+          parts.forEach((part, i) => {
+            const name = `Batch_${info.batch_no}_part_${String(i + 1).padStart(2, '0')}_of_${String(parts.length).padStart(2, '0')}.pdf`;
+            bundle.file(name, part.blob);
+          });
+          saveBlob(await bundle.generateAsync({ type: 'blob', compression: 'STORE' }), `Batch_${info.batch_no}.zip`);
+          text = `Exported ${detail} as ${parts.length} PDFs of up to 90 MB each, in Batch_${info.batch_no}.zip.`;
+        }
         setResult({ ok: true, text, details: problems });
-        await logBatchDownload({ accountId, batchNo: info.batch_no, message: `${text}${noteProblems}` }).catch(() => {});
+        const leftOut = problems.length ? ` ${problems.length} item${problems.length === 1 ? '' : 's'} not included.` : '';
+        await logBatchDownload({ accountId, batchNo: info.batch_no, message: `${text}${leftOut}` }).catch(() => {});
         return;
       }
 
@@ -383,7 +412,7 @@ export function BatchDownloadPanel({ accounts, onDownloaded }: { accounts: Porta
               Combine the whole batch into one PDF
               <span className="block text-[11px] text-muted">
                 One file, Batch_{batch.info.batch_no}.pdf, with every invoice in order instead of a ZIP. Very large
-                batches can take a while to build.
+                batches can take a while to build. Tick the option below to split it if it passes 90 MB.
               </span>
             </span>
           </label>
@@ -391,15 +420,17 @@ export function BatchDownloadPanel({ accounts, onDownloaded }: { accounts: Porta
           <label className="flex items-start gap-2 text-sm text-ink">
             <input
               type="checkbox"
-              checked={splitFolders && !singlePdf}
+              checked={splitFolders}
               onChange={(e) => setSplitFolders(e.target.checked)}
-              disabled={running || singlePdf}
+              disabled={running}
               className="mt-1"
             />
             <span>
-              Split into folders of up to 90 MB
+              {singlePdf ? 'Split into several PDFs if over 90 MB' : 'Split into folders of up to 90 MB'}
               <span className="block text-[11px] text-muted">
-                Creates Part_01, Part_02 and so on inside the ZIP. An invoice's paperwork is never split across folders.
+                {singlePdf
+                  ? 'If the combined PDF is bigger than 90 MB it is cut into parts of up to 90 MB, delivered together in one ZIP. An invoice is never split between parts.'
+                  : "Creates Part_01, Part_02 and so on inside the ZIP. An invoice's paperwork is never split across folders."}
               </span>
             </span>
           </label>
