@@ -4,6 +4,8 @@ export interface PortalAccount {
   id: number;
   /** The client (Clients tab) this login belongs to. */
   client_id: number | null;
+  /** False for logins saved by another team: they can be used to upload, not changed. */
+  can_edit: boolean;
   label: string;
   portal_url: string;
   username: string;

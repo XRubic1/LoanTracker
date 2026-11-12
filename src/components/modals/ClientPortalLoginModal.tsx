@@ -77,7 +77,7 @@ export function ClientPortalLoginModal({
 
   return (
     <Modal open={open} onClose={() => !busy && onClose()} title={`Portal login · ${clientName}`}>
-      {canManage ? (
+      {canManage && (account?.can_edit ?? true) ? (
         <div className="space-y-3">
           <p className="text-[12px] text-muted">
             Their TruFunding client portal login. It is tested on the portal when you save. The password is stored
@@ -142,7 +142,9 @@ export function ClientPortalLoginModal({
           {account
             ? `A portal login is saved for ${clientName} (${account.username}).`
             : `No portal login is saved for ${clientName}.`}{' '}
-          Only the account owner can change it.
+          {account && !account.can_edit
+            ? 'It was saved by another team, so you can use it on the Upload tab but not change it.'
+            : 'Only the account owner can change it.'}
         </p>
       )}
     </Modal>

@@ -68,16 +68,20 @@ interface Caller {
   email: string;
   /** The team owner whose accounts this person works with. */
   ownerId: string;
-  /** This team plus every team linked to it by the super admin. Logins and uploads are shared across them. */
+  /** Every team under the super admin. Anyone can use their logins to upload. */
   sharedOwnerIds: string[];
   isOwner: boolean;
+  /** Super admins may change any login. */
+  isPlatformAdmin: boolean;
 }
 
-/** Owners in the same link group, from the same rule that shares the client list. */
-async function linkedOwnerIds(admin: ReturnType<typeof createClient>, ownerId: string): Promise<string[]> {
-  const { data } = await admin.rpc('linked_owner_ids_for', { p_effective_owner_id: ownerId });
+/** Every team the super admin has set up. They all share client logins for uploading. */
+async function allTeamOwnerIds(admin: ReturnType<typeof createClient>, ownerId: string): Promise<string[]> {
+  const { data } = await admin.from('companies').select('owner_id').not('owner_id', 'is', null);
   const ids = new Set<string>([ownerId]);
-  for (const id of (data as string[] | null) ?? []) ids.add(id);
+  for (const row of (data as { owner_id: string | null }[] | null) ?? []) {
+    if (row.owner_id) ids.add(row.owner_id);
+  }
   return [...ids];
 }
 
@@ -96,12 +100,17 @@ async function resolveCaller(
     .limit(1)
     .maybeSingle();
   const ownerId = (membership?.owner_id as string | undefined) ?? data.user.id;
+  const email = (data.user.email ?? '').trim().toLowerCase();
+  const { data: isAdmin } = email
+    ? await admin.from('platform_admins').select('email').eq('email', email).maybeSingle()
+    : { data: null };
   return {
     userId: data.user.id,
     email: data.user.email ?? '',
     ownerId,
-    sharedOwnerIds: await linkedOwnerIds(admin, ownerId),
+    sharedOwnerIds: await allTeamOwnerIds(admin, ownerId),
     isOwner: ownerId === data.user.id,
+    isPlatformAdmin: Boolean(isAdmin),
   };
 }
 
@@ -115,8 +124,13 @@ type AccountRow = {
   client_id: number | null;
 };
 
-const publicAccount = (a: AccountRow) => ({
+/** Only the team that saved a login (or a super admin) can change it. Everyone else can only upload with it. */
+const canEditAccount = (caller: Caller, a: AccountRow) =>
+  caller.isPlatformAdmin || (caller.isOwner && a.owner_id === caller.ownerId);
+
+const publicAccount = (a: AccountRow, caller: Caller) => ({
   id: a.id,
+  can_edit: canEditAccount(caller, a),
   client_id: a.client_id,
   label: a.label,
   portal_url: a.portal_url,
@@ -147,14 +161,16 @@ Deno.serve(async (req) => {
           .limit(50),
       ]);
       return json({
-        accounts: ((accounts ?? []) as AccountRow[]).map(publicAccount),
+        accounts: ((accounts ?? []) as AccountRow[]).map((a) => publicAccount(a, caller)),
         log: log ?? [],
-        canManage: caller.isOwner,
+        canManage: caller.isOwner || caller.isPlatformAdmin,
       });
     }
 
     if (action === 'save' || action === 'delete') {
-      if (!caller.isOwner) return json({ error: 'Only the account owner can change saved logins.' }, 403);
+      if (!caller.isOwner && !caller.isPlatformAdmin) {
+        return json({ error: 'Only the account owner can change saved logins.' }, 403);
+      }
     }
 
     if (action === 'save') {
@@ -185,6 +201,18 @@ Deno.serve(async (req) => {
           .limit(1)
           .maybeSingle();
         if (unlinked) id = unlinked.id as number;
+      }
+      if (id != null) {
+        const { data: target } = await admin
+          .from('portal_upload_accounts')
+          .select('*')
+          .eq('id', id)
+          .in('owner_id', caller.sharedOwnerIds)
+          .maybeSingle();
+        if (!target) return json({ error: 'Login not found.' }, 404);
+        if (!canEditAccount(caller, target as AccountRow)) {
+          return json({ error: 'This login was saved by another team. Only that team can change it.' }, 403);
+        }
       }
       if (!label || !username) return json({ error: 'Enter a client name and username.' }, 400);
       if (!portalUrl) return json({ error: 'The portal address must be an https trufunding.net address.' }, 400);
@@ -217,10 +245,20 @@ Deno.serve(async (req) => {
           : admin.from('portal_upload_accounts').insert({ ...row, owner_id: caller.ownerId });
       const { data, error } = await query.select('*').single();
       if (error) return json({ error: error.message }, 400);
-      return json({ account: publicAccount(data as AccountRow) });
+      return json({ account: publicAccount(data as AccountRow, caller) });
     }
 
     if (action === 'delete') {
+      const { data: target } = await admin
+        .from('portal_upload_accounts')
+        .select('*')
+        .eq('id', Number(body.id))
+        .in('owner_id', caller.sharedOwnerIds)
+        .maybeSingle();
+      if (!target) return json({ error: 'Login not found.' }, 404);
+      if (!canEditAccount(caller, target as AccountRow)) {
+        return json({ error: 'This login was saved by another team. Only that team can remove it.' }, 403);
+      }
       const { error } = await admin
         .from('portal_upload_accounts')
         .delete()
