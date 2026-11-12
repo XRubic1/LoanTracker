@@ -136,6 +136,8 @@ export async function fetchPortalInvoiceFile(input: {
   accountId: number;
   invoice: PortalInvoice;
   file: PortalInvoiceFileInfo;
+  /** Set when the file is one piece of a combined PDF that is logged separately. */
+  skipLog?: boolean;
 }): Promise<Blob> {
   const supabase = getSupabase();
   if (!supabase) throw new Error('Supabase not configured');
@@ -146,6 +148,7 @@ export async function fetchPortalInvoiceFile(input: {
       invoiceKey: input.invoice.invoiceKey,
       invoiceNo: input.invoice.invoiceNo,
       imageKey: input.file.image_key,
+      skipLog: input.skipLog === true,
     },
   });
   if (error) throw new Error((await errorMessage(error)) ?? 'The download failed.');
@@ -175,3 +178,13 @@ export async function downloadPortalInvoiceFile(input: {
 }): Promise<void> {
   saveBlob(await fetchPortalInvoiceFile(input), input.file.file_name);
 }
+
+/** Record a combined-PDF download in the history as one entry. */
+export const logCombinedDownload = (input: { accountId: number; invoice: PortalInvoice; fileNames: string[] }) =>
+  call<{ ok: true }>({
+    action: 'invoice_download_log',
+    accountId: input.accountId,
+    invoiceKey: input.invoice.invoiceKey,
+    invoiceNo: input.invoice.invoiceNo,
+    fileNames: input.fileNames,
+  });

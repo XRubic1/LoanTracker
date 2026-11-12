@@ -5,6 +5,7 @@ import { mergeIntoOnePdf } from '@/lib/mergeInvoicePdf';
 import {
   downloadPortalInvoiceFile,
   fetchPortalInvoiceFile,
+  logCombinedDownload,
   saveBlob,
   fetchPortalUploads,
   listPortalInvoiceFiles,
@@ -92,11 +93,12 @@ function InvoiceDownloadPanel({ accounts, onDownloaded }: { accounts: PortalAcco
       for (const file of which) {
         inputs.push({
           fileName: file.file_name,
-          blob: await fetchPortalInvoiceFile({ accountId, invoice: selected, file }),
+          blob: await fetchPortalInvoiceFile({ accountId, invoice: selected, file, skipLog: true }),
         });
       }
       const merged = await mergeIntoOnePdf(inputs);
       if (merged.pages === 0) throw new Error('None of the documents could be combined into a PDF.');
+      await logCombinedDownload({ accountId, invoice: selected, fileNames: inputs.map((i) => i.fileName) }).catch(() => {});
       const customer = selected.debtorName.replace(/[^A-Za-z0-9]+/g, '_').replace(/^_|_$/g, '');
       saveBlob(merged.blob, `Invoice_${selected.invoiceNo}${customer ? `_${customer}` : ''}.pdf`);
       setMergeNote(

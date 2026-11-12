@@ -477,7 +477,7 @@ export function RecentUploads({
                     {entry.batch_no ? (
                       <span className="font-normal text-muted">
                         {' '}
-                        · {/^\d+$/.test(entry.batch_no) ? `Batch ${entry.batch_no}` : entry.batch_no}
+                        · {/^\d+$/.test(entry.batch_no) ? `Batch ${entry.batch_no}` : entry.batch_no.replace(/^Download · /, '')}
                       </span>
                     ) : null}
                   </div>

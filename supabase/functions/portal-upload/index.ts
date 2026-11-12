@@ -276,7 +276,8 @@ Deno.serve(async (req) => {
       action === 'invoice_search' ||
       action === 'invoice_upload' ||
       action === 'invoice_files' ||
-      action === 'invoice_download'
+      action === 'invoice_download' ||
+      action === 'invoice_download_log'
     ) {
       const accountId = Number(form ? form.get('accountId') : body.accountId);
       const { data: account } = await admin
@@ -311,7 +312,7 @@ Deno.serve(async (req) => {
         return json({ invoices: await searchInvoices(session, { invoice, debtorName, poId }) });
       }
 
-      if (action === 'invoice_files' || action === 'invoice_download') {
+      if (action === 'invoice_files' || action === 'invoice_download' || action === 'invoice_download_log') {
         const invoiceKey = Number(body.invoiceKey);
         const invoiceNo = String(body.invoiceNo ?? '').trim();
         if (!invoiceKey || !invoiceNo) return json({ error: 'Find the invoice first.' }, 400);
@@ -319,6 +320,26 @@ Deno.serve(async (req) => {
         // The invoice must really belong to this login.
         const found = (await searchInvoices(session, { invoice: invoiceNo })).find((i) => i.invoiceKey === invoiceKey);
         if (!found) return json({ error: `Invoice ${invoiceNo} was not found for ${acct.label}.` }, 404);
+
+        const logDownload = (fileNames: string[], message: string) =>
+          admin.from('portal_upload_log').insert({
+            owner_id: caller.ownerId,
+            account_id: acct.id,
+            account_label: acct.label,
+            batch_no: `Download · Invoice ${found.invoiceNo}`,
+            file_names: fileNames,
+            processed: false,
+            status: 'success',
+            message,
+            uploaded_by: caller.email,
+          });
+
+        // One history line for a combined PDF, written once after all its documents were fetched.
+        if (action === 'invoice_download_log') {
+          const names = Array.isArray(body.fileNames) ? (body.fileNames as unknown[]).map(String).slice(0, 100) : [];
+          await logDownload(names, `Combined ${names.length} document${names.length === 1 ? '' : 's'} into one PDF.`);
+          return json({ ok: true });
+        }
 
         const available = await listInvoiceFiles(session, invoiceKey);
         if (action === 'invoice_files') {
@@ -328,17 +349,8 @@ Deno.serve(async (req) => {
         const wanted = available.find((f) => f.imageKey === Number(body.imageKey));
         if (!wanted) return json({ error: 'That document is no longer on the invoice.' }, 404);
         const bytes = await fetchInvoiceFile(wanted);
-        await admin.from('portal_upload_log').insert({
-          owner_id: caller.ownerId,
-          account_id: acct.id,
-          account_label: acct.label,
-          batch_no: `Download · Invoice ${found.invoiceNo}`,
-          file_names: [wanted.fileName],
-          processed: false,
-          status: 'success',
-          message: 'Downloaded.',
-          uploaded_by: caller.email,
-        });
+        // Pieces of a combined PDF are logged once as a whole, not one by one.
+        if (body.skipLog !== true) await logDownload([wanted.fileName], 'Downloaded.');
         return new Response(bytes, {
           headers: { ...cors, 'Content-Type': 'application/octet-stream' },
         });
