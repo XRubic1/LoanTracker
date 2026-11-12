@@ -203,12 +203,14 @@ function UploadPanel({ accounts, onUploaded }: { accounts: PortalAccount[]; onUp
       <div className="flex flex-wrap items-center gap-3">
         <button
           type="button"
-          disabled={busy || files.length === 0 || (processAfter && !hasExcel)}
+          disabled
+          title="Revised invoice upload is not available yet"
           onClick={() => void upload()}
-          className="rounded-lg btn-primary px-4 py-2 text-sm disabled:opacity-60"
+          className="rounded-lg btn-primary px-4 py-2 text-sm disabled:cursor-not-allowed disabled:opacity-60"
         >
           {busy ? 'Uploading…' : `Upload ${files.length || ''} file${files.length === 1 ? '' : 's'}`.replace('  ', ' ')}
         </button>
+        <span className="text-xs text-muted">Coming soon</span>
         {result && <span className={`text-sm ${result.ok ? 'text-green' : 'text-red'}`}>{result.text}</span>}
       </div>
     </div>
