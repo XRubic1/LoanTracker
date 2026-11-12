@@ -68,7 +68,17 @@ interface Caller {
   email: string;
   /** The team owner whose accounts this person works with. */
   ownerId: string;
+  /** This team plus every team linked to it by the super admin. Logins and uploads are shared across them. */
+  sharedOwnerIds: string[];
   isOwner: boolean;
+}
+
+/** Owners in the same link group, from the same rule that shares the client list. */
+async function linkedOwnerIds(admin: ReturnType<typeof createClient>, ownerId: string): Promise<string[]> {
+  const { data } = await admin.rpc('linked_owner_ids_for', { p_effective_owner_id: ownerId });
+  const ids = new Set<string>([ownerId]);
+  for (const id of (data as string[] | null) ?? []) ids.add(id);
+  return [...ids];
 }
 
 async function resolveCaller(
@@ -90,6 +100,7 @@ async function resolveCaller(
     userId: data.user.id,
     email: data.user.email ?? '',
     ownerId,
+    sharedOwnerIds: await linkedOwnerIds(admin, ownerId),
     isOwner: ownerId === data.user.id,
   };
 }
@@ -127,11 +138,11 @@ Deno.serve(async (req) => {
 
     if (action === 'list') {
       const [{ data: accounts }, { data: log }] = await Promise.all([
-        admin.from('portal_upload_accounts').select('*').eq('owner_id', caller.ownerId).order('label'),
+        admin.from('portal_upload_accounts').select('*').in('owner_id', caller.sharedOwnerIds).order('label'),
         admin
           .from('portal_upload_log')
           .select('id, account_label, batch_no, file_names, processed, status, message, uploaded_by, created_at')
-          .eq('owner_id', caller.ownerId)
+          .in('owner_id', caller.sharedOwnerIds)
           .order('created_at', { ascending: false })
           .limit(50),
       ]);
@@ -158,7 +169,7 @@ Deno.serve(async (req) => {
         const { data: existingForClient } = await admin
           .from('portal_upload_accounts')
           .select('id')
-          .eq('owner_id', caller.ownerId)
+          .in('owner_id', caller.sharedOwnerIds)
           .eq('client_id', clientId)
           .maybeSingle();
         if (existingForClient) id = existingForClient.id as number;
@@ -168,7 +179,7 @@ Deno.serve(async (req) => {
         const { data: unlinked } = await admin
           .from('portal_upload_accounts')
           .select('id')
-          .eq('owner_id', caller.ownerId)
+          .in('owner_id', caller.sharedOwnerIds)
           .is('client_id', null)
           .ilike('label', label)
           .limit(1)
@@ -186,7 +197,7 @@ Deno.serve(async (req) => {
           .from('portal_upload_accounts')
           .select('password_enc')
           .eq('id', id)
-          .eq('owner_id', caller.ownerId)
+          .in('owner_id', caller.sharedOwnerIds)
           .maybeSingle();
         if (!existing) return json({ error: 'Login not found.' }, 404);
         checkPassword = await decrypt(existing.password_enc as string);
@@ -197,13 +208,13 @@ Deno.serve(async (req) => {
         return json({ error: err instanceof Error ? err.message : 'Portal login failed.' }, 400);
       }
 
-      const row: Record<string, unknown> = { label, username, portal_url: portalUrl, owner_id: caller.ownerId };
+      const row: Record<string, unknown> = { label, username, portal_url: portalUrl };
       if (clientId != null) row.client_id = clientId;
       if (password) row.password_enc = await encrypt(password);
       const query =
         id != null
-          ? admin.from('portal_upload_accounts').update(row).eq('id', id).eq('owner_id', caller.ownerId)
-          : admin.from('portal_upload_accounts').insert(row);
+          ? admin.from('portal_upload_accounts').update(row).eq('id', id).in('owner_id', caller.sharedOwnerIds)
+          : admin.from('portal_upload_accounts').insert({ ...row, owner_id: caller.ownerId });
       const { data, error } = await query.select('*').single();
       if (error) return json({ error: error.message }, 400);
       return json({ account: publicAccount(data as AccountRow) });
@@ -214,7 +225,7 @@ Deno.serve(async (req) => {
         .from('portal_upload_accounts')
         .delete()
         .eq('id', Number(body.id))
-        .eq('owner_id', caller.ownerId);
+        .in('owner_id', caller.sharedOwnerIds);
       if (error) return json({ error: error.message }, 400);
       return json({ ok: true });
     }
@@ -225,7 +236,7 @@ Deno.serve(async (req) => {
         .from('portal_upload_accounts')
         .select('*')
         .eq('id', accountId)
-        .eq('owner_id', caller.ownerId)
+        .in('owner_id', caller.sharedOwnerIds)
         .maybeSingle();
       if (!account) return json({ error: 'Login not found.' }, 404);
       const acct = account as AccountRow;
