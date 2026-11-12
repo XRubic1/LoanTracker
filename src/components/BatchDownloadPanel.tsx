@@ -128,6 +128,7 @@ export function BatchDownloadPanel({ accounts, onDownloaded }: { accounts: Porta
   const [openKey, setOpenKey] = useState<number | null>(null);
   const [combine, setCombine] = useState(true);
   const [splitFolders, setSplitFolders] = useState(false);
+  const [singlePdf, setSinglePdf] = useState(false);
   const [progress, setProgress] = useState<{ done: number; total: number } | null>(null);
   const [result, setResult] = useState<{ ok: boolean; text: string; details?: string[] } | null>(null);
 
@@ -181,7 +182,7 @@ export function BatchDownloadPanel({ accounts, onDownloaded }: { accounts: Porta
           const label = `Invoice_${safeName(pkg.invoice_no)}${row.customer ? `_${safeName(row.customer)}` : ''}`;
           if (pkg.files.length === 0) {
             problems.push(`Invoice ${pkg.invoice_no}: no documents on the invoice`);
-          } else if (combine) {
+          } else if (combine || singlePdf) {
             const merged = await mergeIntoOnePdf(
               pkg.files.map((f) => ({ fileName: f.file_name, blob: new Blob([bytesFromBase64(f.data)]) }))
             );
@@ -219,6 +220,24 @@ export function BatchDownloadPanel({ accounts, onDownloaded }: { accounts: Porta
         setResult({ ok: false, text: 'No documents were found in this batch.', details: problems });
         return;
       }
+      const exportedAmount = invoices.reduce((sum, row, i) => (collected[i].length ? sum + row.amount : sum), 0);
+      const batchAmount = invoices.reduce((sum, row) => sum + row.amount, 0);
+      const amountNote =
+        exportedAmount === batchAmount ? money(exportedAmount) : `${money(exportedAmount)} of ${money(batchAmount)}`;
+      const noteProblems = problems.length ? ` ${problems.length} item${problems.length === 1 ? '' : 's'} not included.` : '';
+
+      // One PDF for the whole batch: every invoice's pages, in batch order.
+      if (singlePdf) {
+        const everything = await mergeIntoOnePdf(
+          collected.flatMap((files) => files.map((file) => ({ fileName: file.path, blob: file.data as Blob })))
+        );
+        saveBlob(everything.blob, `Batch_${info.batch_no}.pdf`);
+        const text = `Exported ${invoicesWithDocs} of ${invoices.length} invoices, ${amountNote} (${documents} documents, ${everything.pages} pages) as one PDF, Batch_${info.batch_no}.pdf.`;
+        setResult({ ok: true, text, details: problems });
+        await logBatchDownload({ accountId, batchNo: info.batch_no, message: `${text}${noteProblems}` }).catch(() => {});
+        return;
+      }
+
       // Keep each invoice's paperwork together; start a new folder when the next invoice would pass the limit.
       let part = 1;
       let partSize = 0;
@@ -243,10 +262,6 @@ export function BatchDownloadPanel({ accounts, onDownloaded }: { accounts: Porta
       }
       const blob = await zip.generateAsync({ type: 'blob', compression: 'DEFLATE' });
       saveBlob(blob, `Batch_${info.batch_no}.zip`);
-      const exportedAmount = invoices.reduce((sum, row, i) => (collected[i].length ? sum + row.amount : sum), 0);
-      const batchAmount = invoices.reduce((sum, row) => sum + row.amount, 0);
-      const amountNote =
-        exportedAmount === batchAmount ? money(exportedAmount) : `${money(exportedAmount)} of ${money(batchAmount)}`;
       const text =
         `Exported ${invoicesWithDocs} of ${invoices.length} invoices, ${amountNote} (${documents} documents) as Batch_${info.batch_no}.zip` +
         `${splitFolders ? `, split into ${parts} folder${parts === 1 ? '' : 's'} of up to 90 MB` : ''}.`;
@@ -254,7 +269,7 @@ export function BatchDownloadPanel({ accounts, onDownloaded }: { accounts: Porta
       await logBatchDownload({
         accountId,
         batchNo: info.batch_no,
-        message: `${text}${problems.length ? ` ${problems.length} item${problems.length === 1 ? '' : 's'} not included.` : ''}`,
+        message: `${text}${noteProblems}`,
       }).catch(() => {});
     } catch (err) {
       setResult({ ok: false, text: err instanceof Error ? err.message : 'The download failed' });
@@ -341,7 +356,13 @@ export function BatchDownloadPanel({ accounts, onDownloaded }: { accounts: Porta
           </ul>
 
           <label className="flex items-start gap-2 text-sm text-ink">
-            <input type="checkbox" checked={combine} onChange={(e) => setCombine(e.target.checked)} disabled={running} className="mt-1" />
+            <input
+              type="checkbox"
+              checked={combine || singlePdf}
+              onChange={(e) => setCombine(e.target.checked)}
+              disabled={running || singlePdf}
+              className="mt-1"
+            />
             <span>
               Combine each invoice's documents into one PDF
               <span className="block text-[11px] text-muted">
@@ -353,9 +374,26 @@ export function BatchDownloadPanel({ accounts, onDownloaded }: { accounts: Porta
           <label className="flex items-start gap-2 text-sm text-ink">
             <input
               type="checkbox"
-              checked={splitFolders}
-              onChange={(e) => setSplitFolders(e.target.checked)}
+              checked={singlePdf}
+              onChange={(e) => setSinglePdf(e.target.checked)}
               disabled={running}
+              className="mt-1"
+            />
+            <span>
+              Combine the whole batch into one PDF
+              <span className="block text-[11px] text-muted">
+                One file, Batch_{batch.info.batch_no}.pdf, with every invoice in order instead of a ZIP. Very large
+                batches can take a while to build.
+              </span>
+            </span>
+          </label>
+
+          <label className="flex items-start gap-2 text-sm text-ink">
+            <input
+              type="checkbox"
+              checked={splitFolders && !singlePdf}
+              onChange={(e) => setSplitFolders(e.target.checked)}
+              disabled={running || singlePdf}
               className="mt-1"
             />
             <span>
@@ -373,7 +411,7 @@ export function BatchDownloadPanel({ accounts, onDownloaded }: { accounts: Porta
               onClick={() => void downloadZip()}
               className="rounded-lg btn-primary px-4 py-2 text-sm disabled:opacity-60"
             >
-              {running ? 'Downloading…' : `Download batch ${batch.info.batch_no} as ZIP`}
+              {running ? 'Downloading…' : singlePdf ? `Download batch ${batch.info.batch_no} as one PDF` : `Download batch ${batch.info.batch_no} as ZIP`}
             </button>
             {running && (
               <button
