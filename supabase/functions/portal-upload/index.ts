@@ -281,6 +281,7 @@ Deno.serve(async (req) => {
       action === 'invoice_files' ||
       action === 'invoice_download' ||
       action === 'invoice_download_log' ||
+      action === 'invoice_package' ||
       action === 'batch_find' ||
       action === 'batch_invoice_package' ||
       action === 'batch_download_log'
@@ -383,7 +384,12 @@ Deno.serve(async (req) => {
         return json({ ok: true });
       }
 
-      if (action === 'invoice_files' || action === 'invoice_download' || action === 'invoice_download_log') {
+      if (
+        action === 'invoice_files' ||
+        action === 'invoice_download' ||
+        action === 'invoice_download_log' ||
+        action === 'invoice_package'
+      ) {
         const invoiceKey = Number(body.invoiceKey);
         const invoiceNo = String(body.invoiceNo ?? '').trim();
         if (!invoiceKey || !invoiceNo) return json({ error: 'Find the invoice first.' }, 400);
@@ -408,11 +414,42 @@ Deno.serve(async (req) => {
         // One history line for a combined PDF, written once after all its documents were fetched.
         if (action === 'invoice_download_log') {
           const names = Array.isArray(body.fileNames) ? (body.fileNames as unknown[]).map(String).slice(0, 100) : [];
-          await logDownload(names, `Combined ${names.length} document${names.length === 1 ? '' : 's'} into one PDF.`);
+          await logDownload(
+            names,
+            String(body.message ?? '').slice(0, 300) ||
+              `Combined ${names.length} document${names.length === 1 ? '' : 's'} into one PDF.`
+          );
           return json({ ok: true });
         }
 
         const available = await listInvoiceFiles(session, invoiceKey);
+
+        // Every requested document in one round trip: one login, one lookup, files fetched side by side.
+        if (action === 'invoice_package') {
+          const wanted = Array.isArray(body.imageKeys) ? (body.imageKeys as unknown[]).map(Number) : null;
+          const chosen = wanted ? available.filter((f) => wanted.includes(f.imageKey)) : available;
+          const out: { file_name: string; data: string }[] = [];
+          let total = 0;
+          for (let i = 0; i < chosen.length; i += 4) {
+            const group = chosen.slice(i, i + 4);
+            const bytes = await Promise.all(group.map((f) => fetchInvoiceFile(f)));
+            bytes.forEach((b, k) => {
+              total += b.length;
+              out.push({ file_name: group[k].fileName, data: base64(b) });
+            });
+            if (total > 28 * 1024 * 1024) {
+              return json({ error: `Invoice ${found.invoiceNo} has more than 28 MB of documents. Download them one at a time.` }, 413);
+            }
+          }
+          if (body.log === true && out.length) {
+            await logDownload(
+              out.map((f) => f.file_name),
+              out.length === 1 ? 'Downloaded.' : `Downloaded ${out.length} documents.`
+            );
+          }
+          return json({ files: out });
+        }
+
         if (action === 'invoice_files') {
           return json({ files: available.map((f) => ({ image_key: f.imageKey, file_name: f.fileName })) });
         }

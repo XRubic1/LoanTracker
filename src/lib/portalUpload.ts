@@ -218,3 +218,30 @@ export const fetchBatchInvoicePackage = (input: { accountId: number; transKey: n
 
 export const logBatchDownload = (input: { accountId: number; batchNo: number; message: string }) =>
   call<{ ok: true }>({ action: 'batch_download_log', ...input });
+
+function blobFromBase64(data: string): Blob {
+  const binary = atob(data);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i += 1) bytes[i] = binary.charCodeAt(i);
+  return new Blob([bytes]);
+}
+
+/** All requested documents of one invoice in a single request (much faster than one request per file). */
+export async function fetchInvoicePackage(input: {
+  accountId: number;
+  invoice: PortalInvoice;
+  /** Leave out to get every document on the invoice. */
+  imageKeys?: number[];
+  /** Write a history entry for these files. */
+  log?: boolean;
+}): Promise<{ fileName: string; blob: Blob }[]> {
+  const result = await call<{ files: { file_name: string; data: string }[] }>({
+    action: 'invoice_package',
+    accountId: input.accountId,
+    invoiceKey: input.invoice.invoiceKey,
+    invoiceNo: input.invoice.invoiceNo,
+    imageKeys: input.imageKeys,
+    log: input.log === true,
+  });
+  return result.files.map((f) => ({ fileName: f.file_name, blob: blobFromBase64(f.data) }));
+}

@@ -4,8 +4,7 @@ import { BatchDownloadPanel } from '@/components/BatchDownloadPanel';
 import { RecentUploads } from '@/pages/UploadPage';
 import { mergeIntoOnePdf } from '@/lib/mergeInvoicePdf';
 import {
-  downloadPortalInvoiceFile,
-  fetchPortalInvoiceFile,
+  fetchInvoicePackage,
   logCombinedDownload,
   saveBlob,
   fetchPortalUploads,
@@ -90,13 +89,11 @@ function InvoiceDownloadPanel({ accounts, onDownloaded }: { accounts: PortalAcco
     setDownloadError(null);
     setMergeNote(null);
     try {
-      const inputs = [];
-      for (const file of which) {
-        inputs.push({
-          fileName: file.file_name,
-          blob: await fetchPortalInvoiceFile({ accountId, invoice: selected, file, skipLog: true }),
-        });
-      }
+      const inputs = await fetchInvoicePackage({
+        accountId,
+        invoice: selected,
+        imageKeys: which.map((f) => f.image_key),
+      }).then((files) => files.map((f) => ({ fileName: f.fileName, blob: f.blob })));
       const merged = await mergeIntoOnePdf(inputs);
       if (merged.pages === 0) throw new Error('None of the documents could be combined into a PDF.');
       await logCombinedDownload({ accountId, invoice: selected, fileNames: inputs.map((i) => i.fileName) }).catch(() => {});
@@ -119,9 +116,13 @@ function InvoiceDownloadPanel({ accounts, onDownloaded }: { accounts: PortalAcco
     setDownloading(marker);
     setDownloadError(null);
     try {
-      for (const file of which) {
-        await downloadPortalInvoiceFile({ accountId, invoice: selected, file });
-      }
+      const received = await fetchInvoicePackage({
+        accountId,
+        invoice: selected,
+        imageKeys: which.map((f) => f.image_key),
+        log: true,
+      });
+      for (const file of received) saveBlob(file.blob, file.fileName);
     } catch (err) {
       setDownloadError(err instanceof Error ? err.message : 'The download failed');
     } finally {
