@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import type { Loan } from '@/types';
 import { Modal } from '@/components/Modal';
+import { EditLoanModal } from '@/components/modals/EditLoanModal';
 import { InstallmentPaymentsList } from '@/components/InstallmentPaymentsList';
 import { getInstallmentPayments } from '@/lib/loanPaymentActions';
 import { WEEKDAY_LABELS, WEEKDAY_ORDER, fmt, fmtDate, getLoanInstallmentAmount, getLoanOpenInstallmentRemaining, getLoanRemaining, getScheduleDueDateOnly } from '@/lib/utils';
@@ -30,6 +31,8 @@ interface LoanDetailModalProps {
   onUpdatePaymentDate?: (index: number, date: string) => Promise<void>;
   /** Set (or clear with null) the weekday this loan is deducted. */
   onUpdateDeductionDay?: (day: number | null) => Promise<void>;
+  /** Save corrected loan details (client, amounts, schedule). Shows an Edit button when set. */
+  onEditLoan?: (loan: Loan) => Promise<Loan>;
 }
 
 const WEEKDAY_FULL = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
@@ -75,7 +78,9 @@ export function LoanDetailModal({
   onCloseInstallmentWithNote,
   onUpdatePaymentDate,
   onUpdateDeductionDay,
+  onEditLoan,
 }: LoanDetailModalProps) {
+  const [editOpen, setEditOpen] = useState(false);
   const [selectedInstallmentIndex, setSelectedInstallmentIndex] = useState<number | null>(null);
   const [popupNote, setPopupNote] = useState('');
   const [popupCloseDate, setPopupCloseDate] = useState('');
@@ -454,6 +459,15 @@ export function LoanDetailModal({
               </span>
               <span>{(loan.hidden ?? false) ? 'Hidden from dashboard lists' : 'Hide this loan from dashboard'}</span>
             </button>
+            {onEditLoan && (
+              <button
+                type="button"
+                onClick={() => setEditOpen(true)}
+                className="py-1.5 px-3.5 rounded-lg border border-accent/50 text-accent text-xs font-medium bg-transparent hover:bg-accent/10"
+              >
+                Edit
+              </button>
+            )}
             <button
               type="button"
               onClick={handlePrint}
@@ -640,6 +654,9 @@ export function LoanDetailModal({
             </div>
           </div>
         </div>
+      )}
+      {onEditLoan && (
+        <EditLoanModal open={editOpen} loan={loan} onClose={() => setEditOpen(false)} onSave={onEditLoan} />
       )}
     </>
   );

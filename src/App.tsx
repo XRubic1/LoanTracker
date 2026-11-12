@@ -760,6 +760,7 @@ export default function App() {
         onCloseInstallmentWithNote={handleLoanCloseInstallmentWithNote}
         onUpdatePaymentDate={handleLoanUpdatePaymentDate}
         onUpdateDeductionDay={handleLoanUpdateDeductionDay}
+        onEditLoan={(updated) => updateLoanById(updated.id, updated)}
       />
       <ReserveDetailModal
         reserve={selectedReserve}
