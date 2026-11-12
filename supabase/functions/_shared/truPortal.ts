@@ -192,7 +192,7 @@ export async function searchInvoices(
   }));
 }
 
-function base64(bytes: Uint8Array): string {
+export function base64(bytes: Uint8Array): string {
   let binary = '';
   for (let i = 0; i < bytes.length; i += 0x8000) binary += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
   return btoa(binary);
@@ -270,4 +270,85 @@ export async function fetchInvoiceFile(file: PortalInvoiceFile): Promise<Uint8Ar
   const bytes = new Uint8Array(await response.arrayBuffer());
   if (bytes.length > MAX_DOWNLOAD_BYTES) throw new Error(`${file.fileName} is larger than 40 MB.`);
   return bytes;
+}
+
+export interface PortalBatchSummary {
+  transKey: number;
+  batchNo: number;
+  postDate: string | null;
+  checkAmount: number;
+  status: string;
+  invoiceCount: number;
+}
+
+export interface PortalBatchInvoice {
+  invoiceKey: number;
+  invoiceNo: string;
+  customer: string;
+  amount: number;
+}
+
+async function scheduleRows(session: PortalSession, from: string, to: string): Promise<Record<string, unknown>[]> {
+  const query = JSON.stringify({
+    DateFrom: from,
+    DateTo: to,
+    username: session.username,
+    token: session.token,
+    ClientNo: session.clientNo,
+    callmode: 'SCHEDULE',
+  });
+  const response = await request(
+    `${session.base}/api/purchasedschedule_trufunding?source=purchasedschedule&data=${encodeURIComponent(query)}`,
+    { headers: { Accept: 'application/json' } }
+  );
+  if (!response.ok) throw new Error(`Could not look up the batch (${response.status}).`);
+  const data = (await response.json().catch(() => null)) as unknown;
+  return Array.isArray(data) ? (data as Record<string, unknown>[]) : [];
+}
+
+/** Find a purchase batch (the portal's "BatchNo") for this client. The portal caps a list at 1000 rows, so look year by year if needed. */
+export async function findBatch(session: PortalSession, batchNo: number): Promise<PortalBatchSummary | null> {
+  const now = new Date();
+  const windows: [string, string][] = [['01/01/2015', usDate(new Date(now.getTime() + 366 * 24 * 60 * 60 * 1000))]];
+  for (let year = now.getUTCFullYear() + 1; year >= 2015; year -= 1) windows.push([`01/01/${year}`, `12/31/${year}`]);
+
+  for (const [from, to] of windows) {
+    const rows = await scheduleRows(session, from, to);
+    const hit = rows.find((r) => Number(r.BatchNo) === batchNo);
+    if (hit) {
+      return {
+        transKey: Number(hit.TransKey),
+        batchNo: Number(hit.BatchNo),
+        postDate: portalDate(hit.PostDate),
+        checkAmount: Number(hit.CheckAmt ?? 0),
+        status: String(hit.TransStatus ?? ''),
+        invoiceCount: Number(hit.NumberOfInvoices ?? 0),
+      };
+    }
+    // A list under the cap holds everything in its window, so older windows need no further search.
+    if (rows.length < 1000 && from === windows[0][0]) break;
+  }
+  return null;
+}
+
+export async function listBatchInvoices(session: PortalSession, transKey: number): Promise<PortalBatchInvoice[]> {
+  const query = JSON.stringify({
+    TransKey: String(transKey),
+    username: session.username,
+    token: session.token,
+    ClientNo: session.clientNo,
+  });
+  const response = await request(
+    `${session.base}/api/purchasedscheduledetails_trufunding?source=purchasedscheduledetails&data=${encodeURIComponent(query)}`,
+    { headers: { Accept: 'application/json' } }
+  );
+  if (!response.ok) throw new Error(`Could not list the batch invoices (${response.status}).`);
+  const data = (await response.json().catch(() => null)) as unknown;
+  if (!Array.isArray(data)) return [];
+  return (data as Record<string, unknown>[]).map((row) => ({
+    invoiceKey: Number(row.InvoiceKey),
+    invoiceNo: String(row.InvNo ?? '').trim(),
+    customer: String(row.Name ?? '').trim(),
+    amount: Number(row.Amt ?? 0),
+  }));
 }

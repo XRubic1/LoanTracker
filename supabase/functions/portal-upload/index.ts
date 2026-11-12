@@ -7,8 +7,11 @@
  */
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.45.0';
 import {
+  base64,
   createBatch,
   fetchInvoiceFile,
+  findBatch,
+  listBatchInvoices,
   listBatches,
   listInvoiceFiles,
   MAX_INVOICE_IMAGE_BYTES,
@@ -277,7 +280,10 @@ Deno.serve(async (req) => {
       action === 'invoice_upload' ||
       action === 'invoice_files' ||
       action === 'invoice_download' ||
-      action === 'invoice_download_log'
+      action === 'invoice_download_log' ||
+      action === 'batch_find' ||
+      action === 'batch_invoice_package' ||
+      action === 'batch_download_log'
     ) {
       const accountId = Number(form ? form.get('accountId') : body.accountId);
       const { data: account } = await admin
@@ -310,6 +316,71 @@ Deno.serve(async (req) => {
           return json({ error: 'Enter an invoice number, a customer name or a PO number.' }, 400);
         }
         return json({ invoices: await searchInvoices(session, { invoice, debtorName, poId }) });
+      }
+
+      if (action === 'batch_find') {
+        const batchNo = Number(String(body.batchNo ?? '').replace(/\D/g, ''));
+        if (!batchNo) return json({ error: 'Enter a batch number.' }, 400);
+        const batch = await findBatch(session, batchNo);
+        if (!batch) return json({ error: `Batch ${batchNo} was not found for ${acct.label}.` }, 404);
+        const invoices = await listBatchInvoices(session, batch.transKey);
+        return json({
+          batch: {
+            trans_key: batch.transKey,
+            batch_no: batch.batchNo,
+            post_date: batch.postDate,
+            check_amount: batch.checkAmount,
+            status: batch.status,
+          },
+          invoices: invoices.map((i) => ({
+            invoice_key: i.invoiceKey,
+            invoice_no: i.invoiceNo,
+            customer: i.customer,
+            amount: i.amount,
+          })),
+        });
+      }
+
+      if (action === 'batch_invoice_package') {
+        const transKey = Number(body.transKey);
+        const invoiceKey = Number(body.invoiceKey);
+        if (!transKey || !invoiceKey) return json({ error: 'Find the batch first.' }, 400);
+        // The invoice must be part of that batch, and the batch part of this login's account.
+        const inBatch = (await listBatchInvoices(session, transKey)).find((i) => i.invoiceKey === invoiceKey);
+        if (!inBatch) return json({ error: 'That invoice is not in this batch.' }, 404);
+
+        const available = await listInvoiceFiles(session, invoiceKey);
+        const out: { file_name: string; data: string }[] = [];
+        let total = 0;
+        for (let i = 0; i < available.length; i += 4) {
+          const group = available.slice(i, i + 4);
+          const bytes = await Promise.all(group.map((f) => fetchInvoiceFile(f)));
+          bytes.forEach((b, k) => {
+            total += b.length;
+            out.push({ file_name: group[k].fileName, data: base64(b) });
+          });
+          if (total > 28 * 1024 * 1024) {
+            return json({ error: `Invoice ${inBatch.invoiceNo} has more than 28 MB of documents.` }, 413);
+          }
+        }
+        return json({ invoice_no: inBatch.invoiceNo, customer: inBatch.customer, files: out });
+      }
+
+      if (action === 'batch_download_log') {
+        const batchNo = Number(body.batchNo);
+        const message = String(body.message ?? '').slice(0, 300);
+        await admin.from('portal_upload_log').insert({
+          owner_id: caller.ownerId,
+          account_id: acct.id,
+          account_label: acct.label,
+          batch_no: `Download · Batch ${batchNo}`,
+          file_names: [`Batch_${batchNo}.zip`],
+          processed: false,
+          status: 'success',
+          message,
+          uploaded_by: caller.email,
+        });
+        return json({ ok: true });
       }
 
       if (action === 'invoice_files' || action === 'invoice_download' || action === 'invoice_download_log') {

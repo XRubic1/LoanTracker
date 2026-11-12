@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Section } from '@/components/Section';
+import { BatchDownloadPanel } from '@/components/BatchDownloadPanel';
 import { RecentUploads } from '@/pages/UploadPage';
 import { mergeIntoOnePdf } from '@/lib/mergeInvoicePdf';
 import {
@@ -284,6 +285,7 @@ function InvoiceDownloadPanel({ accounts, onDownloaded }: { accounts: PortalAcco
 export function DownloadPage() {
   const [overview, setOverview] = useState<PortalUploadOverview | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [tab, setTab] = useState<'invoice' | 'batch'>('invoice');
 
   const load = useCallback(async () => {
     try {
@@ -307,16 +309,44 @@ export function DownloadPage() {
         <h1 className="page-title">Download</h1>
       </div>
       <p className="text-sm text-muted2">
-        Find an invoice in a client's TruFunding portal by invoice number, load number or customer, then download its
-        documents.
+        Find an invoice in a client's TruFunding portal by invoice number, load number or customer and download its
+        documents, or download every invoice's paperwork in a batch as one ZIP.
       </p>
       {error && (
         <p className="rounded-lg border border-red/30 bg-tag-overdue px-3 py-2 text-sm text-tag-overdue-fg">{error}</p>
       )}
 
-      <Section title="Download invoice documents" noPadding>
-        <InvoiceDownloadPanel accounts={accounts} onDownloaded={() => void load()} />
-      </Section>
+      <div className="flex gap-1 border-b border-border" role="tablist">
+        {(
+          [
+            ['invoice', 'Invoice documents'],
+            ['batch', 'Batch download'],
+          ] as const
+        ).map(([id, label]) => (
+          <button
+            key={id}
+            type="button"
+            role="tab"
+            aria-selected={tab === id}
+            onClick={() => setTab(id)}
+            className={`-mb-px border-b-2 px-4 py-2 text-sm font-medium transition-colors ${
+              tab === id ? 'border-accent text-ink' : 'border-transparent text-muted hover:text-ink'
+            }`}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+
+      {tab === 'invoice' ? (
+        <Section title="Download invoice documents" noPadding>
+          <InvoiceDownloadPanel accounts={accounts} onDownloaded={() => void load()} />
+        </Section>
+      ) : (
+        <Section title="Download a whole batch" noPadding>
+          <BatchDownloadPanel accounts={accounts} onDownloaded={() => void load()} />
+        </Section>
+      )}
 
       <RecentUploads entries={downloads} title="Recent downloads" />
     </div>

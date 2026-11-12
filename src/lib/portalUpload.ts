@@ -40,6 +40,21 @@ export interface PortalInvoice {
   batchNo: string;
 }
 
+export interface PortalPurchaseBatch {
+  trans_key: number;
+  batch_no: number;
+  post_date: string | null;
+  check_amount: number;
+  status: string;
+}
+
+export interface PortalBatchInvoiceRow {
+  invoice_key: number;
+  invoice_no: string;
+  customer: string;
+  amount: number;
+}
+
 export interface PortalUploadOverview {
   accounts: PortalAccount[];
   log: PortalUploadLogEntry[];
@@ -188,3 +203,18 @@ export const logCombinedDownload = (input: { accountId: number; invoice: PortalI
     invoiceNo: input.invoice.invoiceNo,
     fileNames: input.fileNames,
   });
+
+export const findPortalBatch = (input: { accountId: number; batchNo: string }) =>
+  call<{ batch: PortalPurchaseBatch; invoices: PortalBatchInvoiceRow[] }>({ action: 'batch_find', ...input });
+
+export interface BatchInvoicePackage {
+  invoice_no: string;
+  customer: string;
+  files: { file_name: string; data: string }[];
+}
+
+export const fetchBatchInvoicePackage = (input: { accountId: number; transKey: number; invoiceKey: number }) =>
+  call<BatchInvoicePackage>({ action: 'batch_invoice_package', ...input });
+
+export const logBatchDownload = (input: { accountId: number; batchNo: number; message: string }) =>
+  call<{ ok: true }>({ action: 'batch_download_log', ...input });
