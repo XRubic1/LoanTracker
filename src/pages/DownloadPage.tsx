@@ -1,8 +1,11 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Section } from '@/components/Section';
 import { RecentUploads } from '@/pages/UploadPage';
+import { mergeIntoOnePdf } from '@/lib/mergeInvoicePdf';
 import {
   downloadPortalInvoiceFile,
+  fetchPortalInvoiceFile,
+  saveBlob,
   fetchPortalUploads,
   listPortalInvoiceFiles,
   searchPortalInvoices,
@@ -31,7 +34,8 @@ function InvoiceDownloadPanel({ accounts, onDownloaded }: { accounts: PortalAcco
   const [files, setFiles] = useState<PortalInvoiceFileInfo[] | null>(null);
   const [filesError, setFilesError] = useState<string | null>(null);
   const [loadingFiles, setLoadingFiles] = useState(false);
-  const [downloading, setDownloading] = useState<number | 'all' | null>(null);
+  const [downloading, setDownloading] = useState<number | 'all' | 'merged' | null>(null);
+  const [mergeNote, setMergeNote] = useState<string | null>(null);
   const [downloadError, setDownloadError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -43,6 +47,7 @@ function InvoiceDownloadPanel({ accounts, onDownloaded }: { accounts: PortalAcco
     setFiles(null);
     setFilesError(null);
     setDownloadError(null);
+    setMergeNote(null);
     try {
       setFiles((await listPortalInvoiceFiles({ accountId: account, invoice })).files);
     } catch (err) {
@@ -73,6 +78,36 @@ function InvoiceDownloadPanel({ accounts, onDownloaded }: { accounts: PortalAcco
       setSearchError(err instanceof Error ? err.message : 'Search failed');
     } finally {
       setSearching(false);
+    }
+  };
+
+  /** Fetch every document and save them as a single PDF. */
+  const downloadMerged = async (which: PortalInvoiceFileInfo[]) => {
+    if (accountId === '' || !selected) return;
+    setDownloading('merged');
+    setDownloadError(null);
+    setMergeNote(null);
+    try {
+      const inputs = [];
+      for (const file of which) {
+        inputs.push({
+          fileName: file.file_name,
+          blob: await fetchPortalInvoiceFile({ accountId, invoice: selected, file }),
+        });
+      }
+      const merged = await mergeIntoOnePdf(inputs);
+      if (merged.pages === 0) throw new Error('None of the documents could be combined into a PDF.');
+      const customer = selected.debtorName.replace(/[^A-Za-z0-9]+/g, '_').replace(/^_|_$/g, '');
+      saveBlob(merged.blob, `Invoice_${selected.invoiceNo}${customer ? `_${customer}` : ''}.pdf`);
+      setMergeNote(
+        `Combined ${inputs.length - merged.skipped.length} document${inputs.length - merged.skipped.length === 1 ? '' : 's'} into one PDF (${merged.pages} pages).` +
+          (merged.skipped.length ? ` Left out (not PDF or image): ${merged.skipped.join(', ')}.` : '')
+      );
+    } catch (err) {
+      setDownloadError(err instanceof Error ? err.message : 'The download failed');
+    } finally {
+      setDownloading(null);
+      onDownloaded();
     }
   };
 
@@ -191,15 +226,27 @@ function InvoiceDownloadPanel({ accounts, onDownloaded }: { accounts: PortalAcco
               Documents on invoice #{selected.invoiceNo}
               {files ? <span className="font-normal text-muted"> · {files.length}</span> : null}
             </p>
-            {files && files.length > 1 && (
-              <button
-                type="button"
-                disabled={downloading != null}
-                onClick={() => void download(files, 'all')}
-                className="rounded-lg btn-primary px-3 py-1.5 text-xs disabled:opacity-60"
-              >
-                {downloading === 'all' ? 'Downloading…' : `Download all ${files.length}`}
-              </button>
+            {files && files.length > 0 && (
+              <div className="flex flex-wrap items-center gap-3">
+                {files.length > 1 && (
+                  <button
+                    type="button"
+                    disabled={downloading != null}
+                    onClick={() => void download(files, 'all')}
+                    className="text-xs text-muted2 underline hover:text-ink disabled:opacity-60"
+                  >
+                    {downloading === 'all' ? 'Downloading…' : `Download ${files.length} separately`}
+                  </button>
+                )}
+                <button
+                  type="button"
+                  disabled={downloading != null}
+                  onClick={() => void downloadMerged(files)}
+                  className="rounded-lg btn-primary px-3 py-1.5 text-xs disabled:opacity-60"
+                >
+                  {downloading === 'merged' ? 'Combining…' : 'Download as one PDF'}
+                </button>
+              </div>
             )}
           </div>
           {loadingFiles && <p className="text-sm text-muted">Loading documents…</p>}
@@ -224,6 +271,7 @@ function InvoiceDownloadPanel({ accounts, onDownloaded }: { accounts: PortalAcco
               ))}
             </ul>
           )}
+          {mergeNote && <p className="text-sm text-green">{mergeNote}</p>}
           {downloadError && <p className="text-sm text-red">{downloadError}</p>}
         </div>
       )}

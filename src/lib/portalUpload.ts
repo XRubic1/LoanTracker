@@ -131,12 +131,12 @@ export const listPortalInvoiceFiles = (input: { accountId: number; invoice: Port
     invoiceNo: input.invoice.invoiceNo,
   });
 
-/** Fetch one document and hand it to the browser as a download. */
-export async function downloadPortalInvoiceFile(input: {
+/** Fetch one document from the portal. */
+export async function fetchPortalInvoiceFile(input: {
   accountId: number;
   invoice: PortalInvoice;
   file: PortalInvoiceFileInfo;
-}): Promise<void> {
+}): Promise<Blob> {
   const supabase = getSupabase();
   if (!supabase) throw new Error('Supabase not configured');
   const { data, error } = await supabase.functions.invoke('portal-upload', {
@@ -153,12 +153,25 @@ export async function downloadPortalInvoiceFile(input: {
     const message = (data as { error?: string } | null)?.error;
     throw new Error(message ?? 'The download failed.');
   }
-  const url = URL.createObjectURL(data);
+  return data;
+}
+
+/** Hand a file to the browser as a download. */
+export function saveBlob(blob: Blob, fileName: string): void {
+  const url = URL.createObjectURL(blob);
   const link = document.createElement('a');
   link.href = url;
-  link.download = input.file.file_name;
+  link.download = fileName;
   document.body.appendChild(link);
   link.click();
   link.remove();
   window.setTimeout(() => URL.revokeObjectURL(url), 10_000);
+}
+
+export async function downloadPortalInvoiceFile(input: {
+  accountId: number;
+  invoice: PortalInvoice;
+  file: PortalInvoiceFileInfo;
+}): Promise<void> {
+  saveBlob(await fetchPortalInvoiceFile(input), input.file.file_name);
 }
