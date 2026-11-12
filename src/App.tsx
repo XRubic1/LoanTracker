@@ -11,6 +11,7 @@ import { AaaPaymentsPage } from '@/pages/AaaPaymentsPage';
 import { ClientInsurancePage } from '@/pages/ClientInsurancePage';
 import { MotusInsurancePage } from '@/pages/MotusInsurancePage';
 import { UploadPage } from '@/pages/UploadPage';
+import { DownloadPage } from '@/pages/DownloadPage';
 import { ClientsPage } from '@/pages/ClientsPage';
 import { WorksheetPage } from '@/pages/WorksheetPage';
 import { UserActivityPage } from '@/pages/UserActivityPage';
@@ -678,6 +679,7 @@ export default function App() {
           />
         )}
         {page === 'upload' && <UploadPage />}
+        {page === 'download' && <DownloadPage />}
         {page === 'clientInsurance' && (
           <ClientInsurancePage
             clientInsurance={clientInsurance}

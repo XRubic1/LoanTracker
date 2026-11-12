@@ -220,3 +220,54 @@ export async function uploadInvoiceImage(session: PortalSession, invoiceKey: num
     throw new Error(String(result.InfoResponse || `The portal rejected ${file.name}.`));
   }
 }
+
+export interface PortalInvoiceFile {
+  imageKey: number;
+  fileName: string;
+  url: string;
+}
+
+/** Documents attached to an invoice, as the invoice page lists them. */
+export async function listInvoiceFiles(session: PortalSession, invoiceKey: number): Promise<PortalInvoiceFile[]> {
+  const query = JSON.stringify({
+    InvoiceKey: invoiceKey,
+    username: session.username,
+    token: session.token,
+    ClientNo: session.clientNo,
+  });
+  const response = await request(
+    `${session.base}/api/invoicesdetailsImagesUrl_trufunding?source=invoicedetailsimages&data=${encodeURIComponent(query)}`,
+    { headers: { Accept: 'application/json' } }
+  );
+  if (!response.ok) throw new Error(`Could not list the invoice documents (${response.status}).`);
+  const data = (await response.json().catch(() => null)) as unknown;
+  if (!Array.isArray(data)) return [];
+
+  const files: PortalInvoiceFile[] = [];
+  for (const row of data as Record<string, unknown>[]) {
+    const fileName = String(row.FileName ?? '').trim();
+    // The portal serves these over http; the same address works over https.
+    const url = String(row.TmpPath ?? '').trim().replace(/^http:\/\//i, 'https://');
+    let parsed: URL;
+    try {
+      parsed = new URL(url);
+    } catch {
+      continue;
+    }
+    // Only fetch files from the portal's own TMP_Images folder.
+    if (!fileName || parsed.origin !== session.base || !parsed.pathname.startsWith('/TMP_Images/')) continue;
+    files.push({ imageKey: Number(row.ImageKey), fileName, url });
+  }
+  return files;
+}
+
+/** Largest document the app will relay in one download. */
+export const MAX_DOWNLOAD_BYTES = 40 * 1024 * 1024;
+
+export async function fetchInvoiceFile(file: PortalInvoiceFile): Promise<Uint8Array> {
+  const response = await request(file.url, { headers: { Accept: '*/*' } });
+  if (!response.ok) throw new Error(`The portal could not send ${file.fileName} (${response.status}).`);
+  const bytes = new Uint8Array(await response.arrayBuffer());
+  if (bytes.length > MAX_DOWNLOAD_BYTES) throw new Error(`${file.fileName} is larger than 40 MB.`);
+  return bytes;
+}

@@ -117,3 +117,48 @@ export function uploadInvoiceFiles(input: { accountId: number; invoice: PortalIn
   for (const file of input.files) form.append('files', file, file.name);
   return call<{ invoice_no: string; message: string }>(form);
 }
+
+export interface PortalInvoiceFileInfo {
+  image_key: number;
+  file_name: string;
+}
+
+export const listPortalInvoiceFiles = (input: { accountId: number; invoice: PortalInvoice }) =>
+  call<{ files: PortalInvoiceFileInfo[] }>({
+    action: 'invoice_files',
+    accountId: input.accountId,
+    invoiceKey: input.invoice.invoiceKey,
+    invoiceNo: input.invoice.invoiceNo,
+  });
+
+/** Fetch one document and hand it to the browser as a download. */
+export async function downloadPortalInvoiceFile(input: {
+  accountId: number;
+  invoice: PortalInvoice;
+  file: PortalInvoiceFileInfo;
+}): Promise<void> {
+  const supabase = getSupabase();
+  if (!supabase) throw new Error('Supabase not configured');
+  const { data, error } = await supabase.functions.invoke('portal-upload', {
+    body: {
+      action: 'invoice_download',
+      accountId: input.accountId,
+      invoiceKey: input.invoice.invoiceKey,
+      invoiceNo: input.invoice.invoiceNo,
+      imageKey: input.file.image_key,
+    },
+  });
+  if (error) throw new Error((await errorMessage(error)) ?? 'The download failed.');
+  if (!(data instanceof Blob)) {
+    const message = (data as { error?: string } | null)?.error;
+    throw new Error(message ?? 'The download failed.');
+  }
+  const url = URL.createObjectURL(data);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = input.file.file_name;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  window.setTimeout(() => URL.revokeObjectURL(url), 10_000);
+}

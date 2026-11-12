@@ -216,6 +216,7 @@ export type PageId =
   | 'clientInsurance'
   | 'motus'
   | 'upload'
+  | 'download'
   | 'worksheet'
   | 'clients'
   | 'userActivity'

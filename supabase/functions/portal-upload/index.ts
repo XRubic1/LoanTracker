@@ -8,7 +8,9 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.45.0';
 import {
   createBatch,
+  fetchInvoiceFile,
   listBatches,
+  listInvoiceFiles,
   MAX_INVOICE_IMAGE_BYTES,
   normalizePortalUrl,
   portalLogin,
@@ -268,7 +270,14 @@ Deno.serve(async (req) => {
       return json({ ok: true });
     }
 
-    if (action === 'batches' || action === 'upload' || action === 'invoice_search' || action === 'invoice_upload') {
+    if (
+      action === 'batches' ||
+      action === 'upload' ||
+      action === 'invoice_search' ||
+      action === 'invoice_upload' ||
+      action === 'invoice_files' ||
+      action === 'invoice_download'
+    ) {
       const accountId = Number(form ? form.get('accountId') : body.accountId);
       const { data: account } = await admin
         .from('portal_upload_accounts')
@@ -300,6 +309,39 @@ Deno.serve(async (req) => {
           return json({ error: 'Enter an invoice number, a customer name or a PO number.' }, 400);
         }
         return json({ invoices: await searchInvoices(session, { invoice, debtorName, poId }) });
+      }
+
+      if (action === 'invoice_files' || action === 'invoice_download') {
+        const invoiceKey = Number(body.invoiceKey);
+        const invoiceNo = String(body.invoiceNo ?? '').trim();
+        if (!invoiceKey || !invoiceNo) return json({ error: 'Find the invoice first.' }, 400);
+
+        // The invoice must really belong to this login.
+        const found = (await searchInvoices(session, { invoice: invoiceNo })).find((i) => i.invoiceKey === invoiceKey);
+        if (!found) return json({ error: `Invoice ${invoiceNo} was not found for ${acct.label}.` }, 404);
+
+        const available = await listInvoiceFiles(session, invoiceKey);
+        if (action === 'invoice_files') {
+          return json({ files: available.map((f) => ({ image_key: f.imageKey, file_name: f.fileName })) });
+        }
+
+        const wanted = available.find((f) => f.imageKey === Number(body.imageKey));
+        if (!wanted) return json({ error: 'That document is no longer on the invoice.' }, 404);
+        const bytes = await fetchInvoiceFile(wanted);
+        await admin.from('portal_upload_log').insert({
+          owner_id: caller.ownerId,
+          account_id: acct.id,
+          account_label: acct.label,
+          batch_no: `Download · Invoice ${found.invoiceNo}`,
+          file_names: [wanted.fileName],
+          processed: false,
+          status: 'success',
+          message: 'Downloaded.',
+          uploaded_by: caller.email,
+        });
+        return new Response(bytes, {
+          headers: { ...cors, 'Content-Type': 'application/octet-stream' },
+        });
       }
 
       if (action === 'invoice_upload') {

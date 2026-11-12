@@ -171,6 +171,16 @@ const navItems: NavItem[] = [
     ),
   },
   {
+    id: 'download',
+    label: 'Download',
+    section: 'workspace',
+    icon: (
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+        <path d="M12 4v12M7 11l5 5 5-5M4 20h16" />
+      </svg>
+    ),
+  },
+  {
     id: 'api',
     label: 'API',
     section: 'workspace',

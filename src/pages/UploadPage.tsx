@@ -442,7 +442,13 @@ function InvoiceUploadPanel({ accounts, onUploaded }: { accounts: PortalAccount[
 }
 
 /** Past uploads, folded away until opened. Each shows who uploaded it. */
-function RecentUploads({ entries }: { entries: PortalUploadLogEntry[] }) {
+export function RecentUploads({
+  entries,
+  title = 'Recent uploads',
+}: {
+  entries: PortalUploadLogEntry[];
+  title?: string;
+}) {
   const [open, setOpen] = useState(false);
   return (
     <section className="panel-surface">
@@ -454,7 +460,7 @@ function RecentUploads({ entries }: { entries: PortalUploadLogEntry[] }) {
       >
         <span className="flex items-center gap-2 text-[11px] font-medium uppercase tracking-[0.04em] text-ink">
           <span className="inline-block w-2">{open ? '▾' : '▸'}</span>
-          Recent uploads
+          {title}
           <span className="count-badge">{entries.length}</span>
         </span>
       </button>
@@ -484,7 +490,7 @@ function RecentUploads({ entries }: { entries: PortalUploadLogEntry[] }) {
                   <div className="flex gap-1.5">
                     {entry.processed && <Badge variant="ok">Processed</Badge>}
                     <Badge variant={entry.status === 'success' ? 'ok' : 'overdue'}>
-                      {entry.status === 'success' ? 'Uploaded' : 'Failed'}
+                      {entry.status === 'success' ? (entry.batch_no?.startsWith('Download') ? 'Downloaded' : 'Uploaded') : 'Failed'}
                     </Badge>
                   </div>
                   <span className="text-ink">By {entry.uploaded_by || 'unknown'}</span>
@@ -567,7 +573,7 @@ export function UploadPage() {
           <Section title="Upload to an invoice" noPadding>
             <InvoiceUploadPanel accounts={accounts} onUploaded={() => void load()} />
           </Section>
-          <RecentUploads entries={log.filter((e) => !/^\d+$/.test(e.batch_no ?? ''))} />
+          <RecentUploads entries={log.filter((e) => !/^\d+$/.test(e.batch_no ?? '') && !e.batch_no?.startsWith('Download'))} />
         </>
       )}
     </div>
