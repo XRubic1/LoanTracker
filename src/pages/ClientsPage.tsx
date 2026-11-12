@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Section } from '@/components/Section';
 import { TeamScopeFilter } from '@/components/TeamScopeFilter';
 import { useLinkedTeams } from '@/hooks/useLinkedTeams';
@@ -15,6 +15,8 @@ import {
   getClientExpenseAmount,
 } from '@/lib/clientUtils';
 import type { UseDataResult } from '@/hooks/useData';
+import { ClientPortalLoginModal } from '@/components/modals/ClientPortalLoginModal';
+import { fetchPortalUploads, type PortalAccount } from '@/lib/portalUpload';
 
 interface ClientsPageProps extends Pick<UseDataResult, 'clients'> {
   effectiveOwnerId: string;
@@ -37,6 +39,23 @@ export function ClientsPage({
   onDeleteClient,
 }: ClientsPageProps) {
   const [deletingId, setDeletingId] = useState<number | null>(null);
+  const [portalAccounts, setPortalAccounts] = useState<PortalAccount[]>([]);
+  const [canManagePortal, setCanManagePortal] = useState(false);
+  const [portalClientId, setPortalClientId] = useState<number | null>(null);
+
+  const loadPortalAccounts = useCallback(async () => {
+    try {
+      const overview = await fetchPortalUploads();
+      setPortalAccounts(overview.accounts);
+      setCanManagePortal(overview.canManage);
+    } catch {
+      // The upload service is optional here; the column just shows no logins.
+    }
+  }, []);
+
+  useEffect(() => {
+    void loadPortalAccounts();
+  }, [loadPortalAccounts]);
   const [copyingEmails, setCopyingEmails] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<
@@ -154,7 +173,7 @@ export function ClientsPage({
 
       <Section title={`${list.length} client${list.length !== 1 ? 's' : ''}`}>
         <div className="overflow-x-auto -mx-1">
-          <table className="data-table w-full min-w-[720px]">
+          <table className="data-table w-full min-w-[820px]">
             <thead>
               <tr>
                 <th>Client</th>
@@ -163,6 +182,7 @@ export function ClientsPage({
                 <th className="text-center">Fee</th>
                 <th>Warning</th>
                 <th className="text-center">Verification</th>
+                <th>Portal login</th>
                 <th></th>
               </tr>
             </thead>
@@ -195,6 +215,20 @@ export function ClientsPage({
                       ) : (
                         <span className="text-muted2">—</span>
                       )}
+                    </td>
+                    <td className="text-[12px] whitespace-nowrap">
+                      {(() => {
+                        const login = portalAccounts.find((a) => a.client_id === c.id);
+                        return (
+                          <button
+                            type="button"
+                            onClick={() => setPortalClientId(c.id)}
+                            className={login ? 'text-green hover:underline' : 'text-muted2 hover:text-accent'}
+                          >
+                            {login ? `✓ ${login.username}` : 'Set up'}
+                          </button>
+                        );
+                      })()}
                     </td>
                     <td className="text-right whitespace-nowrap">
                       <button
@@ -232,6 +266,18 @@ export function ClientsPage({
           )}
         </div>
       </Section>
+
+      {portalClientId != null && (
+        <ClientPortalLoginModal
+          open
+          clientId={portalClientId}
+          clientName={clients.find((c) => c.id === portalClientId)?.name ?? ''}
+          account={portalAccounts.find((a) => a.client_id === portalClientId) ?? null}
+          canManage={canManagePortal}
+          onClose={() => setPortalClientId(null)}
+          onChanged={() => void loadPortalAccounts()}
+        />
+      )}
     </>
   );
 }

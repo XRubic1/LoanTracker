@@ -101,10 +101,12 @@ type AccountRow = {
   portal_url: string;
   username: string;
   password_enc: string;
+  client_id: number | null;
 };
 
 const publicAccount = (a: AccountRow) => ({
   id: a.id,
+  client_id: a.client_id,
   label: a.label,
   portal_url: a.portal_url,
   username: a.username,
@@ -149,7 +151,30 @@ Deno.serve(async (req) => {
       const username = String(body.username ?? '').trim();
       const password = String(body.password ?? '');
       const portalUrl = normalizePortalUrl(String(body.portal_url ?? 'https://clients.trufunding.net'));
-      const id = body.id != null ? Number(body.id) : null;
+      const clientId = body.client_id != null ? Number(body.client_id) : null;
+      let id = body.id != null ? Number(body.id) : null;
+      if (id == null && clientId != null) {
+        // One login per client: saving again updates the existing one.
+        const { data: existingForClient } = await admin
+          .from('portal_upload_accounts')
+          .select('id')
+          .eq('owner_id', caller.ownerId)
+          .eq('client_id', clientId)
+          .maybeSingle();
+        if (existingForClient) id = existingForClient.id as number;
+      }
+      if (id == null && clientId != null) {
+        // A login saved before logins were tied to clients: take it over instead of adding a second one.
+        const { data: unlinked } = await admin
+          .from('portal_upload_accounts')
+          .select('id')
+          .eq('owner_id', caller.ownerId)
+          .is('client_id', null)
+          .ilike('label', label)
+          .limit(1)
+          .maybeSingle();
+        if (unlinked) id = unlinked.id as number;
+      }
       if (!label || !username) return json({ error: 'Enter a client name and username.' }, 400);
       if (!portalUrl) return json({ error: 'The portal address must be an https trufunding.net address.' }, 400);
       if (id == null && !password) return json({ error: 'Enter the password.' }, 400);
@@ -173,6 +198,7 @@ Deno.serve(async (req) => {
       }
 
       const row: Record<string, unknown> = { label, username, portal_url: portalUrl, owner_id: caller.ownerId };
+      if (clientId != null) row.client_id = clientId;
       if (password) row.password_enc = await encrypt(password);
       const query =
         id != null

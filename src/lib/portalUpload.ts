@@ -2,6 +2,8 @@ import { getSupabase } from '@/lib/supabase';
 
 export interface PortalAccount {
   id: number;
+  /** The client (Clients tab) this login belongs to. */
+  client_id: number | null;
   label: string;
   portal_url: string;
   username: string;
@@ -70,6 +72,7 @@ export const fetchPortalUploads = () => call<PortalUploadOverview>({ action: 'li
 
 export const savePortalAccount = (input: {
   id?: number;
+  client_id?: number;
   label: string;
   username: string;
   password?: string;

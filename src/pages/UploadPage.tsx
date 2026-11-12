@@ -3,11 +3,8 @@ import { Section } from '@/components/Section';
 import { Badge } from '@/components/Badge';
 import { fmtDateTime } from '@/lib/utils';
 import {
-  DEFAULT_PORTAL_URL,
-  deletePortalAccount,
   fetchPortalBatches,
   fetchPortalUploads,
-  savePortalAccount,
   searchPortalInvoices,
   uploadInvoiceFiles,
   uploadToPortal,
@@ -24,94 +21,6 @@ const labelClass = 'mb-1 block text-[10px] font-medium uppercase tracking-widest
 
 function formatSize(bytes: number): string {
   return bytes >= 1_000_000 ? `${(bytes / 1_000_000).toFixed(1)} MB` : `${Math.max(1, Math.round(bytes / 1000))} KB`;
-}
-
-/** Add or edit one saved client login. The password is checked against the portal before it is saved. */
-function AccountForm({
-  account,
-  onSaved,
-  onCancel,
-}: {
-  account: PortalAccount | null;
-  onSaved: () => void;
-  onCancel: () => void;
-}) {
-  const [label, setLabel] = useState(account?.label ?? '');
-  const [username, setUsername] = useState(account?.username ?? '');
-  const [password, setPassword] = useState('');
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  const submit = async (event: React.FormEvent) => {
-    event.preventDefault();
-    setSaving(true);
-    setError(null);
-    try {
-      await savePortalAccount({
-        id: account?.id,
-        label,
-        username,
-        password: password || undefined,
-        portal_url: account?.portal_url ?? DEFAULT_PORTAL_URL,
-      });
-      onSaved();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not save');
-      setSaving(false);
-    }
-  };
-
-  return (
-    <form onSubmit={(e) => void submit(e)} className="space-y-3 border-b border-border px-4 py-4">
-      <div className="grid gap-3 sm:grid-cols-3">
-        <div>
-          <label className={labelClass}>Client</label>
-          <input value={label} onChange={(e) => setLabel(e.target.value)} placeholder="Client name" className={inputClass} />
-        </div>
-        <div>
-          <label className={labelClass}>Portal username</label>
-          <input
-            value={username}
-            onChange={(e) => setUsername(e.target.value)}
-            autoComplete="off"
-            className={inputClass}
-          />
-        </div>
-        <div>
-          <label className={labelClass}>Portal password</label>
-          <input
-            type="password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            autoComplete="new-password"
-            placeholder={account ? 'Leave blank to keep' : ''}
-            className={inputClass}
-          />
-        </div>
-      </div>
-      <p className="text-[11px] text-muted">
-        The login is tested on the portal when you save. The password is stored encrypted and is never shown again.
-      </p>
-      {error && <p className="text-sm text-red">{error}</p>}
-      <div className="flex gap-2">
-        <button
-          type="submit"
-          disabled={saving || !label.trim() || !username.trim() || (!account && !password)}
-          className="rounded-lg btn-primary px-3 py-1.5 text-xs disabled:opacity-60"
-        >
-          {saving ? 'Testing login…' : 'Save login'}
-        </button>
-        <button
-          type="button"
-          onClick={onCancel}
-          disabled={saving}
-          className="rounded-lg border border-border px-3 py-1.5 text-xs text-muted hover:text-ink"
-        >
-          Cancel
-        </button>
-      </div>
-    </form>
-  );
 }
 
 function UploadPanel({ accounts, onUploaded }: { accounts: PortalAccount[]; onUploaded: () => void }) {
@@ -172,14 +81,14 @@ function UploadPanel({ accounts, onUploaded }: { accounts: PortalAccount[]; onUp
   };
 
   if (accounts.length === 0) {
-    return <div className="px-4 py-8 text-center text-[12px] text-muted">Add a client login above to start uploading.</div>;
+    return <div className="px-4 py-8 text-center text-[12px] text-muted">No client has a portal login yet. Set one up on the Clients tab.</div>;
   }
 
   return (
     <div className="space-y-4 px-4 py-4">
       <div className="grid gap-3 sm:grid-cols-2">
         <div>
-          <label className={labelClass}>Client portal</label>
+          <label className={labelClass}>Client</label>
           <select
             value={accountId}
             onChange={(e) => {
@@ -380,7 +289,7 @@ function InvoiceUploadPanel({ accounts, onUploaded }: { accounts: PortalAccount[
   };
 
   if (accounts.length === 0) {
-    return <div className="px-4 py-8 text-center text-[12px] text-muted">Add a client login above to start uploading.</div>;
+    return <div className="px-4 py-8 text-center text-[12px] text-muted">No client has a portal login yet. Set one up on the Clients tab.</div>;
   }
 
   const hasQuery = Boolean(invoiceNo.trim() || customer.trim() || poId.trim());
@@ -390,7 +299,7 @@ function InvoiceUploadPanel({ accounts, onUploaded }: { accounts: PortalAccount[
       <form onSubmit={(e) => void search(e)} className="space-y-3">
         <div className="grid gap-3 sm:grid-cols-4">
           <div>
-            <label className={labelClass}>Client portal</label>
+            <label className={labelClass}>Client</label>
             <select
               value={accountId}
               onChange={(e) => {
@@ -592,7 +501,6 @@ export function UploadPage() {
   const [tab, setTab] = useState<'revised' | 'invoice'>('invoice');
   const [overview, setOverview] = useState<PortalUploadOverview | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [editing, setEditing] = useState<PortalAccount | 'new' | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -607,18 +515,7 @@ export function UploadPage() {
     void load();
   }, [load]);
 
-  const remove = async (account: PortalAccount) => {
-    if (!window.confirm(`Remove the saved login for ${account.label}?`)) return;
-    try {
-      await deletePortalAccount(account.id);
-      await load();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not remove');
-    }
-  };
-
   const accounts = overview?.accounts ?? [];
-  const canManage = overview?.canManage ?? false;
   const log = overview?.log ?? [];
 
   return (
@@ -627,55 +524,9 @@ export function UploadPage() {
         <h1 className="page-title">Upload</h1>
       </div>
       <p className="text-sm text-muted2">
-        Save each client's portal login once, then drop their revised invoices here. Files go straight into a
-        TruFunding Purchase Import batch.
+        Upload documents to a client's TruFunding portal. Set each client's portal login on the Clients tab.
       </p>
       {error && <p className="rounded-lg border border-red/30 bg-tag-overdue px-3 py-2 text-sm text-tag-overdue-fg">{error}</p>}
-
-      <Section title="Client logins" count={accounts.length} noPadding>
-        {editing && canManage && (
-          <AccountForm
-            key={editing === 'new' ? 'new' : editing.id}
-            account={editing === 'new' ? null : editing}
-            onSaved={() => {
-              setEditing(null);
-              void load();
-            }}
-            onCancel={() => setEditing(null)}
-          />
-        )}
-        {accounts.length === 0 && !editing ? (
-          <div className="px-4 py-6 text-center text-[12px] text-muted">No client logins saved yet.</div>
-        ) : (
-          accounts.map((account) => (
-            <div key={account.id} className="flex flex-wrap items-center gap-3 border-b border-border px-4 py-3 last:border-b-0">
-              <div className="min-w-0 flex-1">
-                <div className="text-sm font-semibold text-ink">{account.label}</div>
-                <div className="text-xs text-muted">
-                  {account.username} · {account.portal_url.replace('https://', '')}
-                </div>
-              </div>
-              {canManage && (
-                <div className="flex gap-3 text-xs">
-                  <button type="button" onClick={() => setEditing(account)} className="text-accent hover:underline">
-                    Edit
-                  </button>
-                  <button type="button" onClick={() => void remove(account)} className="text-muted hover:text-red">
-                    Remove
-                  </button>
-                </div>
-              )}
-            </div>
-          ))
-        )}
-        {canManage && !editing && (
-          <div className="px-4 py-3">
-            <button type="button" onClick={() => setEditing('new')} className="rounded-lg btn-primary px-3 py-1.5 text-xs">
-              + Add client login
-            </button>
-          </div>
-        )}
-      </Section>
 
       <div className="flex gap-1 border-b border-border" role="tablist">
         {(
