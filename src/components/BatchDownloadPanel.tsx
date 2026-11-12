@@ -20,6 +20,15 @@ const inputClass =
 const labelClass = 'mb-1 block text-[10px] font-medium uppercase tracking-widest text-label';
 const money = (value: number) => value.toLocaleString('en-US', { style: 'currency', currency: 'USD' });
 const CONCURRENCY = 3;
+/** Folder size limit when splitting a batch (bytes). */
+const FOLDER_LIMIT_BYTES = 90 * 1024 * 1024;
+
+interface PendingFile {
+  /** Path inside the invoice's slot: a PDF name, or folder/file name. */
+  path: string;
+  data: Blob | Uint8Array;
+  size: number;
+}
 
 const safeName = (text: string) => text.replace(/[^A-Za-z0-9]+/g, '_').replace(/^_|_$/g, '');
 
@@ -118,6 +127,7 @@ export function BatchDownloadPanel({ accounts, onDownloaded }: { accounts: Porta
   const [batch, setBatch] = useState<{ info: PortalPurchaseBatch; invoices: PortalBatchInvoiceRow[] } | null>(null);
   const [openKey, setOpenKey] = useState<number | null>(null);
   const [combine, setCombine] = useState(true);
+  const [splitFolders, setSplitFolders] = useState(false);
   const [progress, setProgress] = useState<{ done: number; total: number } | null>(null);
   const [result, setResult] = useState<{ ok: boolean; text: string; details?: string[] } | null>(null);
 
@@ -152,6 +162,8 @@ export function BatchDownloadPanel({ accounts, onDownloaded }: { accounts: Porta
 
     const zip = new JSZip();
     const folder = zip.folder(`Batch_${info.batch_no}`) as JSZip;
+    /** Files per invoice, kept in batch order so folders fill predictably. */
+    const collected: PendingFile[][] = invoices.map(() => []);
     const problems: string[] = [];
     let documents = 0;
     let invoicesWithDocs = 0;
@@ -160,7 +172,8 @@ export function BatchDownloadPanel({ accounts, onDownloaded }: { accounts: Porta
 
     const worker = async () => {
       while (!cancelRef.current) {
-        const row = invoices[cursor];
+        const index = cursor;
+        const row = invoices[index];
         cursor += 1;
         if (!row) return;
         try {
@@ -173,7 +186,7 @@ export function BatchDownloadPanel({ accounts, onDownloaded }: { accounts: Porta
               pkg.files.map((f) => ({ fileName: f.file_name, blob: new Blob([bytesFromBase64(f.data)]) }))
             );
             if (merged.pages > 0) {
-              folder.file(`${label}.pdf`, merged.blob);
+              collected[index].push({ path: `${label}.pdf`, data: merged.blob, size: merged.blob.size });
               documents += pkg.files.length - merged.skipped.length;
               invoicesWithDocs += 1;
             } else {
@@ -181,8 +194,10 @@ export function BatchDownloadPanel({ accounts, onDownloaded }: { accounts: Porta
             }
             for (const name of merged.skipped) problems.push(`Invoice ${pkg.invoice_no}: left out ${name}`);
           } else {
-            const sub = folder.folder(label) as JSZip;
-            for (const f of pkg.files) sub.file(f.file_name, bytesFromBase64(f.data));
+            for (const f of pkg.files) {
+              const bytes = bytesFromBase64(f.data);
+              collected[index].push({ path: `${label}/${f.file_name}`, data: bytes, size: bytes.length });
+            }
             documents += pkg.files.length;
             invoicesWithDocs += 1;
           }
@@ -204,12 +219,37 @@ export function BatchDownloadPanel({ accounts, onDownloaded }: { accounts: Porta
         setResult({ ok: false, text: 'No documents were found in this batch.', details: problems });
         return;
       }
+      // Keep each invoice's paperwork together; start a new folder when the next invoice would pass the limit.
+      let part = 1;
+      let partSize = 0;
+      let parts = 1;
+      collected.forEach((files, index) => {
+        if (files.length === 0) return;
+        const invoiceSize = files.reduce((n, file) => n + file.size, 0);
+        if (splitFolders && partSize > 0 && partSize + invoiceSize > FOLDER_LIMIT_BYTES) {
+          part += 1;
+          partSize = 0;
+        }
+        partSize += invoiceSize;
+        parts = Math.max(parts, part);
+        const target = splitFolders ? (folder.folder(`Part_${String(part).padStart(2, '0')}`) as JSZip) : folder;
+        for (const file of files) target.file(file.path, file.data);
+        if (splitFolders && invoiceSize > FOLDER_LIMIT_BYTES) {
+          problems.push(`Invoice ${invoices[index].invoice_no}: its documents alone are over 90 MB, so it has a folder to itself`);
+        }
+      });
       if (problems.length) {
         folder.file('_report.txt', `Batch ${info.batch_no}\n\nNot included:\n${problems.map((p) => `- ${p}`).join('\n')}\n`);
       }
       const blob = await zip.generateAsync({ type: 'blob', compression: 'DEFLATE' });
       saveBlob(blob, `Batch_${info.batch_no}.zip`);
-      const text = `Downloaded ${invoicesWithDocs} of ${invoices.length} invoices (${documents} documents) as Batch_${info.batch_no}.zip.`;
+      const exportedAmount = invoices.reduce((sum, row, i) => (collected[i].length ? sum + row.amount : sum), 0);
+      const batchAmount = invoices.reduce((sum, row) => sum + row.amount, 0);
+      const amountNote =
+        exportedAmount === batchAmount ? money(exportedAmount) : `${money(exportedAmount)} of ${money(batchAmount)}`;
+      const text =
+        `Exported ${invoicesWithDocs} of ${invoices.length} invoices, ${amountNote} (${documents} documents) as Batch_${info.batch_no}.zip` +
+        `${splitFolders ? `, split into ${parts} folder${parts === 1 ? '' : 's'} of up to 90 MB` : ''}.`;
       setResult({ ok: true, text, details: problems });
       await logBatchDownload({
         accountId,
@@ -306,6 +346,22 @@ export function BatchDownloadPanel({ accounts, onDownloaded }: { accounts: Porta
               Combine each invoice's documents into one PDF
               <span className="block text-[11px] text-muted">
                 Off: each invoice gets its own folder with the original files.
+              </span>
+            </span>
+          </label>
+
+          <label className="flex items-start gap-2 text-sm text-ink">
+            <input
+              type="checkbox"
+              checked={splitFolders}
+              onChange={(e) => setSplitFolders(e.target.checked)}
+              disabled={running}
+              className="mt-1"
+            />
+            <span>
+              Split into folders of up to 90 MB
+              <span className="block text-[11px] text-muted">
+                Creates Part_01, Part_02 and so on inside the ZIP. An invoice's paperwork is never split across folders.
               </span>
             </span>
           </label>
