@@ -542,12 +542,15 @@ export function UploadPage() {
             type="button"
             role="tab"
             aria-selected={tab === id}
+            disabled={id === 'revised'}
+            title={id === 'revised' ? 'Revised invoices is not available yet' : undefined}
             onClick={() => setTab(id)}
             className={`-mb-px border-b-2 px-4 py-2 text-sm font-medium transition-colors ${
               tab === id ? 'border-accent text-ink' : 'border-transparent text-muted hover:text-ink'
-            }`}
+            } disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:text-muted`}
           >
             {label}
+            {id === 'revised' && <span className="ml-2 text-[10px] uppercase tracking-wide">Soon</span>}
           </button>
         ))}
       </div>
