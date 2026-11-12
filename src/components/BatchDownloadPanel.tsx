@@ -23,6 +23,23 @@ const CONCURRENCY = 3;
 /** Folder size limit when splitting a batch (bytes). */
 const FOLDER_LIMIT_BYTES = 90 * 1024 * 1024;
 
+/** An invoice that ended up with nothing to download. */
+interface MissingInvoice {
+  invoiceKey: number;
+  invoiceNo: string;
+  customer: string;
+  amount: number;
+  reason: string;
+}
+
+/** Short list of invoice numbers for the history entry. */
+function missingSummary(missing: MissingInvoice[]): string {
+  if (missing.length === 0) return '';
+  const shown = missing.slice(0, 5).map((m) => `#${m.invoiceNo}`);
+  const more = missing.length > 5 ? ` (+${missing.length - 5} more)` : '';
+  return ` No documents on ${missing.length} invoice${missing.length === 1 ? '' : 's'}: ${shown.join(', ')}${more}.`;
+}
+
 interface PendingFile {
   /** Path inside the invoice's slot: a PDF name, or folder/file name. */
   path: string;
@@ -45,11 +62,14 @@ function BatchInvoiceRow({
   row,
   open,
   onToggle,
+  missingReason,
 }: {
   accountId: number;
   row: PortalBatchInvoiceRow;
   open: boolean;
   onToggle: () => void;
+  /** Set after a download when this invoice had nothing to download. */
+  missingReason?: string;
 }) {
   const [files, setFiles] = useState<PortalInvoiceFileInfo[] | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -86,6 +106,11 @@ function BatchInvoiceRow({
         <span className="inline-block w-2 text-muted">{open ? '▾' : '▸'}</span>
         <span className="w-20 font-semibold text-accent">#{row.invoice_no}</span>
         <span className="min-w-0 flex-1 truncate text-ink">{row.customer}</span>
+        {missingReason && (
+          <span className="rounded bg-red/10 px-1.5 py-0.5 text-[10px] font-medium text-red" title={missingReason}>
+            No documents
+          </span>
+        )}
         <span className="text-xs text-muted">{money(row.amount)}</span>
       </button>
       {open && (
@@ -130,7 +155,8 @@ export function BatchDownloadPanel({ accounts, onDownloaded }: { accounts: Porta
   const [splitFolders, setSplitFolders] = useState(false);
   const [singlePdf, setSinglePdf] = useState(false);
   const [progress, setProgress] = useState<{ done: number; total: number } | null>(null);
-  const [result, setResult] = useState<{ ok: boolean; text: string; details?: string[] } | null>(null);
+  const [result, setResult] = useState<{ ok: boolean; text: string; details?: string[]; missing?: MissingInvoice[] } | null>(null);
+  const [missingByKey, setMissingByKey] = useState<Map<number, string>>(new Map());
 
   useEffect(() => {
     if (accountId === '' && accounts[0]) setAccountId(accounts[0].id);
@@ -159,6 +185,7 @@ export function BatchDownloadPanel({ accounts, onDownloaded }: { accounts: Porta
     const { info, invoices } = batch;
     cancelRef.current = false;
     setResult(null);
+    setMissingByKey(new Map());
     setProgress({ done: 0, total: invoices.length });
 
     const zip = new JSZip();
@@ -166,6 +193,7 @@ export function BatchDownloadPanel({ accounts, onDownloaded }: { accounts: Porta
     /** Files per invoice, kept in batch order so folders fill predictably. */
     const collected: PendingFile[][] = invoices.map(() => []);
     const problems: string[] = [];
+    const missing: MissingInvoice[] = [];
     let documents = 0;
     let invoicesWithDocs = 0;
     let done = 0;
@@ -181,7 +209,7 @@ export function BatchDownloadPanel({ accounts, onDownloaded }: { accounts: Porta
           const pkg = await fetchBatchInvoicePackage({ accountId, transKey: info.trans_key, invoiceKey: row.invoice_key });
           const label = `Invoice_${safeName(pkg.invoice_no)}${row.customer ? `_${safeName(row.customer)}` : ''}`;
           if (pkg.files.length === 0) {
-            problems.push(`Invoice ${pkg.invoice_no}: no documents on the invoice`);
+            missing.push({ invoiceKey: row.invoice_key, invoiceNo: pkg.invoice_no, customer: row.customer, amount: row.amount, reason: 'no documents on the invoice' });
           } else if (combine || singlePdf) {
             const merged = await mergeIntoOnePdf(
               pkg.files.map((f) => ({ fileName: f.file_name, blob: new Blob([bytesFromBase64(f.data)]) }))
@@ -191,7 +219,7 @@ export function BatchDownloadPanel({ accounts, onDownloaded }: { accounts: Porta
               documents += pkg.files.length - merged.skipped.length;
               invoicesWithDocs += 1;
             } else {
-              problems.push(`Invoice ${pkg.invoice_no}: documents could not be combined`);
+              missing.push({ invoiceKey: row.invoice_key, invoiceNo: pkg.invoice_no, customer: row.customer, amount: row.amount, reason: 'its documents are not PDFs or images that can be combined' });
             }
             for (const name of merged.skipped) problems.push(`Invoice ${pkg.invoice_no}: left out ${name}`);
           } else {
@@ -203,7 +231,7 @@ export function BatchDownloadPanel({ accounts, onDownloaded }: { accounts: Porta
             invoicesWithDocs += 1;
           }
         } catch (err) {
-          problems.push(`Invoice ${row.invoice_no}: ${err instanceof Error ? err.message : 'failed'}`);
+          missing.push({ invoiceKey: row.invoice_key, invoiceNo: row.invoice_no, customer: row.customer, amount: row.amount, reason: err instanceof Error ? err.message : 'the download failed' });
         }
         done += 1;
         setProgress({ done, total: invoices.length });
@@ -217,13 +245,15 @@ export function BatchDownloadPanel({ accounts, onDownloaded }: { accounts: Porta
         return;
       }
       if (invoicesWithDocs === 0) {
-        setResult({ ok: false, text: 'No documents were found in this batch.', details: problems });
+        setMissingByKey(new Map(missing.map((m) => [m.invoiceKey, m.reason])));
+        setResult({ ok: false, text: 'No documents were found in this batch.', details: problems, missing });
         return;
       }
       const exportedAmount = invoices.reduce((sum, row, i) => (collected[i].length ? sum + row.amount : sum), 0);
       const batchAmount = invoices.reduce((sum, row) => sum + row.amount, 0);
       const amountNote =
         exportedAmount === batchAmount ? money(exportedAmount) : `${money(exportedAmount)} of ${money(batchAmount)}`;
+      setMissingByKey(new Map(missing.map((m) => [m.invoiceKey, m.reason])));
       const noteProblems = problems.length ? ` ${problems.length} item${problems.length === 1 ? '' : 's'} not included.` : '';
 
       // One PDF for the whole batch: every invoice's pages, in batch order.
@@ -261,9 +291,9 @@ export function BatchDownloadPanel({ accounts, onDownloaded }: { accounts: Porta
           saveBlob(await bundle.generateAsync({ type: 'blob', compression: 'STORE' }), `Batch_${info.batch_no}.zip`);
           text = `Exported ${detail} as ${parts.length} PDFs of up to 90 MB each, in Batch_${info.batch_no}.zip.`;
         }
-        setResult({ ok: true, text, details: problems });
+        setResult({ ok: true, text, details: problems, missing });
         const leftOut = problems.length ? ` ${problems.length} item${problems.length === 1 ? '' : 's'} not included.` : '';
-        await logBatchDownload({ accountId, batchNo: info.batch_no, message: `${text}${leftOut}` }).catch(() => {});
+        await logBatchDownload({ accountId, batchNo: info.batch_no, message: `${text}${leftOut}${missingSummary(missing)}` }).catch(() => {});
         return;
       }
 
@@ -286,19 +316,25 @@ export function BatchDownloadPanel({ accounts, onDownloaded }: { accounts: Porta
           problems.push(`Invoice ${invoices[index].invoice_no}: its documents alone are over 90 MB, so it has a folder to itself`);
         }
       });
-      if (problems.length) {
-        folder.file('_report.txt', `Batch ${info.batch_no}\n\nNot included:\n${problems.map((p) => `- ${p}`).join('\n')}\n`);
+      if (problems.length || missing.length) {
+        const lines = [`Batch ${info.batch_no}`];
+        if (missing.length) {
+          lines.push('', `Invoices with no documents (${missing.length}):`);
+          for (const m of missing) lines.push(`- #${m.invoiceNo} ${m.customer} ${money(m.amount)}: ${m.reason}`);
+        }
+        if (problems.length) lines.push('', 'Other items not included:', ...problems.map((p) => `- ${p}`));
+        folder.file('_report.txt', `${lines.join('\n')}\n`);
       }
       const blob = await zip.generateAsync({ type: 'blob', compression: 'DEFLATE' });
       saveBlob(blob, `Batch_${info.batch_no}.zip`);
       const text =
         `Exported ${invoicesWithDocs} of ${invoices.length} invoices, ${amountNote} (${documents} documents) as Batch_${info.batch_no}.zip` +
         `${splitFolders ? `, split into ${parts} folder${parts === 1 ? '' : 's'} of up to 90 MB` : ''}.`;
-      setResult({ ok: true, text, details: problems });
+      setResult({ ok: true, text, details: problems, missing });
       await logBatchDownload({
         accountId,
         batchNo: info.batch_no,
-        message: `${text}${noteProblems}`,
+        message: `${text}${noteProblems}${missingSummary(missing)}`,
       }).catch(() => {});
     } catch (err) {
       setResult({ ok: false, text: err instanceof Error ? err.message : 'The download failed' });
@@ -380,6 +416,7 @@ export function BatchDownloadPanel({ accounts, onDownloaded }: { accounts: Porta
                 row={row}
                 open={openKey === row.invoice_key}
                 onToggle={() => setOpenKey((current) => (current === row.invoice_key ? null : row.invoice_key))}
+                missingReason={missingByKey.get(row.invoice_key)}
               />
             ))}
           </ul>
@@ -468,6 +505,24 @@ export function BatchDownloadPanel({ accounts, onDownloaded }: { accounts: Porta
               <p className="text-xs text-muted">
                 Invoice {progress.done} of {progress.total}
               </p>
+            </div>
+          )}
+
+          {result?.missing && result.missing.length > 0 && (
+            <div className="space-y-1.5 rounded-lg border border-red/40 bg-red/5 px-3 py-2" role="alert">
+              <p className="text-sm font-medium text-red">
+                ⚠ {result.missing.length} invoice{result.missing.length === 1 ? ' is' : 's are'} missing documents
+              </p>
+              <ul className="max-h-[200px] space-y-0.5 overflow-y-auto text-xs text-ink">
+                {result.missing.map((m) => (
+                  <li key={m.invoiceKey} className="flex flex-wrap gap-x-3">
+                    <span className="w-20 font-semibold">#{m.invoiceNo}</span>
+                    <span className="min-w-0 flex-1 truncate">{m.customer}</span>
+                    <span className="text-muted">{money(m.amount)}</span>
+                    <span className="w-full pl-[5.5rem] text-[11px] text-muted">{m.reason}</span>
+                  </li>
+                ))}
+              </ul>
             </div>
           )}
 
