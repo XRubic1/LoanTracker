@@ -1,4 +1,5 @@
 import { getSupabase } from '@/lib/supabase';
+import { prepareForPortal } from './shrinkForPortal';
 
 export interface PortalAccount {
   id: number;
@@ -124,14 +125,16 @@ export const searchPortalInvoices = (input: {
   poId?: string;
 }) => call<{ invoices: PortalInvoice[] }>({ action: 'invoice_search', ...input });
 
-export function uploadInvoiceFiles(input: { accountId: number; invoice: PortalInvoice; files: File[] }) {
+export async function uploadInvoiceFiles(input: { accountId: number; invoice: PortalInvoice; files: File[] }) {
+  const prepared = await prepareForPortal(input.files);
   const form = new FormData();
   form.append('action', 'invoice_upload');
   form.append('accountId', String(input.accountId));
   form.append('invoiceKey', String(input.invoice.invoiceKey));
   form.append('invoiceNo', input.invoice.invoiceNo);
-  for (const file of input.files) form.append('files', file, file.name);
-  return call<{ invoice_no: string; message: string }>(form);
+  for (const file of prepared.files) form.append('files', file, file.name);
+  const result = await call<{ invoice_no: string; message: string }>(form);
+  return prepared.notes.length ? { ...result, message: `${result.message} (${prepared.notes.join('; ')}.)` } : result;
 }
 
 export interface PortalInvoiceFileInfo {
@@ -286,11 +289,12 @@ export const removeRevisedInvoice = (input: { accountId: number; id: number }) =
 export const processRevisedInvoices = (input: { accountId: number; ids: number[] }) =>
   call<{ processed: number; total: number; message: string }>({ action: 'revised_process', ...input });
 
-export function uploadRevisedDocuments(input: { accountId: number; id: number; files: File[] }) {
+export async function uploadRevisedDocuments(input: { accountId: number; id: number; files: File[] }) {
+  const prepared = await prepareForPortal(input.files);
   const form = new FormData();
   form.append('action', 'revised_upload');
   form.append('accountId', String(input.accountId));
   form.append('id', String(input.id));
-  for (const file of input.files) form.append('files', file, file.name);
+  for (const file of prepared.files) form.append('files', file, file.name);
   return call<{ uploaded: number }>(form);
 }

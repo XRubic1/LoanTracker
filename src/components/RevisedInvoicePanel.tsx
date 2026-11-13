@@ -15,7 +15,7 @@ import { findFamily, nextRevisionNumber, revisionSuffix } from '@/lib/revisedInv
 const inputClass =
   'w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-ink outline-none focus:border-accent';
 const money = (value: number) => value.toLocaleString('en-US', { style: 'currency', currency: 'USD' });
-const MAX_FILE_BYTES = 16 * 1024 * 1024;
+const MAX_FILE_BYTES = 50 * 1024 * 1024;
 
 type Status = { ok: boolean; text: string } | null;
 
@@ -92,7 +92,7 @@ function FileChooser({
               className={`flex items-center gap-1.5 rounded-full bg-surface px-2.5 py-1 text-xs ${
                 file.size > MAX_FILE_BYTES ? 'text-red' : 'text-ink'
               }`}
-              title={file.size > MAX_FILE_BYTES ? 'Over 16 MB' : file.name}
+              title={file.size > MAX_FILE_BYTES ? 'Over 50 MB' : file.name}
             >
               <span className="max-w-[220px] truncate">{file.name}</span>
               <button
@@ -140,7 +140,7 @@ function WaitingRow({
     if (files.length === 0) return;
     const tooBig = files.find((f) => f.size > MAX_FILE_BYTES);
     if (tooBig) {
-      setError(`${tooBig.name} is over 16 MB`);
+      setError(`${tooBig.name} is over 50 MB`);
       return;
     }
     setUploading(true);
@@ -515,7 +515,7 @@ export function RevisedInvoicePanel({ accounts, onChanged }: { accounts: PortalA
               {creating ? 'Creating…' : files.length > 0 ? `Create and upload ${files.length}` : 'Create invoice'}
             </button>
             {family !== null && !basePo && <span className="text-sm text-red">No PO number on this invoice.</span>}
-            {!filesOk && <span className="text-sm text-red">A file is over 16 MB.</span>}
+            {!filesOk && <span className="text-sm text-red">A file is over 50 MB.</span>}
           </div>
         </div>
       )}

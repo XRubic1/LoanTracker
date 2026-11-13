@@ -199,7 +199,7 @@ function InvoiceUploadPanel({ accounts, onUploaded }: { accounts: PortalAccount[
               dragging ? 'border-accent bg-accent/5 text-ink' : 'border-border text-muted hover:border-accent'
             }`}
           >
-            Drop documents for invoice #{selected.invoiceNo} here, or click to choose (up to 16 MB each)
+            Drop documents for invoice #{selected.invoiceNo} here, or click to choose (large files are shrunk or split automatically)
             <input
               ref={fileInput}
               type="file"
@@ -231,7 +231,7 @@ function InvoiceUploadPanel({ accounts, onUploaded }: { accounts: PortalAccount[
           <div className="flex flex-wrap items-center gap-3">
             <button
               type="button"
-              disabled={busy || files.length === 0 || files.some((f) => f.size > 16 * 1024 * 1024)}
+              disabled={busy || files.length === 0 || files.some((f) => f.size > 50 * 1024 * 1024)}
               onClick={() => void upload()}
               className="rounded-lg btn-primary px-4 py-2 text-sm disabled:opacity-60"
             >
