@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { fmtDateTime } from '@/lib/utils';
 import {
   createRevisedInvoice,
   listRevisedInvoices,
@@ -15,156 +14,233 @@ import { findFamily, nextRevisionNumber, revisionSuffix } from '@/lib/revisedInv
 
 const inputClass =
   'w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-ink outline-none focus:border-accent';
-const labelClass = 'mb-1 block text-[10px] font-medium uppercase tracking-widest text-label';
 const money = (value: number) => value.toLocaleString('en-US', { style: 'currency', currency: 'USD' });
+const MAX_FILE_BYTES = 16 * 1024 * 1024;
 
-/** Documents attached to one created invoice, plus a way to add more. */
-function RevisedDocuments({
-  accountId,
-  row,
+type Status = { ok: boolean; text: string } | null;
+
+/** One box finds an invoice by invoice #, load # or customer. */
+async function searchEverywhere(accountId: number, query: string): Promise<PortalInvoice[]> {
+  const runs = await Promise.allSettled([
+    searchPortalInvoices({ accountId, invoice: query }),
+    searchPortalInvoices({ accountId, poId: query }),
+    searchPortalInvoices({ accountId, debtorName: query }),
+  ]);
+  const ok = runs.filter((r): r is PromiseFulfilledResult<{ invoices: PortalInvoice[] }> => r.status === 'fulfilled');
+  if (ok.length === 0) {
+    const failed = runs.find((r): r is PromiseRejectedResult => r.status === 'rejected');
+    throw failed?.reason instanceof Error ? failed.reason : new Error('Search failed');
+  }
+  const byKey = new Map<number, PortalInvoice>();
+  for (const run of ok) for (const invoice of run.value.invoices) byKey.set(invoice.invoiceKey, invoice);
+  return [...byKey.values()].sort((a, b) => a.invoiceNo.localeCompare(b.invoiceNo, undefined, { numeric: true }));
+}
+
+/** Files to attach: drop them or click. Nothing else to press. */
+function FileChooser({
+  files,
+  onChange,
   disabled,
-  onUploaded,
 }: {
-  accountId: number;
-  row: RevisedInvoice;
-  disabled: boolean;
-  onUploaded: () => Promise<void>;
+  files: File[];
+  onChange: (files: File[]) => void;
+  disabled?: boolean;
 }) {
   const input = useRef<HTMLInputElement>(null);
-  const [open, setOpen] = useState(false);
-  const [files, setFiles] = useState<File[]>([]);
   const [dragging, setDragging] = useState(false);
-  const [busy, setBusy] = useState(false);
-  const [message, setMessage] = useState<{ ok: boolean; text: string } | null>(null);
 
-  const add = (list: FileList | File[]) =>
-    setFiles((current) => {
-      const known = new Set(current.map((f) => `${f.name}:${f.size}`));
-      return [...current, ...[...list].filter((f) => !known.has(`${f.name}:${f.size}`))];
-    });
-
-  const upload = async () => {
-    if (files.length === 0) return;
-    if (!window.confirm(`Upload ${files.length} document${files.length === 1 ? '' : 's'} to invoice #${row.new_invoice_no}?`)) return;
-    setBusy(true);
-    setMessage(null);
-    try {
-      await uploadRevisedDocuments({ accountId, id: row.id, files });
-      setMessage({ ok: true, text: `Uploaded ${files.length} document${files.length === 1 ? '' : 's'}.` });
-      setFiles([]);
-      await onUploaded();
-    } catch (err) {
-      setMessage({ ok: false, text: err instanceof Error ? err.message : 'Upload failed' });
-    } finally {
-      setBusy(false);
-    }
+  const add = (list: FileList | File[]) => {
+    const known = new Set(files.map((f) => `${f.name}:${f.size}`));
+    onChange([...files, ...[...list].filter((f) => !known.has(`${f.name}:${f.size}`))]);
   };
 
   return (
-    <div className="basis-full">
-      <button
-        type="button"
-        onClick={() => setOpen((v) => !v)}
-        aria-expanded={open}
-        className="inline-flex items-center gap-1 text-xs text-accent hover:underline"
+    <div className="space-y-2">
+      <div
+        onDragOver={(e) => {
+          e.preventDefault();
+          if (!disabled) setDragging(true);
+        }}
+        onDragLeave={() => setDragging(false)}
+        onDrop={(e) => {
+          e.preventDefault();
+          setDragging(false);
+          if (!disabled) add(e.dataTransfer.files);
+        }}
+        onClick={() => !disabled && input.current?.click()}
+        className={`cursor-pointer rounded-lg border border-dashed px-3 py-3 text-center text-sm ${
+          dragging ? 'border-accent bg-accent/5 text-ink' : 'border-border text-muted hover:border-accent'
+        } ${disabled ? 'cursor-not-allowed opacity-60' : ''}`}
       >
-        <span className="inline-block w-2">{open ? '▾' : '▸'}</span>
-        Documents ({row.files.length})
-        {row.files.length === 0 && <span className="ml-1 text-red">none yet</span>}
-      </button>
-      {open && (
-        <div className="mt-2 space-y-2 rounded-lg bg-surface p-3">
-          {row.files.length > 0 && (
-            <ul className="space-y-0.5 text-xs text-ink">
-              {row.files.map((name) => (
-                <li key={name} className="truncate">
-                  {name}
-                </li>
-              ))}
-            </ul>
-          )}
-          <div
-            onDragOver={(e) => {
-              e.preventDefault();
-              setDragging(true);
-            }}
-            onDragLeave={() => setDragging(false)}
-            onDrop={(e) => {
-              e.preventDefault();
-              setDragging(false);
-              add(e.dataTransfer.files);
-            }}
-            onClick={() => input.current?.click()}
-            className={`cursor-pointer rounded-lg border-2 border-dashed px-3 py-4 text-center text-xs ${
-              dragging ? 'border-accent bg-accent/5 text-ink' : 'border-border text-muted hover:border-accent'
-            }`}
-          >
-            Drop the revised documents for #{row.new_invoice_no} here, or click to choose (up to 16 MB each)
-            <input
-              ref={input}
-              type="file"
-              multiple
-              className="hidden"
-              onChange={(e) => {
-                if (e.target.files) add(e.target.files);
-                e.target.value = '';
-              }}
-            />
-          </div>
-          {files.length > 0 && (
-            <ul className="divide-y divide-border rounded-lg border border-border text-xs">
-              {files.map((file) => (
-                <li key={`${file.name}:${file.size}`} className="flex items-center justify-between gap-3 px-3 py-1.5">
-                  <span className="min-w-0 truncate text-ink">{file.name}</span>
-                  <button type="button" onClick={() => setFiles((c) => c.filter((x) => x !== file))} className="text-muted hover:text-red">
-                    Remove
-                  </button>
-                </li>
-              ))}
-            </ul>
-          )}
-          <div className="flex flex-wrap items-center gap-3">
-            <button
-              type="button"
-              disabled={disabled || busy || files.length === 0 || files.some((f) => f.size > 16 * 1024 * 1024)}
-              onClick={() => void upload()}
-              className="rounded-lg btn-primary px-3 py-1.5 text-xs disabled:opacity-60"
+        Drop revised documents here
+        <input
+          ref={input}
+          type="file"
+          multiple
+          className="hidden"
+          onChange={(e) => {
+            if (e.target.files) add(e.target.files);
+            e.target.value = '';
+          }}
+        />
+      </div>
+      {files.length > 0 && (
+        <ul className="flex flex-wrap gap-1.5">
+          {files.map((file) => (
+            <li
+              key={`${file.name}:${file.size}`}
+              className={`flex items-center gap-1.5 rounded-full bg-surface px-2.5 py-1 text-xs ${
+                file.size > MAX_FILE_BYTES ? 'text-red' : 'text-ink'
+              }`}
+              title={file.size > MAX_FILE_BYTES ? 'Over 16 MB' : file.name}
             >
-              {busy ? 'Uploading…' : `Upload ${files.length || ''} document${files.length === 1 ? '' : 's'}`.replace('  ', ' ')}
-            </button>
-            {message && <span className={`text-xs ${message.ok ? 'text-green' : 'text-red'}`}>{message.text}</span>}
-          </div>
-        </div>
+              <span className="max-w-[220px] truncate">{file.name}</span>
+              <button
+                type="button"
+                disabled={disabled}
+                onClick={() => onChange(files.filter((f) => f !== file))}
+                className="text-muted hover:text-red"
+                aria-label={`Remove ${file.name}`}
+              >
+                ×
+              </button>
+            </li>
+          ))}
+        </ul>
       )}
     </div>
   );
 }
 
-/** Find the invoice, enter the difference, create the revised invoice, then process the ones you created. */
+/** A created invoice in the waiting list. Dropping or choosing files uploads them straight away. */
+function WaitingRow({
+  accountId,
+  row,
+  checked,
+  busy,
+  onToggle,
+  onRemove,
+  onUploaded,
+}: {
+  accountId: number;
+  row: RevisedInvoice;
+  checked: boolean;
+  busy: boolean;
+  onToggle: (value: boolean) => void;
+  onRemove: () => void;
+  onUploaded: () => Promise<void>;
+}) {
+  const input = useRef<HTMLInputElement>(null);
+  const [uploading, setUploading] = useState(false);
+  const [dragging, setDragging] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const upload = async (list: FileList | File[]) => {
+    const files = [...list];
+    if (files.length === 0) return;
+    const tooBig = files.find((f) => f.size > MAX_FILE_BYTES);
+    if (tooBig) {
+      setError(`${tooBig.name} is over 16 MB`);
+      return;
+    }
+    setUploading(true);
+    setError(null);
+    try {
+      await uploadRevisedDocuments({ accountId, id: row.id, files });
+      await onUploaded();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Upload failed');
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  return (
+    <li
+      onDragOver={(e) => {
+        e.preventDefault();
+        if (row.in_portal) setDragging(true);
+      }}
+      onDragLeave={() => setDragging(false)}
+      onDrop={(e) => {
+        e.preventDefault();
+        setDragging(false);
+        if (row.in_portal) void upload(e.dataTransfer.files);
+      }}
+      className={`flex flex-wrap items-center gap-x-4 gap-y-1 px-3 py-2.5 text-sm ${dragging ? 'bg-accent/10' : ''}`}
+    >
+      <input
+        type="checkbox"
+        aria-label={`Process invoice ${row.new_invoice_no}`}
+        checked={row.in_portal && checked}
+        disabled={!row.in_portal || busy}
+        onChange={(e) => onToggle(e.target.checked)}
+      />
+      <span className="w-28 font-semibold text-ink">#{row.new_invoice_no}</span>
+      <span className="min-w-0 flex-1 truncate text-ink">{row.broker}</span>
+      <span className="font-medium text-ink">{money(row.amount)}</span>
+      {row.in_portal ? (
+        <button
+          type="button"
+          disabled={uploading || busy}
+          onClick={() => input.current?.click()}
+          title={row.files.length ? row.files.join('\n') : 'Drop files on this row or click to add'}
+          className={`text-xs hover:underline disabled:opacity-60 ${row.files.length ? 'text-green' : 'text-red'}`}
+        >
+          {uploading
+            ? 'Uploading…'
+            : row.files.length
+              ? `${row.files.length} file${row.files.length === 1 ? '' : 's'} · add`
+              : '+ Add documents'}
+        </button>
+      ) : (
+        <span className="text-xs text-red" title="Processed or removed in the portal itself">
+          Not on the portal's list
+        </span>
+      )}
+      <input
+        ref={input}
+        type="file"
+        multiple
+        className="hidden"
+        onChange={(e) => {
+          if (e.target.files) void upload(e.target.files);
+          e.target.value = '';
+        }}
+      />
+      <button
+        type="button"
+        disabled={busy || uploading}
+        onClick={onRemove}
+        className="text-xs text-muted hover:text-red disabled:opacity-60"
+      >
+        Remove
+      </button>
+      {error && <p className="basis-full text-xs text-red">{error}</p>}
+    </li>
+  );
+}
+
+/** Find an invoice, enter the difference, add documents, create. Then process what you created. */
 export function RevisedInvoicePanel({ accounts, onChanged }: { accounts: PortalAccount[]; onChanged: () => void }) {
   const [accountId, setAccountId] = useState<number | ''>(accounts[0]?.id ?? '');
-  const [invoiceNo, setInvoiceNo] = useState('');
-  const [customer, setCustomer] = useState('');
-  const [poId, setPoId] = useState('');
+  const [query, setQuery] = useState('');
   const [searching, setSearching] = useState(false);
   const [matches, setMatches] = useState<PortalInvoice[] | null>(null);
-  const [searchError, setSearchError] = useState<string | null>(null);
   const [selected, setSelected] = useState<PortalInvoice | null>(null);
   /** The original invoice and all its revisions, loaded when an invoice is picked. */
   const [family, setFamily] = useState<ReturnType<typeof findFamily<PortalInvoice>> | null>(null);
   const [difference, setDifference] = useState('');
-  const [description, setDescription] = useState('');
+  const [files, setFiles] = useState<File[]>([]);
   const [creating, setCreating] = useState(false);
-  const [createMessage, setCreateMessage] = useState<{ ok: boolean; text: string } | null>(null);
+  const [status, setStatus] = useState<Status>(null);
 
   const [list, setList] = useState<RevisedInvoice[]>([]);
-  const [listError, setListError] = useState<string | null>(null);
   const [checked, setChecked] = useState<Set<number>>(new Set());
-  const [processing, setProcessing] = useState(false);
-  const [removing, setRemoving] = useState<number | null>(null);
   /** Invoices the list has already shown, so only new ones start checked. */
   const knownIds = useRef<Set<number>>(new Set());
-  const [processMessage, setProcessMessage] = useState<{ ok: boolean; text: string } | null>(null);
+  const [processing, setProcessing] = useState(false);
+  const [listStatus, setListStatus] = useState<Status>(null);
 
   useEffect(() => {
     if (accountId === '' && accounts[0]) setAccountId(accounts[0].id);
@@ -174,20 +250,17 @@ export function RevisedInvoicePanel({ accounts, onChanged }: { accounts: PortalA
     if (accountId === '') return;
     try {
       const { revised } = await listRevisedInvoices(accountId);
-      // Newly created invoices start checked, as they have to be on the portal's schedule page.
+      // New invoices start checked, as they have to be on the portal's schedule page.
       const fresh = new Set(revised.filter((r) => !knownIds.current.has(r.id)).map((r) => r.id));
       revised.forEach((r) => knownIds.current.add(r.id));
       setList(revised);
-      setListError(null);
       setChecked((current) => {
         const next = new Set<number>();
-        for (const r of revised) {
-          if (r.in_portal && (fresh.has(r.id) || current.has(r.id))) next.add(r.id);
-        }
+        for (const r of revised) if (r.in_portal && (fresh.has(r.id) || current.has(r.id))) next.add(r.id);
         return next;
       });
     } catch (err) {
-      setListError(err instanceof Error ? err.message : 'Could not load the list');
+      setListStatus({ ok: false, text: err instanceof Error ? err.message : 'Could not load the list' });
     }
   }, [accountId]);
 
@@ -195,38 +268,21 @@ export function RevisedInvoicePanel({ accounts, onChanged }: { accounts: PortalA
     setList([]);
     knownIds.current = new Set();
     setChecked(new Set());
-    setProcessMessage(null);
+    setListStatus(null);
     void loadList();
   }, [loadList]);
-
-  const search = async (event: React.FormEvent) => {
-    event.preventDefault();
-    if (accountId === '') return;
-    setSearching(true);
-    setSearchError(null);
-    setSelected(null);
-    setFamily(null);
-    setCreateMessage(null);
-    try {
-      const { invoices } = await searchPortalInvoices({ accountId, invoice: invoiceNo, debtorName: customer, poId });
-      setMatches(invoices);
-      if (invoices.length === 1) void choose(invoices[0]);
-    } catch (err) {
-      setMatches(null);
-      setSearchError(err instanceof Error ? err.message : 'Search failed');
-    } finally {
-      setSearching(false);
-    }
-  };
 
   const choose = useCallback(
     async (invoice: PortalInvoice) => {
       setSelected(invoice);
       setFamily(null);
-      setCreateMessage(null);
+      setStatus(null);
       if (accountId === '') return;
       try {
-        const { invoices } = await searchPortalInvoices({ accountId, invoice: invoice.invoiceNo.replace(/R\d*$/i, '') || invoice.invoiceNo });
+        const { invoices } = await searchPortalInvoices({
+          accountId,
+          invoice: invoice.invoiceNo.replace(/R\d*$/i, '') || invoice.invoiceNo,
+        });
         setFamily(findFamily(invoices, invoice));
       } catch {
         setFamily(findFamily([invoice], invoice));
@@ -235,41 +291,63 @@ export function RevisedInvoicePanel({ accounts, onChanged }: { accounts: PortalA
     [accountId]
   );
 
-  const differenceNum = difference.trim() ? Math.round(parseFloat(difference) * 100) / 100 : NaN;
-  const differenceOk = Number.isFinite(differenceNum) && differenceNum > 0;
+  const search = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (accountId === '' || !query.trim()) return;
+    setSearching(true);
+    setStatus(null);
+    setSelected(null);
+    setFamily(null);
+    try {
+      const found = await searchEverywhere(accountId, query.trim());
+      setMatches(found);
+      if (found.length === 1) void choose(found[0]);
+    } catch (err) {
+      setMatches(null);
+      setStatus({ ok: false, text: err instanceof Error ? err.message : 'Search failed' });
+    } finally {
+      setSearching(false);
+    }
+  };
+
   const members = family?.members ?? [];
-  const nextSuffix = revisionSuffix(nextRevisionNumber(members));
+  const suffix = revisionSuffix(nextRevisionNumber(members));
   const baseNo = family?.base ?? selected?.invoiceNo ?? '';
   const basePo = ((family?.original ?? selected)?.poId ?? '').replace(/R\d*$/i, '');
-  const newInvoiceNo = `${baseNo}${nextSuffix}`;
-  const newPoNo = basePo ? `${basePo}${nextSuffix}` : '';
+  const newInvoiceNo = `${baseNo}${suffix}`;
   const familyTotal = members.reduce((sum, m) => sum + m.amount, 0);
+  const differenceNum = difference.trim() ? Math.round(parseFloat(difference) * 100) / 100 : NaN;
+  const differenceOk = Number.isFinite(differenceNum) && differenceNum > 0;
+  const filesOk = files.every((f) => f.size <= MAX_FILE_BYTES);
 
   const create = async () => {
-    if (accountId === '' || !selected || !differenceOk) return;
-    const question =
-      `Create revised invoice #${newInvoiceNo}?\n\nBroker: ${selected.debtorName}\nPO: ${newPoNo}\nAmount: ${money(differenceNum)}\nFull amount with this one: ${money(familyTotal + differenceNum)}\n\n` +
-      'It will be created in the TruFunding portal and wait on the schedule list until you process it.';
-    if (!window.confirm(question)) return;
+    if (accountId === '' || !selected || !differenceOk || !filesOk) return;
     setCreating(true);
-    setCreateMessage(null);
+    setStatus(null);
     try {
-      const { revised } = await createRevisedInvoice({
-        accountId,
-        invoice: selected,
-        amount: differenceNum,
-        description,
-      });
-      setCreateMessage({ ok: true, text: `Created invoice #${revised.new_invoice_no} for ${money(revised.amount)}.` });
+      const { revised } = await createRevisedInvoice({ accountId, invoice: selected, amount: differenceNum });
+      let text = `Created #${revised.new_invoice_no} for ${money(revised.amount)}`;
+      let ok = true;
+      if (files.length > 0) {
+        try {
+          await uploadRevisedDocuments({ accountId, id: revised.id, files });
+          text += ` with ${files.length} document${files.length === 1 ? '' : 's'}`;
+        } catch (err) {
+          ok = false;
+          text += `, but the documents did not upload (${err instanceof Error ? err.message : 'error'}). Add them from the list below.`;
+        }
+      }
+      setStatus({ ok, text: `${text}${ok ? '.' : ''}` });
       setDifference('');
-      setDescription('');
+      setFiles([]);
       setSelected(null);
       setFamily(null);
       setMatches(null);
+      setQuery('');
       await loadList();
       onChanged();
     } catch (err) {
-      setCreateMessage({ ok: false, text: err instanceof Error ? err.message : 'Could not create the invoice' });
+      setStatus({ ok: false, text: err instanceof Error ? err.message : 'Could not create the invoice' });
     } finally {
       setCreating(false);
     }
@@ -277,25 +355,14 @@ export function RevisedInvoicePanel({ accounts, onChanged }: { accounts: PortalA
 
   const remove = async (row: RevisedInvoice) => {
     if (accountId === '') return;
-    const question = row.in_portal
-      ? `Remove invoice #${row.new_invoice_no} (${money(row.amount)}) from the portal's schedule list?`
-      : `Remove #${row.new_invoice_no} from this list? It is no longer on the portal's schedule list.`;
-    if (!window.confirm(question)) return;
-    setRemoving(row.id);
-    setProcessMessage(null);
+    if (!window.confirm(`Remove #${row.new_invoice_no}?`)) return;
+    setListStatus(null);
     try {
       await removeRevisedInvoice({ accountId, id: row.id });
-      setChecked((current) => {
-        const next = new Set(current);
-        next.delete(row.id);
-        return next;
-      });
       await loadList();
       onChanged();
     } catch (err) {
-      setProcessMessage({ ok: false, text: err instanceof Error ? err.message : 'Could not remove the invoice' });
-    } finally {
-      setRemoving(null);
+      setListStatus({ ok: false, text: err instanceof Error ? err.message : 'Could not remove the invoice' });
     }
   };
 
@@ -305,26 +372,24 @@ export function RevisedInvoicePanel({ accounts, onChanged }: { accounts: PortalA
   const process = async () => {
     if (accountId === '' || selectedRows.length === 0) return;
     const names = selectedRows.map((r) => `#${r.new_invoice_no}  ${money(r.amount)}`).join('\n');
-    const question =
-      `Process ${selectedRows.length} revised invoice${selectedRows.length === 1 ? '' : 's'}, ${money(selectedTotal)} in total?\n\n` +
-      `${names}\n\nThis submits them to TruFunding for processing. Only the invoices listed here are included.`;
     const withoutDocs = selectedRows.filter((r) => r.files.length === 0);
     const warning = withoutDocs.length
-      ? `\n\n⚠ No documents are attached to: ${withoutDocs.map((r) => '#' + r.new_invoice_no).join(', ')}.`
+      ? `\n\n⚠ No documents on: ${withoutDocs.map((r) => '#' + r.new_invoice_no).join(', ')}`
       : '';
-    if (!window.confirm(question + warning)) return;
+    const question = `Process ${selectedRows.length} invoice${selectedRows.length === 1 ? '' : 's'} (${money(selectedTotal)})?\n\n${names}${warning}`;
+    if (!window.confirm(question)) return;
     setProcessing(true);
-    setProcessMessage(null);
+    setListStatus(null);
     try {
       const done = await processRevisedInvoices({ accountId, ids: selectedRows.map((r) => r.id) });
-      setProcessMessage({
+      setListStatus({
         ok: true,
-        text: `Processed ${done.processed} invoice${done.processed === 1 ? '' : 's'}, ${money(done.total)}. ${done.message}`,
+        text: `Processed ${done.processed} invoice${done.processed === 1 ? '' : 's'}, ${money(done.total)}.`,
       });
       await loadList();
       onChanged();
     } catch (err) {
-      setProcessMessage({ ok: false, text: err instanceof Error ? err.message : 'Processing failed' });
+      setListStatus({ ok: false, text: err instanceof Error ? err.message : 'Processing failed' });
     } finally {
       setProcessing(false);
     }
@@ -338,261 +403,162 @@ export function RevisedInvoicePanel({ accounts, onChanged }: { accounts: PortalA
     );
   }
 
-  const hasQuery = Boolean(invoiceNo.trim() || customer.trim() || poId.trim());
-
   return (
-    <div className="space-y-6 px-4 py-4">
-      <div className="space-y-4">
-        <p className="text-[11px] font-medium uppercase tracking-widest text-label">1 · Find the invoice</p>
-        <form onSubmit={(e) => void search(e)} className="space-y-3">
-          <div className="grid gap-3 sm:grid-cols-4">
-            <div>
-              <label className={labelClass}>Client</label>
-              <select
-                value={accountId}
-                onChange={(e) => {
-                  setAccountId(Number(e.target.value));
-                  setMatches(null);
-                  setSelected(null);
-                }}
-                className={inputClass}
+    <div className="space-y-5 px-4 py-4">
+      <form onSubmit={(e) => void search(e)} className="flex flex-wrap gap-2">
+        <select
+          value={accountId}
+          onChange={(e) => {
+            setAccountId(Number(e.target.value));
+            setMatches(null);
+            setSelected(null);
+            setFamily(null);
+          }}
+          className={`${inputClass} sm:w-60`}
+          aria-label="Client"
+        >
+          {accounts.map((a) => (
+            <option key={a.id} value={a.id}>
+              {a.label}
+            </option>
+          ))}
+        </select>
+        <input
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          placeholder="Invoice #, load #, or customer"
+          className={`${inputClass} min-w-[200px] flex-1`}
+          aria-label="Invoice number, load number or customer"
+        />
+        <button
+          type="submit"
+          disabled={searching || !query.trim()}
+          className="rounded-lg btn-primary px-5 py-2 text-sm disabled:opacity-60"
+        >
+          {searching ? 'Searching…' : 'Find'}
+        </button>
+      </form>
+
+      {matches && matches.length === 0 && <p className="text-sm text-red">No invoice found.</p>}
+
+      {matches && matches.length > 1 && !selected && (
+        <ul className="divide-y divide-border rounded-lg border border-border">
+          {matches.map((m) => (
+            <li key={m.invoiceKey}>
+              <button
+                type="button"
+                onClick={() => void choose(m)}
+                className="flex w-full flex-wrap items-center gap-x-4 gap-y-0.5 px-3 py-2 text-left text-sm hover:bg-surface"
               >
-                {accounts.map((a) => (
-                  <option key={a.id} value={a.id}>
-                    {a.label}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label className={labelClass}>Invoice #</label>
-              <input value={invoiceNo} onChange={(e) => setInvoiceNo(e.target.value)} placeholder="33473" className={inputClass} />
-            </div>
-            <div>
-              <label className={labelClass}>Customer (broker)</label>
-              <input value={customer} onChange={(e) => setCustomer(e.target.value)} className={inputClass} />
-            </div>
-            <div>
-              <label className={labelClass}>PO / load #</label>
-              <input value={poId} onChange={(e) => setPoId(e.target.value)} className={inputClass} />
-            </div>
-          </div>
-          <button
-            type="submit"
-            disabled={searching || !hasQuery}
-            className="rounded-lg btn-primary px-4 py-2 text-sm disabled:opacity-60"
-          >
-            {searching ? 'Searching…' : 'Find invoice'}
-          </button>
-        </form>
-
-        {searchError && <p className="text-sm text-red">{searchError}</p>}
-
-        {matches && (
-          <div className="space-y-2">
-            <p className={`text-sm font-medium ${matches.length === 0 ? 'text-red' : 'text-green'}`}>
-              {matches.length === 0
-                ? 'No invoice found. Check the invoice number, load number and customer, then search again.'
-                : matches.length === 1
-                  ? 'Invoice found.'
-                  : `${matches.length} invoices found. Pick the right one.`}
-            </p>
-            {matches.length > 0 && (
-              <ul className="divide-y divide-border rounded-lg border border-border">
-                {matches.map((m) => {
-                  const group = findFamily(matches, m);
-                  const groupTotal = group.members.reduce((sum, g) => sum + g.amount, 0);
-                  return (
-                  <li key={m.invoiceKey}>
-                    <button
-                      type="button"
-                      onClick={() => void choose(m)}
-                      className={`flex w-full flex-wrap items-center gap-x-4 gap-y-1 px-3 py-2 text-left text-sm ${
-                        selected?.invoiceKey === m.invoiceKey ? 'bg-accent/10' : 'hover:bg-surface'
-                      }`}
-                    >
-                      <span className="w-20 font-semibold text-ink">#{m.invoiceNo}</span>
-                      <span className="min-w-0 flex-1 truncate text-ink">{m.debtorName}</span>
-                      <span className="text-xs text-muted">PO {m.poId || '—'}</span>
-                      <span className="text-xs text-muted">{m.invoiceDate ?? ''}</span>
-                      <span className="text-xs text-muted">
-                        {money(m.amount)} · balance {money(m.balance)}
-                      </span>
-                      {group.members.length > 1 && (
-                        <span className="w-full text-right text-[11px] font-medium text-accent">
-                          Full amount with revisions {money(groupTotal)} ({group.members.length} invoices)
-                        </span>
-                      )}
-                    </button>
-                  </li>
-                  );
-                })}
-              </ul>
-            )}
-          </div>
-        )}
-      </div>
+                <span className="w-28 font-semibold text-ink">#{m.invoiceNo}</span>
+                <span className="min-w-0 flex-1 truncate text-ink">{m.debtorName}</span>
+                <span className="text-xs text-muted">PO {m.poId || '—'}</span>
+                <span className="text-xs text-ink">{money(m.amount)}</span>
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
 
       {selected && (
         <div className="space-y-3 rounded-lg border border-border p-4">
-          <p className="text-[11px] font-medium uppercase tracking-widest text-label">2 · Enter the difference</p>
-          <dl className="grid gap-x-6 gap-y-1 text-sm sm:grid-cols-2">
-            <div className="flex justify-between gap-3">
-              <dt className="text-muted">Broker</dt>
-              <dd className="font-medium text-ink">{selected.debtorName}</dd>
+          <div className="flex flex-wrap items-baseline justify-between gap-2">
+            <div className="min-w-0">
+              <span className="text-base font-semibold text-ink">#{baseNo}</span>
+              <span className="ml-2 text-sm text-muted">{selected.debtorName}</span>
+              {matches && matches.length > 1 && (
+                <button type="button" onClick={() => setSelected(null)} className="ml-3 text-xs text-accent hover:underline">
+                  change
+                </button>
+              )}
             </div>
-            <div className="flex justify-between gap-3">
-              <dt className="text-muted">Invoice</dt>
-              <dd className="font-medium text-ink">#{baseNo}</dd>
+            <div className="text-sm text-muted">
+              {family === null ? 'Loading…' : members.length > 1 ? `${members.map((m) => money(m.amount)).join(' + ')} = ` : ''}
+              {family !== null && <span className="font-semibold text-ink">{money(familyTotal)}</span>}
             </div>
-            <div className="flex justify-between gap-3">
-              <dt className="text-muted">New invoice #</dt>
-              <dd className="font-mono font-medium text-accent">{newInvoiceNo}</dd>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-3">
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-muted">New</span>
+              <span className="font-mono text-sm font-semibold text-accent">{family ? newInvoiceNo : '…'}</span>
             </div>
-            <div className="flex justify-between gap-3">
-              <dt className="text-muted">New PO #</dt>
-              <dd className="font-mono font-medium text-accent">{newPoNo || '—'}</dd>
-            </div>
-          </dl>
-          {family === null ? (
-            <p className="text-xs text-muted">Loading the invoice and its revisions…</p>
-          ) : (
-            <div className="rounded-lg bg-surface px-3 py-2 text-sm">
-              <ul className="space-y-0.5">
-                {members.map((m) => (
-                  <li key={m.invoiceKey} className="flex justify-between gap-3">
-                    <span className="text-ink">
-                      #{m.invoiceNo}
-                      <span className="ml-2 text-xs text-muted">{m.revision === 0 ? 'original' : `revision ${m.revision}`}</span>
-                    </span>
-                    <span className="font-mono text-ink">{money(m.amount)}</span>
-                  </li>
-                ))}
-                {differenceOk && (
-                  <li className="flex justify-between gap-3 text-accent">
-                    <span>#{newInvoiceNo}<span className="ml-2 text-xs">new</span></span>
-                    <span className="font-mono">{money(differenceNum)}</span>
-                  </li>
-                )}
-              </ul>
-              <div className="mt-1.5 flex justify-between gap-3 border-t border-border pt-1.5 font-medium text-ink">
-                <span>Full amount{differenceOk ? ' with the new revision' : ''}</span>
-                <span className="font-mono">{money(familyTotal + (differenceOk ? differenceNum : 0))}</span>
-              </div>
-            </div>
-          )}
-          <div className="grid gap-3 sm:grid-cols-3">
-            <div>
-              <label className={labelClass}>Difference amount ($)</label>
+            <div className="relative w-40">
+              <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted">$</span>
               <input
                 type="number"
                 min="0"
                 step="0.01"
                 value={difference}
                 onChange={(e) => setDifference(e.target.value)}
-                placeholder="0.00"
-                className={`${inputClass} tabular-nums`}
+                placeholder="Difference"
+                className={`${inputClass} pl-6 tabular-nums`}
+                aria-label="Difference amount"
               />
             </div>
-            <div className="sm:col-span-2">
-              <label className={labelClass}>Description (optional)</label>
-              <input value={description} onChange={(e) => setDescription(e.target.value)} className={inputClass} />
-            </div>
+            {differenceOk && family && (
+              <span className="text-sm text-muted">
+                Total <span className="font-semibold text-ink">{money(familyTotal + differenceNum)}</span>
+              </span>
+            )}
           </div>
+
+          <FileChooser files={files} onChange={setFiles} disabled={creating} />
+
           <div className="flex flex-wrap items-center gap-3">
             <button
               type="button"
-              disabled={creating || !differenceOk || family === null || !basePo}
+              disabled={creating || !differenceOk || family === null || !basePo || !filesOk}
               onClick={() => void create()}
-              className="rounded-lg btn-primary px-4 py-2 text-sm disabled:opacity-60"
+              className="rounded-lg btn-primary px-5 py-2 text-sm disabled:opacity-60"
             >
-              {creating ? 'Creating…' : 'Create invoice'}
+              {creating ? 'Creating…' : files.length > 0 ? `Create and upload ${files.length}` : 'Create invoice'}
             </button>
-            {family !== null && !basePo && <span className="text-sm text-red">This invoice has no PO number.</span>}
+            {family !== null && !basePo && <span className="text-sm text-red">No PO number on this invoice.</span>}
+            {!filesOk && <span className="text-sm text-red">A file is over 16 MB.</span>}
           </div>
         </div>
       )}
-      {createMessage && <p className={`text-sm ${createMessage.ok ? 'text-green' : 'text-red'}`}>{createMessage.text}</p>}
 
-      <div className="space-y-3">
-        <p className="text-[11px] font-medium uppercase tracking-widest text-label">
-          3 · Created invoices waiting to be processed
-          <span className="ml-2 font-normal normal-case tracking-normal text-muted">{list.length}</span>
-        </p>
-        {listError && <p className="text-sm text-red">{listError}</p>}
-        {list.length === 0 && !listError && (
-          <p className="text-sm text-muted">No revised invoices are waiting. Create one above.</p>
-        )}
-        {list.length > 0 && (
-          <>
-            <ul className="divide-y divide-border rounded-lg border border-border">
-              {list.map((row) => (
-                <li key={row.id} className="flex flex-wrap items-center gap-x-4 gap-y-1 px-3 py-2 text-sm">
-                  <input
-                    type="checkbox"
-                    aria-label={`Process invoice ${row.new_invoice_no}`}
-                    checked={row.in_portal && checked.has(row.id)}
-                    disabled={!row.in_portal || processing}
-                    onChange={(e) =>
-                      setChecked((current) => {
-                        const next = new Set(current);
-                        if (e.target.checked) next.add(row.id);
-                        else next.delete(row.id);
-                        return next;
-                      })
-                    }
-                  />
-                  <span className="w-24 font-semibold text-ink">#{row.new_invoice_no}</span>
-                  <span className="min-w-0 flex-1 truncate text-ink">{row.broker}</span>
-                  <span className="text-xs text-muted">PO {row.po_no}</span>
-                  <span className="font-medium text-ink">{money(row.amount)}</span>
-                  <span className="text-xs text-muted">
-                    {row.created_by ?? ''} · {fmtDateTime(row.created_at)}
-                  </span>
-                  {!row.in_portal && (
-                    <span className="text-xs text-red" title="Processed or removed in the portal itself">
-                      No longer on the portal's list
-                    </span>
-                  )}
-                  <button
-                    type="button"
-                    disabled={processing || removing === row.id}
-                    onClick={() => void remove(row)}
-                    className="text-xs text-muted hover:text-red disabled:opacity-60"
-                  >
-                    {removing === row.id ? '…' : 'Remove'}
-                  </button>
-                  {row.in_portal && accountId !== '' && (
-                    <RevisedDocuments
-                      accountId={accountId}
-                      row={row}
-                      disabled={processing}
-                      onUploaded={() => loadList()}
-                    />
-                  )}
-                </li>
-              ))}
-            </ul>
+      {status && <p className={`text-sm ${status.ok ? 'text-green' : 'text-red'}`}>{status.text}</p>}
 
-            <div className="flex flex-wrap items-center gap-3">
-              <button
-                type="button"
-                disabled={processing || selectedRows.length === 0}
-                onClick={() => void process()}
-                className="rounded-lg btn-primary px-4 py-2 text-sm disabled:opacity-60"
-              >
-                {processing
-                  ? 'Processing…'
-                  : `Process ${selectedRows.length} selected · ${money(selectedTotal)}`}
-              </button>
-              <span className="text-xs text-muted">Only invoices created here are listed, and only checked ones are processed.</span>
-            </div>
-          </>
-        )}
-        {processMessage && (
-          <p className={`text-sm ${processMessage.ok ? 'text-green' : 'text-red'}`}>{processMessage.text}</p>
-        )}
-      </div>
+      {list.length > 0 && (
+        <div className="space-y-3">
+          <p className="text-sm font-semibold text-ink">
+            Waiting to process <span className="font-normal text-muted">({list.length})</span>
+          </p>
+          <ul className="divide-y divide-border rounded-lg border border-border">
+            {list.map((row) => (
+              <WaitingRow
+                key={row.id}
+                accountId={accountId as number}
+                row={row}
+                checked={checked.has(row.id)}
+                busy={processing}
+                onToggle={(value) =>
+                  setChecked((current) => {
+                    const next = new Set(current);
+                    if (value) next.add(row.id);
+                    else next.delete(row.id);
+                    return next;
+                  })
+                }
+                onRemove={() => void remove(row)}
+                onUploaded={loadList}
+              />
+            ))}
+          </ul>
+          <button
+            type="button"
+            disabled={processing || selectedRows.length === 0}
+            onClick={() => void process()}
+            className="rounded-lg btn-primary px-5 py-2 text-sm disabled:opacity-60"
+          >
+            {processing ? 'Processing…' : `Process ${selectedRows.length} · ${money(selectedTotal)}`}
+          </button>
+        </div>
+      )}
+      {listStatus && <p className={`text-sm ${listStatus.ok ? 'text-green' : 'text-red'}`}>{listStatus.text}</p>}
     </div>
   );
 }
