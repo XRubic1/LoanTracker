@@ -33,6 +33,7 @@ function InvoiceDownloadPanel({ accounts, onDownloaded }: { accounts: PortalAcco
   const [searchError, setSearchError] = useState<string | null>(null);
   const [selected, setSelected] = useState<PortalInvoice | null>(null);
   const [files, setFiles] = useState<PortalInvoiceFileInfo[] | null>(null);
+  const [docsOpen, setDocsOpen] = useState(false);
   const [filesError, setFilesError] = useState<string | null>(null);
   const [loadingFiles, setLoadingFiles] = useState(false);
   const [downloading, setDownloading] = useState<number | 'all' | 'merged' | null>(null);
@@ -60,7 +61,18 @@ function InvoiceDownloadPanel({ accounts, onDownloaded }: { accounts: PortalAcco
 
   const select = (invoice: PortalInvoice) => {
     setSelected(invoice);
-    if (accountId !== '') void loadFiles(accountId, invoice);
+    setFiles(null);
+    setFilesError(null);
+    setDocsOpen(false);
+    setDownloadError(null);
+    setMergeNote(null);
+  };
+
+  /** The document list is only fetched when the person opens it. */
+  const toggleDocs = () => {
+    const next = !docsOpen;
+    setDocsOpen(next);
+    if (next && !files && accountId !== '' && selected) void loadFiles(accountId, selected);
   };
 
   const search = async (event: React.FormEvent) => {
@@ -70,6 +82,7 @@ function InvoiceDownloadPanel({ accounts, onDownloaded }: { accounts: PortalAcco
     setSearchError(null);
     setSelected(null);
     setFiles(null);
+    setDocsOpen(false);
     try {
       const { invoices } = await searchPortalInvoices({ accountId, invoice: invoiceNo, debtorName: customer, poId });
       setMatches(invoices);
@@ -83,25 +96,25 @@ function InvoiceDownloadPanel({ accounts, onDownloaded }: { accounts: PortalAcco
   };
 
   /** Fetch every document and save them as a single PDF. */
-  const downloadMerged = async (which: PortalInvoiceFileInfo[]) => {
+  const downloadMerged = async () => {
     if (accountId === '' || !selected) return;
     setDownloading('merged');
     setDownloadError(null);
     setMergeNote(null);
     try {
-      const inputs = await fetchInvoicePackage({
-        accountId,
-        invoice: selected,
-        imageKeys: which.map((f) => f.image_key),
-      }).then((files) => files.map((f) => ({ fileName: f.fileName, blob: f.blob })));
+      const inputs = await fetchInvoicePackage({ accountId, invoice: selected }).then((files) =>
+        files.map((f) => ({ fileName: f.fileName, blob: f.blob }))
+      );
+      if (inputs.length === 0) throw new Error('This invoice has no documents attached.');
       const merged = await mergeIntoOnePdf(inputs);
       if (merged.pages === 0) throw new Error('None of the documents could be combined into a PDF.');
       await logCombinedDownload({ accountId, invoice: selected, fileNames: inputs.map((i) => i.fileName) }).catch(() => {});
       const customer = selected.debtorName.replace(/[^A-Za-z0-9]+/g, '_').replace(/^_|_$/g, '');
       saveBlob(merged.blob, `Invoice_${selected.invoiceNo}${customer ? `_${customer}` : ''}.pdf`);
+      const added = inputs.length - merged.skipped.length;
       setMergeNote(
-        `Combined ${inputs.length - merged.skipped.length} document${inputs.length - merged.skipped.length === 1 ? '' : 's'} into one PDF (${merged.pages} pages).` +
-          (merged.skipped.length ? ` Left out (not PDF or image): ${merged.skipped.join(', ')}.` : '')
+        `Combined ${added} document${added === 1 ? '' : 's'} into one PDF (${merged.pages} page${merged.pages === 1 ? '' : 's'}).` +
+          (merged.skipped.length ? ` Could not add: ${merged.skipped.join(', ')}.` : '')
       );
     } catch (err) {
       setDownloadError(err instanceof Error ? err.message : 'The download failed');
@@ -224,56 +237,60 @@ function InvoiceDownloadPanel({ accounts, onDownloaded }: { accounts: PortalAcco
       )}
 
       {selected && (
-        <div className="space-y-2">
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <p className="text-sm font-medium text-ink">
-              Documents on invoice #{selected.invoiceNo}
-              {files ? <span className="font-normal text-muted"> · {files.length}</span> : null}
-            </p>
-            {files && files.length > 0 && (
-              <div className="flex flex-wrap items-center gap-3">
-                {files.length > 1 && (
-                  <button
-                    type="button"
-                    disabled={downloading != null}
-                    onClick={() => void download(files, 'all')}
-                    className="text-xs text-muted2 underline hover:text-ink disabled:opacity-60"
-                  >
-                    {downloading === 'all' ? 'Downloading…' : `Download ${files.length} separately`}
-                  </button>
-                )}
+        <div className="space-y-3">
+          <div className="flex flex-wrap items-center gap-4">
+            <button
+              type="button"
+              disabled={downloading != null}
+              onClick={() => void downloadMerged()}
+              className="rounded-lg btn-primary px-5 py-2 text-sm disabled:opacity-60"
+            >
+              {downloading === 'merged' ? 'Preparing PDF…' : `Download invoice #${selected.invoiceNo} as one PDF`}
+            </button>
+            <button
+              type="button"
+              onClick={toggleDocs}
+              aria-expanded={docsOpen}
+              className="text-xs text-muted2 hover:text-ink"
+            >
+              <span className="mr-1 inline-block w-2">{docsOpen ? '▾' : '▸'}</span>
+              Individual documents{files ? ` (${files.length})` : ''}
+            </button>
+          </div>
+
+          {docsOpen && (
+            <div className="space-y-2">
+              {loadingFiles && <p className="text-sm text-muted">Loading…</p>}
+              {filesError && <p className="text-sm text-red">{filesError}</p>}
+              {files && files.length === 0 && <p className="text-sm text-muted">No documents attached.</p>}
+              {files && files.length > 0 && (
+                <ul className="divide-y divide-border rounded-lg border border-border">
+                  {files.map((file) => (
+                    <li key={file.image_key} className="flex items-center justify-between gap-3 px-3 py-2 text-sm">
+                      <span className="min-w-0 truncate text-ink">{file.file_name}</span>
+                      <button
+                        type="button"
+                        disabled={downloading != null}
+                        onClick={() => void download([file], file.image_key)}
+                        className="flex-shrink-0 rounded-lg border border-border px-3 py-1 text-xs text-accent hover:border-accent disabled:opacity-60"
+                      >
+                        {downloading === file.image_key ? 'Downloading…' : 'Download'}
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+              {files && files.length > 1 && (
                 <button
                   type="button"
                   disabled={downloading != null}
-                  onClick={() => void downloadMerged(files)}
-                  className="rounded-lg btn-primary px-3 py-1.5 text-xs disabled:opacity-60"
+                  onClick={() => void download(files, 'all')}
+                  className="text-xs text-muted2 underline hover:text-ink disabled:opacity-60"
                 >
-                  {downloading === 'merged' ? 'Combining…' : 'Download as one PDF'}
+                  {downloading === 'all' ? 'Downloading…' : `Download all ${files.length} separately`}
                 </button>
-              </div>
-            )}
-          </div>
-          {loadingFiles && <p className="text-sm text-muted">Loading documents…</p>}
-          {filesError && <p className="text-sm text-red">{filesError}</p>}
-          {files && files.length === 0 && (
-            <p className="text-sm text-muted">This invoice has no documents attached.</p>
-          )}
-          {files && files.length > 0 && (
-            <ul className="divide-y divide-border rounded-lg border border-border">
-              {files.map((file) => (
-                <li key={file.image_key} className="flex items-center justify-between gap-3 px-3 py-2 text-sm">
-                  <span className="min-w-0 truncate text-ink">{file.file_name}</span>
-                  <button
-                    type="button"
-                    disabled={downloading != null}
-                    onClick={() => void download([file], file.image_key)}
-                    className="flex-shrink-0 rounded-lg border border-border px-3 py-1 text-xs text-accent hover:border-accent disabled:opacity-60"
-                  >
-                    {downloading === file.image_key ? 'Downloading…' : 'Download'}
-                  </button>
-                </li>
-              ))}
-            </ul>
+              )}
+            </div>
           )}
           {mergeNote && <p className="text-sm text-green">{mergeNote}</p>}
           {downloadError && <p className="text-sm text-red">{downloadError}</p>}
