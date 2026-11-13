@@ -1,15 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Section } from '@/components/Section';
 import { Badge } from '@/components/Badge';
+import { RevisedInvoicePanel } from '@/components/RevisedInvoicePanel';
 import { fmtDateTime } from '@/lib/utils';
 import {
-  fetchPortalBatches,
   fetchPortalUploads,
   searchPortalInvoices,
   uploadInvoiceFiles,
-  uploadToPortal,
   type PortalAccount,
-  type PortalBatchOption,
   type PortalInvoice,
   type PortalUploadLogEntry,
   type PortalUploadOverview,
@@ -21,200 +19,6 @@ const labelClass = 'mb-1 block text-[10px] font-medium uppercase tracking-widest
 
 function formatSize(bytes: number): string {
   return bytes >= 1_000_000 ? `${(bytes / 1_000_000).toFixed(1)} MB` : `${Math.max(1, Math.round(bytes / 1000))} KB`;
-}
-
-function UploadPanel({ accounts, onUploaded }: { accounts: PortalAccount[]; onUploaded: () => void }) {
-  const fileInput = useRef<HTMLInputElement>(null);
-  const [accountId, setAccountId] = useState<number | ''>(accounts[0]?.id ?? '');
-  const [batches, setBatches] = useState<PortalBatchOption[] | null>(null);
-  const [batchId, setBatchId] = useState<'new' | number>('new');
-  const [files, setFiles] = useState<File[]>([]);
-  const [processAfter, setProcessAfter] = useState(false);
-  const [dragging, setDragging] = useState(false);
-  const [busy, setBusy] = useState(false);
-  const [result, setResult] = useState<{ ok: boolean; text: string } | null>(null);
-
-  useEffect(() => {
-    if (accountId === '' && accounts[0]) setAccountId(accounts[0].id);
-  }, [accounts, accountId]);
-
-  const loadBatches = async () => {
-    if (accountId === '') return;
-    setResult(null);
-    try {
-      setBatches((await fetchPortalBatches(accountId)).batches);
-    } catch (err) {
-      setResult({ ok: false, text: err instanceof Error ? err.message : 'Could not load batches' });
-    }
-  };
-
-  const addFiles = (list: FileList | File[]) =>
-    setFiles((current) => {
-      const known = new Set(current.map((f) => `${f.name}:${f.size}`));
-      return [...current, ...[...list].filter((f) => !known.has(`${f.name}:${f.size}`))];
-    });
-
-  const hasExcel = files.some((f) => /\.xlsx?$/i.test(f.name));
-  const account = accounts.find((a) => a.id === accountId);
-
-  const upload = async () => {
-    if (accountId === '' || files.length === 0) return;
-    const target = batchId === 'new' ? 'a new batch' : `batch ${batches?.find((b) => b.id === batchId)?.batch_no ?? ''}`;
-    const question =
-      `Upload ${files.length} file${files.length === 1 ? '' : 's'} to ${target} for ${account?.label}?` +
-      (processAfter ? '\n\nThe batch will also be PROCESSED in the portal right away.' : '');
-    if (!window.confirm(question)) return;
-    setBusy(true);
-    setResult(null);
-    try {
-      const done = await uploadToPortal({ accountId, batchId, process: processAfter, files });
-      setResult({ ok: true, text: `Batch ${done.batch_no}: ${done.message}` });
-      setFiles([]);
-      setBatches(null);
-      setBatchId('new');
-    } catch (err) {
-      setResult({ ok: false, text: err instanceof Error ? err.message : 'Upload failed' });
-    } finally {
-      setBusy(false);
-      onUploaded();
-    }
-  };
-
-  if (accounts.length === 0) {
-    return <div className="px-4 py-8 text-center text-[12px] text-muted">No client has a portal login yet. Set one up on the Clients tab.</div>;
-  }
-
-  return (
-    <div className="space-y-4 px-4 py-4">
-      <div className="grid gap-3 sm:grid-cols-2">
-        <div>
-          <label className={labelClass}>Client</label>
-          <select
-            value={accountId}
-            onChange={(e) => {
-              setAccountId(Number(e.target.value));
-              setBatches(null);
-              setBatchId('new');
-            }}
-            className={inputClass}
-          >
-            {accounts.map((a) => (
-              <option key={a.id} value={a.id}>
-                {a.label} ({a.username})
-              </option>
-            ))}
-          </select>
-        </div>
-        <div>
-          <label className={labelClass}>Batch</label>
-          <div className="flex gap-2">
-            <select
-              value={batchId}
-              onChange={(e) => setBatchId(e.target.value === 'new' ? 'new' : Number(e.target.value))}
-              className={inputClass}
-            >
-              <option value="new">Create a new batch</option>
-              {(batches ?? []).map((b) => (
-                <option key={b.id} value={b.id}>
-                  Batch {b.batch_no}
-                  {b.note ? ` · ${b.note}` : ''}
-                </option>
-              ))}
-            </select>
-            <button
-              type="button"
-              onClick={() => void loadBatches()}
-              className="whitespace-nowrap rounded-lg border border-border px-3 text-xs text-muted hover:text-ink"
-            >
-              Open batches
-            </button>
-          </div>
-        </div>
-      </div>
-
-      <div
-        onDragOver={(e) => {
-          e.preventDefault();
-          setDragging(true);
-        }}
-        onDragLeave={() => setDragging(false)}
-        onDrop={(e) => {
-          e.preventDefault();
-          setDragging(false);
-          addFiles(e.dataTransfer.files);
-        }}
-        onClick={() => fileInput.current?.click()}
-        className={`cursor-pointer rounded-lg border-2 border-dashed px-4 py-8 text-center text-sm ${
-          dragging ? 'border-accent bg-accent/5 text-ink' : 'border-border text-muted hover:border-accent'
-        }`}
-      >
-        Drop the revised invoice files here, or click to choose
-        <input
-          ref={fileInput}
-          type="file"
-          multiple
-          className="hidden"
-          onChange={(e) => {
-            if (e.target.files) addFiles(e.target.files);
-            e.target.value = '';
-          }}
-        />
-      </div>
-
-      {files.length > 0 && (
-        <ul className="divide-y divide-border rounded-lg border border-border">
-          {files.map((file) => (
-            <li key={`${file.name}:${file.size}`} className="flex items-center justify-between gap-3 px-3 py-2 text-sm">
-              <span className="min-w-0 truncate text-ink">{file.name}</span>
-              <span className="flex flex-shrink-0 items-center gap-3 text-xs text-muted">
-                {formatSize(file.size)}
-                <button
-                  type="button"
-                  onClick={() => setFiles((current) => current.filter((f) => f !== file))}
-                  className="hover:text-red"
-                >
-                  Remove
-                </button>
-              </span>
-            </li>
-          ))}
-        </ul>
-      )}
-
-      <label className="flex items-start gap-2 text-sm text-ink">
-        <input
-          type="checkbox"
-          checked={processAfter}
-          onChange={(e) => setProcessAfter(e.target.checked)}
-          className="mt-1"
-        />
-        <span>
-          Process the batch after uploading
-          <span className="block text-[11px] text-muted">
-            Leave this off to upload only and review in the portal first. The portal needs at least one Excel file
-            to process.
-            {processAfter && !hasExcel && files.length > 0 && (
-              <span className="text-red"> No Excel file is selected.</span>
-            )}
-          </span>
-        </span>
-      </label>
-
-      <div className="flex flex-wrap items-center gap-3">
-        <button
-          type="button"
-          disabled
-          title="Revised invoice upload is not available yet"
-          onClick={() => void upload()}
-          className="rounded-lg btn-primary px-4 py-2 text-sm disabled:cursor-not-allowed disabled:opacity-60"
-        >
-          {busy ? 'Uploading…' : `Upload ${files.length || ''} file${files.length === 1 ? '' : 's'}`.replace('  ', ' ')}
-        </button>
-        <span className="text-xs text-muted">Coming soon</span>
-        {result && <span className={`text-sm ${result.ok ? 'text-green' : 'text-red'}`}>{result.text}</span>}
-      </div>
-    </div>
-  );
 }
 
 const money = (value: number) =>
@@ -477,7 +281,7 @@ export function RecentUploads({
                     {entry.batch_no ? (
                       <span className="font-normal text-muted">
                         {' '}
-                        · {/^\d+$/.test(entry.batch_no) ? `Batch ${entry.batch_no}` : entry.batch_no.replace(/^Download · /, '')}
+                        · {/^\d+$/.test(entry.batch_no) ? `Batch ${entry.batch_no}` : entry.batch_no.replace(/^(Download|Revised) · /, '')}
                       </span>
                     ) : null}
                   </div>
@@ -548,32 +352,29 @@ export function UploadPage() {
             type="button"
             role="tab"
             aria-selected={tab === id}
-            disabled={id === 'revised'}
-            title={id === 'revised' ? 'Revised invoices is not available yet' : undefined}
             onClick={() => setTab(id)}
             className={`-mb-px border-b-2 px-4 py-2 text-sm font-medium transition-colors ${
               tab === id ? 'border-accent text-ink' : 'border-transparent text-muted hover:text-ink'
-            } disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:text-muted`}
+            }`}
           >
             {label}
-            {id === 'revised' && <span className="ml-2 text-[10px] uppercase tracking-wide">Soon</span>}
           </button>
         ))}
       </div>
 
       {tab === 'revised' ? (
         <>
-          <Section title="Upload revised invoices" noPadding>
-            <UploadPanel accounts={accounts} onUploaded={() => void load()} />
+          <Section title="Revised invoices" noPadding>
+            <RevisedInvoicePanel accounts={accounts} onChanged={() => void load()} />
           </Section>
-          <RecentUploads entries={log.filter((e) => /^\d+$/.test(e.batch_no ?? ''))} />
+          <RecentUploads entries={log.filter((e) => e.batch_no?.startsWith('Revised'))} title="Recent activity" />
         </>
       ) : (
         <>
           <Section title="Upload to an invoice" noPadding>
             <InvoiceUploadPanel accounts={accounts} onUploaded={() => void load()} />
           </Section>
-          <RecentUploads entries={log.filter((e) => !/^\d+$/.test(e.batch_no ?? '') && !e.batch_no?.startsWith('Download'))} />
+          <RecentUploads entries={log.filter((e) => !/^\d+$/.test(e.batch_no ?? '') && !e.batch_no?.startsWith('Download') && !e.batch_no?.startsWith('Revised'))} />
         </>
       )}
     </div>

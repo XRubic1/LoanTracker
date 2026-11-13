@@ -18,6 +18,7 @@ export interface PortalInvoice {
   invoiceNo: string;
   debtorName: string;
   poId: string;
+  debtorKey: number;
   amount: number;
   balance: number;
   invoiceDate: string | null;
@@ -185,6 +186,7 @@ export async function searchInvoices(
     invoiceNo: String(row.InvoiceNo ?? '').trim(),
     debtorName: String(row.DebtorName ?? '').trim(),
     poId: String(row.PoId ?? '').trim(),
+    debtorKey: Number(row.DebtorKey ?? 0),
     amount: Number(row.InvoiceAmt ?? 0),
     balance: Number(row.InvoiceBal ?? 0),
     invoiceDate: portalDate(row.InvoiceDate),
@@ -351,4 +353,210 @@ export async function listBatchInvoices(session: PortalSession, transKey: number
     customer: String(row.Name ?? '').trim(),
     amount: Number(row.Amt ?? 0),
   }));
+}
+
+// ---- revised invoices: create in the portal, list what is waiting, remove, process ----
+
+export interface PortalInvoiceInput {
+  invoiceInputId: number;
+  invoiceNo: string;
+  poNo: string;
+  amount: number;
+  broker: string;
+  status: string;
+}
+
+/** Invoices created in the portal that have not been processed yet (the make-schedule list). */
+export async function listPendingInvoiceInputs(session: PortalSession): Promise<PortalInvoiceInput[]> {
+  const query = JSON.stringify({
+    InvoiceInputId: 0,
+    username: session.username,
+    token: session.token,
+    ClientNo: session.clientNo,
+    CallMode: '1',
+  });
+  const response = await request(
+    `${session.base}/api/InvoiceInputFeedUrl_trufunding?source=clInvoiceInput&data=${encodeURIComponent(query)}`,
+    { headers: { Accept: 'application/json' } }
+  );
+  if (!response.ok) throw new Error(`Could not read the schedule list (${response.status}).`);
+  const data = (await response.json().catch(() => null)) as unknown;
+  if (!Array.isArray(data)) return [];
+  return (data as Record<string, unknown>[]).map((row) => ({
+    invoiceInputId: Number(row.InvoiceInputId),
+    invoiceNo: String(row.Inv_Id ?? '').trim(),
+    poNo: String(row.Po_No ?? '').trim(),
+    amount: Number(row.InvAmt ?? 0),
+    broker: String(row.DebName ?? '').trim(),
+    status: String(row.StatusInvoice ?? ''),
+  }));
+}
+
+async function portalGet(session: PortalSession, path: string, source: string, query: Record<string, unknown>) {
+  const response = await request(
+    `${session.base}/api/${path}?source=${source}&data=${encodeURIComponent(JSON.stringify(query))}`,
+    { headers: { Accept: 'application/json' } }
+  );
+  if (!response.ok) throw new Error(`The portal could not answer (${response.status}).`);
+  return (await response.json().catch(() => null)) as unknown;
+}
+
+/** The client's own details, as the create-invoice page loads them. */
+async function clientDetails(session: PortalSession): Promise<{ clientKey: number; name: string }> {
+  const data = await portalGet(session, 'ClientInfo_trufunding', 'GETCLIENIFO', {
+    username: session.username,
+    token: session.token,
+    ClientNo: session.clientNo,
+  });
+  const row = Array.isArray(data) ? (data[0] as Record<string, unknown> | undefined) : undefined;
+  if (!row || !row.ClientKey) throw new Error('Could not read the client details from the portal.');
+  return { clientKey: Number(row.ClientKey), name: String(row.Name ?? '') };
+}
+
+/** The broker's address, as the create-invoice page builds it. */
+async function debtorAddress(session: PortalSession, debtorKey: number): Promise<{ name: string; addr1: string; addr2: string }> {
+  const data = await portalGet(session, 'debtorinfo_trufunding', 'getdebtorinfo', {
+    DebtorKey: debtorKey,
+    username: session.username,
+    token: session.token,
+    ClientNo: session.clientNo,
+  });
+  const row = Array.isArray(data) ? (data[0] as Record<string, unknown> | undefined) : undefined;
+  if (!row) throw new Error('Could not read the broker details from the portal.');
+  const addr2 = `${row.City ?? ''}, ${row.State ?? ''}, ${row.ZipCode ?? ''}`.trim();
+  return { name: String(row.Name ?? ''), addr1: String(row.Addr1 ?? ''), addr2 };
+}
+
+const usDateToday = () => {
+  const d = new Date();
+  return `${String(d.getMonth() + 1).padStart(2, '0')}/${String(d.getDate()).padStart(2, '0')}/${d.getFullYear()}`;
+};
+
+export interface CreatedRevisedInvoice {
+  invoiceInputId: number;
+  newInvoiceNo: string;
+  poNo: string;
+  broker: string;
+}
+
+/**
+ * Create the revised invoice exactly as the portal's "create invoice" page does: same broker, the PO and
+ * invoice number with an R added, and one line for the difference amount.
+ */
+export async function createRevisedInvoice(
+  session: PortalSession,
+  original: PortalInvoice,
+  amount: number,
+  description: string
+): Promise<CreatedRevisedInvoice> {
+  if (!original.debtorKey) throw new Error('The invoice has no broker on file, so it cannot be revised here.');
+  const [client, debtor] = await Promise.all([clientDetails(session), debtorAddress(session, original.debtorKey)]);
+  const newInvoiceNo = `${original.invoiceNo}R`;
+  const poNo = `${original.poId}R`;
+  const broker = debtor.name || original.debtorName;
+
+  const header = {
+    Inv_id: newInvoiceNo,
+    Inv_Date: usDateToday(),
+    Po_No: poNo,
+    InvAmt: amount,
+    DebName: broker,
+    Addr1: debtor.addr1,
+    Addr2: debtor.addr2,
+    ClientKey: client.clientKey,
+    ShipmentNum: '',
+    UserName: session.username,
+    DebtorKey: original.debtorKey,
+    Name: client.name,
+  };
+  const result = await postJson(session.base, '/api/CreateInvoice', {
+    Master: JSON.stringify(header),
+    Details: JSON.stringify([{ Description: description, Amount: amount, Qyt: 1 }]),
+    GeneratePDF: JSON.stringify([
+      {
+        ClientKey: client.clientKey,
+        username: session.username,
+        ClientNo: session.clientNo,
+        callmode: 'PRINT',
+        token: session.token,
+      },
+    ]),
+  });
+  // The portal answers "2" when it refuses the invoice.
+  if (String(result.StatusResponse) === '2') {
+    throw new Error(String(result.InfoResponse || 'The portal did not create the invoice.'));
+  }
+
+  let invoiceInputId = parseInt(String(result.ExtraInfoResponse ?? ''), 10);
+  if (!Number.isFinite(invoiceInputId)) {
+    const pending = await listPendingInvoiceInputs(session);
+    const match = pending
+      .filter((p) => p.invoiceNo === newInvoiceNo)
+      .sort((a, b) => b.invoiceInputId - a.invoiceInputId)[0];
+    if (!match) throw new Error('The invoice may have been created, but it could not be found in the portal.');
+    invoiceInputId = match.invoiceInputId;
+  }
+  return { invoiceInputId, newInvoiceNo, poNo, broker };
+}
+
+/** Delete an unprocessed invoice, like the delete button on the schedule page. */
+export async function deleteInvoiceInput(session: PortalSession, invoiceInputId: number): Promise<void> {
+  const result = await postJson(session.base, '/api/deleteInvoice', { InvoiceInputId: invoiceInputId });
+  if (String(result.StatusResponse) !== '1') {
+    throw new Error(String(result.InfoResponse || 'The portal could not remove the invoice.'));
+  }
+}
+
+/** Submit the chosen invoices for processing, like the Process button on the schedule page. */
+export async function createSchedule(session: PortalSession, invoiceInputIds: number[]): Promise<string> {
+  const shipmentNum = Math.floor(Date.now() / 1000);
+  const rows = invoiceInputIds.map((id) => JSON.stringify({ InvoiceInputId: id, ShipmentNum: shipmentNum }));
+  const result = await postJson(session.base, '/api/createschedule', rows as unknown as Record<string, unknown>);
+  if (String(result.StatusResponse) !== '1') {
+    throw new Error(String(result.InfoResponse || 'The portal could not process the invoices.'));
+  }
+  return String(result.InfoResponse ?? 'Processed');
+}
+
+/** Names of the documents already attached to an unprocessed (created) invoice. */
+export async function listInvoiceInputFiles(session: PortalSession, invoiceInputId: number): Promise<string[]> {
+  const query = JSON.stringify({
+    InvoiceInputId: invoiceInputId,
+    username: session.username,
+    token: session.token,
+    ClientNo: session.clientNo,
+    CallMode: 'CREATESCHEDULE_UNPROCESSED',
+  });
+  const response = await request(
+    `${session.base}/api/InvoiceInputFeedUrl_trufunding?source=clInvoiceInput&data=${encodeURIComponent(query)}`,
+    { headers: { Accept: 'application/json' } }
+  );
+  if (!response.ok) return [];
+  const data = (await response.json().catch(() => null)) as unknown;
+  if (!Array.isArray(data)) return [];
+  const row = (data as Record<string, unknown>[]).find((r) => Number(r.InvoiceInputId) === invoiceInputId);
+  const images = row && Array.isArray(row.Invoice_LIST_images) ? (row.Invoice_LIST_images as Record<string, unknown>[]) : [];
+  return images.map((i) => String(i.FileName ?? '')).filter(Boolean);
+}
+
+/** Attach documents to a created invoice, one request per file, like the create-invoice page's upload. */
+export async function uploadToInvoiceInput(session: PortalSession, invoiceInputId: number, files: File[]): Promise<void> {
+  const shipmentNum = Math.floor(Date.now() / 1000);
+  for (let i = 0; i < files.length; i += 1) {
+    const file = files[i];
+    const result = await postJson(session.base, '/api/FactorsoftUploadforCreateInvoice', {
+      user: session.username,
+      token: session.apiKey,
+      ShipmentNum: shipmentNum,
+      FileName: file.name,
+      extra_info: file.type,
+      sequence_number: i + 1,
+      total_files: files.length,
+      base64String: base64(new Uint8Array(await file.arrayBuffer())),
+      InvoiceInputId: invoiceInputId,
+    });
+    if (String(result.StatusResponse) !== '1') {
+      throw new Error(String(result.InfoResponse || `The portal rejected ${file.name}.`));
+    }
+  }
 }

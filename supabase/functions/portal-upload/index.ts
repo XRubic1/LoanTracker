@@ -9,6 +9,13 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.45.0';
 import {
   base64,
   createBatch,
+  createRevisedInvoice,
+  createSchedule,
+  deleteInvoiceInput,
+  listInvoiceInputFiles,
+  listPendingInvoiceInputs,
+  uploadToInvoiceInput,
+  MAX_INVOICE_IMAGE_BYTES as MAX_REVISED_FILE_BYTES,
   fetchInvoiceFile,
   findBatch,
   listBatchInvoices,
@@ -282,6 +289,11 @@ Deno.serve(async (req) => {
       action === 'invoice_download' ||
       action === 'invoice_download_log' ||
       action === 'invoice_package' ||
+      action === 'revised_create' ||
+      action === 'revised_list' ||
+      action === 'revised_remove' ||
+      action === 'revised_process' ||
+      action === 'revised_upload' ||
       action === 'batch_find' ||
       action === 'batch_invoice_package' ||
       action === 'batch_download_log'
@@ -317,6 +329,212 @@ Deno.serve(async (req) => {
           return json({ error: 'Enter an invoice number, a customer name or a PO number.' }, 400);
         }
         return json({ invoices: await searchInvoices(session, { invoice, debtorName, poId }) });
+      }
+
+      // ---- revised invoices ----
+      type RevisedRow = {
+        id: number;
+        owner_id: string;
+        account_id: number;
+        invoice_input_id: number;
+        original_invoice_no: string;
+        new_invoice_no: string;
+        po_no: string;
+        broker: string;
+        amount: number;
+        status: string;
+        created_by: string | null;
+        created_at: string;
+      };
+      const logRevised = (label: string, names: string[], message: string, status = 'success') =>
+        admin.from('portal_upload_log').insert({
+          owner_id: caller.ownerId,
+          account_id: acct.id,
+          account_label: acct.label,
+          batch_no: `Revised · ${label}`,
+          file_names: names,
+          processed: false,
+          status,
+          message,
+          uploaded_by: caller.email,
+        });
+      const openRevised = async (): Promise<RevisedRow[]> => {
+        const { data } = await admin
+          .from('portal_revised_invoices')
+          .select('*')
+          .eq('account_id', acct.id)
+          .in('owner_id', caller.sharedOwnerIds)
+          .eq('status', 'created')
+          .order('created_at', { ascending: false });
+        return (data ?? []) as RevisedRow[];
+      };
+      const money = (n: number) => n.toLocaleString('en-US', { style: 'currency', currency: 'USD' });
+
+      if (action === 'revised_list') {
+        const rows = await openRevised();
+        const waiting = new Set((await listPendingInvoiceInputs(session)).map((p) => p.invoiceInputId));
+        const attached = new Map<number, string[]>();
+        await Promise.all(
+          rows
+            .filter((r) => waiting.has(Number(r.invoice_input_id)))
+            .map(async (r) => attached.set(r.id, await listInvoiceInputFiles(session, Number(r.invoice_input_id))))
+        );
+        return json({
+          revised: rows.map((r) => ({
+            files: attached.get(r.id) ?? [],
+            id: r.id,
+            original_invoice_no: r.original_invoice_no,
+            new_invoice_no: r.new_invoice_no,
+            po_no: r.po_no,
+            broker: r.broker,
+            amount: Number(r.amount),
+            created_by: r.created_by,
+            created_at: r.created_at,
+            // False when the invoice was processed or removed in the portal itself.
+            in_portal: waiting.has(Number(r.invoice_input_id)),
+          })),
+        });
+      }
+
+      if (action === 'revised_create') {
+        const invoiceKey = Number(body.invoiceKey);
+        const invoiceNo = String(body.invoiceNo ?? '').trim();
+        const amount = Math.round(Number(body.amount) * 100) / 100;
+        const description = String(body.description ?? '').trim().slice(0, 200);
+        if (!invoiceKey || !invoiceNo) return json({ error: 'Find the invoice first.' }, 400);
+        if (!Number.isFinite(amount) || amount <= 0 || amount > 10_000_000) {
+          return json({ error: 'Enter the difference amount, greater than 0.' }, 400);
+        }
+        if (/r$/i.test(invoiceNo)) return json({ error: `Invoice ${invoiceNo} is already a revised invoice.` }, 400);
+
+        const original = (await searchInvoices(session, { invoice: invoiceNo })).find((i) => i.invoiceKey === invoiceKey);
+        if (!original) return json({ error: `Invoice ${invoiceNo} was not found for ${acct.label}.` }, 404);
+        if (!original.poId) return json({ error: `Invoice ${invoiceNo} has no PO number, so a revised one cannot be made.` }, 400);
+
+        const already = (await openRevised()).find((r) => Number(r.original_invoice_no) === Number(invoiceNo) || r.original_invoice_no === invoiceNo);
+        if (already) {
+          return json({ error: `A revised invoice for #${invoiceNo} is already waiting. Process or remove it first.` }, 409);
+        }
+        const waitingInPortal = (await listPendingInvoiceInputs(session)).find((p) => p.invoiceNo === `${invoiceNo}R`);
+        if (waitingInPortal) {
+          return json({ error: `The portal already has an unprocessed invoice #${invoiceNo}R.` }, 409);
+        }
+
+        const created = await createRevisedInvoice(session, original, amount, description);
+        const { data: saved, error: saveError } = await admin
+          .from('portal_revised_invoices')
+          .insert({
+            owner_id: caller.ownerId,
+            account_id: acct.id,
+            account_label: acct.label,
+            invoice_input_id: created.invoiceInputId,
+            original_invoice_key: invoiceKey,
+            original_invoice_no: invoiceNo,
+            new_invoice_no: created.newInvoiceNo,
+            po_no: created.poNo,
+            broker: created.broker,
+            amount,
+            created_by: caller.email,
+          })
+          .select('id')
+          .single();
+        if (saveError) {
+          return json({
+            error: `Invoice #${created.newInvoiceNo} was created in the portal but could not be recorded here (${saveError.message}). Check the schedule page in the portal.`,
+          }, 500);
+        }
+        await logRevised(
+          `Invoice ${created.newInvoiceNo}`,
+          [created.newInvoiceNo],
+          `Created for ${money(amount)} from invoice #${invoiceNo}, ${created.broker}, PO ${created.poNo}.`
+        );
+        return json({
+          revised: {
+            id: saved.id,
+            original_invoice_no: invoiceNo,
+            new_invoice_no: created.newInvoiceNo,
+            po_no: created.poNo,
+            broker: created.broker,
+            amount,
+          },
+        });
+      }
+
+      if (action === 'revised_upload') {
+        const row = (await openRevised()).find((r) => r.id === Number(form?.get('id')));
+        if (!row) return json({ error: 'That revised invoice is no longer waiting.' }, 404);
+        const stillWaiting = (await listPendingInvoiceInputs(session)).some(
+          (p) => p.invoiceInputId === Number(row.invoice_input_id)
+        );
+        if (!stillWaiting) return json({ error: "That invoice is no longer on the portal's schedule list." }, 409);
+
+        const docs = (form?.getAll('files') ?? []).filter((f): f is File => f instanceof File);
+        if (docs.length === 0) return json({ error: 'Choose at least one file.' }, 400);
+        const tooBig = docs.find((f) => f.size > MAX_INVOICE_IMAGE_BYTES);
+        if (tooBig) return json({ error: `${tooBig.name} is larger than 16 MB.` }, 400);
+
+        try {
+          await uploadToInvoiceInput(session, Number(row.invoice_input_id), docs);
+          await logRevised(
+            `Documents ${row.new_invoice_no}`,
+            docs.map((f) => f.name),
+            `Uploaded ${docs.length} document${docs.length === 1 ? '' : 's'} to invoice #${row.new_invoice_no}.`
+          );
+          return json({ uploaded: docs.length });
+        } catch (err) {
+          const message = err instanceof Error ? err.message : 'Upload failed.';
+          await logRevised(`Documents ${row.new_invoice_no}`, docs.map((f) => f.name), message, 'failed');
+          return json({ error: message }, 502);
+        }
+      }
+
+      if (action === 'revised_remove') {
+        const row = (await openRevised()).find((r) => r.id === Number(body.id));
+        if (!row) return json({ error: 'That revised invoice is no longer waiting.' }, 404);
+        const waiting = (await listPendingInvoiceInputs(session)).some((p) => p.invoiceInputId === Number(row.invoice_input_id));
+        if (waiting) await deleteInvoiceInput(session, Number(row.invoice_input_id));
+        await admin
+          .from('portal_revised_invoices')
+          .update({ status: 'removed', finished_by: caller.email, finished_at: new Date().toISOString() })
+          .eq('id', row.id);
+        await logRevised(`Removed ${row.new_invoice_no}`, [row.new_invoice_no], `Removed before processing (${money(Number(row.amount))}).`);
+        return json({ ok: true });
+      }
+
+      if (action === 'revised_process') {
+        const ids = (Array.isArray(body.ids) ? (body.ids as unknown[]).map(Number) : []).filter(Number.isFinite).slice(0, 100);
+        if (ids.length === 0) return json({ error: 'Choose at least one invoice to process.' }, 400);
+        const rows = (await openRevised()).filter((r) => ids.includes(r.id));
+        if (rows.length !== new Set(ids).size) {
+          return json({ error: 'Some of the chosen invoices are no longer waiting. Refresh the list and try again.' }, 409);
+        }
+        const waiting = new Set((await listPendingInvoiceInputs(session)).map((p) => p.invoiceInputId));
+        const gone = rows.filter((r) => !waiting.has(Number(r.invoice_input_id)));
+        if (gone.length) {
+          return json({
+            error: `These are no longer on the portal's schedule list: ${gone.map((r) => '#' + r.new_invoice_no).join(', ')}. Remove them from the list and try again.`,
+          }, 409);
+        }
+
+        const total = rows.reduce((n, r) => n + Number(r.amount), 0);
+        const names = rows.map((r) => r.new_invoice_no);
+        try {
+          const portalMessage = await createSchedule(session, rows.map((r) => Number(r.invoice_input_id)));
+          await admin
+            .from('portal_revised_invoices')
+            .update({ status: 'processed', finished_by: caller.email, finished_at: new Date().toISOString() })
+            .in('id', rows.map((r) => r.id));
+          await logRevised(
+            `Processed ${rows.length} invoice${rows.length === 1 ? '' : 's'}`,
+            names,
+            `Processed ${rows.length} revised invoice${rows.length === 1 ? '' : 's'}, ${money(total)}. ${portalMessage}`
+          );
+          return json({ processed: rows.length, total, message: portalMessage });
+        } catch (err) {
+          const message = err instanceof Error ? err.message : 'Processing failed.';
+          await logRevised(`Process failed`, names, message, 'failed');
+          return json({ error: message }, 502);
+        }
       }
 
       if (action === 'batch_find') {

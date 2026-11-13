@@ -34,6 +34,7 @@ export interface PortalInvoice {
   invoiceNo: string;
   debtorName: string;
   poId: string;
+  debtorKey?: number;
   amount: number;
   balance: number;
   invoiceDate: string | null;
@@ -244,4 +245,52 @@ export async function fetchInvoicePackage(input: {
     log: input.log === true,
   });
   return result.files.map((f) => ({ fileName: f.file_name, blob: blobFromBase64(f.data) }));
+}
+
+export interface RevisedInvoice {
+  id: number;
+  original_invoice_no: string;
+  new_invoice_no: string;
+  po_no: string;
+  broker: string;
+  amount: number;
+  created_by: string | null;
+  created_at: string;
+  /** False once the invoice was processed or removed in the portal itself. */
+  in_portal: boolean;
+  /** Names of the documents already attached to the invoice. */
+  files: string[];
+}
+
+export const listRevisedInvoices = (accountId: number) =>
+  call<{ revised: RevisedInvoice[] }>({ action: 'revised_list', accountId });
+
+export const createRevisedInvoice = (input: {
+  accountId: number;
+  invoice: PortalInvoice;
+  amount: number;
+  description?: string;
+}) =>
+  call<{ revised: { id: number; original_invoice_no: string; new_invoice_no: string; amount: number } }>({
+    action: 'revised_create',
+    accountId: input.accountId,
+    invoiceKey: input.invoice.invoiceKey,
+    invoiceNo: input.invoice.invoiceNo,
+    amount: input.amount,
+    description: input.description ?? '',
+  });
+
+export const removeRevisedInvoice = (input: { accountId: number; id: number }) =>
+  call<{ ok: true }>({ action: 'revised_remove', ...input });
+
+export const processRevisedInvoices = (input: { accountId: number; ids: number[] }) =>
+  call<{ processed: number; total: number; message: string }>({ action: 'revised_process', ...input });
+
+export function uploadRevisedDocuments(input: { accountId: number; id: number; files: File[] }) {
+  const form = new FormData();
+  form.append('action', 'revised_upload');
+  form.append('accountId', String(input.accountId));
+  form.append('id', String(input.id));
+  for (const file of input.files) form.append('files', file, file.name);
+  return call<{ uploaded: number }>(form);
 }
