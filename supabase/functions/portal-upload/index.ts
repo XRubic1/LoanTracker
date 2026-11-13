@@ -6,6 +6,7 @@
  * Form body:  action=upload, accountId, batchId ('new' or an existing BatchUploadId), process ('true'|'false'), files[]
  */
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.45.0';
+import { findFamily, nextRevisionNumber, revisionSuffix, stripRevision } from '../../../src/lib/revisedInvoices.ts';
 import {
   base64,
   createBatch,
@@ -405,22 +406,29 @@ Deno.serve(async (req) => {
         if (!Number.isFinite(amount) || amount <= 0 || amount > 10_000_000) {
           return json({ error: 'Enter the difference amount, greater than 0.' }, 400);
         }
-        if (/r$/i.test(invoiceNo)) return json({ error: `Invoice ${invoiceNo} is already a revised invoice.` }, 400);
+        // The invoice may be the original or one of its revisions; either way the family is the same.
+        const results = await searchInvoices(session, { invoice: stripRevision(invoiceNo) || invoiceNo });
+        const picked = results.find((i) => i.invoiceKey === invoiceKey);
+        if (!picked) return json({ error: `Invoice ${invoiceNo} was not found for ${acct.label}.` }, 404);
+        const { base, members, original } = findFamily(results, picked);
+        const source = original ?? picked;
+        const basePo = (source.poId || picked.poId).replace(/R\d*$/i, '');
+        if (!basePo) return json({ error: `Invoice ${base} has no PO number, so a revised one cannot be made.` }, 400);
 
-        const original = (await searchInvoices(session, { invoice: invoiceNo })).find((i) => i.invoiceKey === invoiceKey);
-        if (!original) return json({ error: `Invoice ${invoiceNo} was not found for ${acct.label}.` }, 404);
-        if (!original.poId) return json({ error: `Invoice ${invoiceNo} has no PO number, so a revised one cannot be made.` }, 400);
+        const suffix = revisionSuffix(nextRevisionNumber(members));
+        const newInvoiceNo = `${base}${suffix}`;
+        const newPoNo = `${basePo}${suffix}`;
 
-        const already = (await openRevised()).find((r) => Number(r.original_invoice_no) === Number(invoiceNo) || r.original_invoice_no === invoiceNo);
+        const already = (await openRevised()).find((r) => r.original_invoice_no === base);
         if (already) {
-          return json({ error: `A revised invoice for #${invoiceNo} is already waiting. Process or remove it first.` }, 409);
+          return json({ error: `A revised invoice for #${base} (#${already.new_invoice_no}) is already waiting. Process or remove it first.` }, 409);
         }
-        const waitingInPortal = (await listPendingInvoiceInputs(session)).find((p) => p.invoiceNo === `${invoiceNo}R`);
+        const waitingInPortal = (await listPendingInvoiceInputs(session)).find((p) => p.invoiceNo === newInvoiceNo);
         if (waitingInPortal) {
-          return json({ error: `The portal already has an unprocessed invoice #${invoiceNo}R.` }, 409);
+          return json({ error: `The portal already has an unprocessed invoice #${newInvoiceNo}.` }, 409);
         }
 
-        const created = await createRevisedInvoice(session, original, amount, description);
+        const created = await createRevisedInvoice(session, source, amount, description, newInvoiceNo, newPoNo);
         const { data: saved, error: saveError } = await admin
           .from('portal_revised_invoices')
           .insert({
@@ -428,8 +436,8 @@ Deno.serve(async (req) => {
             account_id: acct.id,
             account_label: acct.label,
             invoice_input_id: created.invoiceInputId,
-            original_invoice_key: invoiceKey,
-            original_invoice_no: invoiceNo,
+            original_invoice_key: source.invoiceKey,
+            original_invoice_no: base,
             new_invoice_no: created.newInvoiceNo,
             po_no: created.poNo,
             broker: created.broker,
@@ -446,12 +454,12 @@ Deno.serve(async (req) => {
         await logRevised(
           `Invoice ${created.newInvoiceNo}`,
           [created.newInvoiceNo],
-          `Created for ${money(amount)} from invoice #${invoiceNo}, ${created.broker}, PO ${created.poNo}.`
+          `Created for ${money(amount)} from invoice #${base}, ${created.broker}, PO ${created.poNo}.`
         );
         return json({
           revised: {
             id: saved.id,
-            original_invoice_no: invoiceNo,
+            original_invoice_no: base,
             new_invoice_no: created.newInvoiceNo,
             po_no: created.poNo,
             broker: created.broker,

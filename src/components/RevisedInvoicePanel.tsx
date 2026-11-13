@@ -11,6 +11,7 @@ import {
   type PortalInvoice,
   type RevisedInvoice,
 } from '@/lib/portalUpload';
+import { findFamily, nextRevisionNumber, revisionSuffix } from '@/lib/revisedInvoices';
 
 const inputClass =
   'w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-ink outline-none focus:border-accent';
@@ -149,6 +150,8 @@ export function RevisedInvoicePanel({ accounts, onChanged }: { accounts: PortalA
   const [matches, setMatches] = useState<PortalInvoice[] | null>(null);
   const [searchError, setSearchError] = useState<string | null>(null);
   const [selected, setSelected] = useState<PortalInvoice | null>(null);
+  /** The original invoice and all its revisions, loaded when an invoice is picked. */
+  const [family, setFamily] = useState<ReturnType<typeof findFamily<PortalInvoice>> | null>(null);
   const [difference, setDifference] = useState('');
   const [description, setDescription] = useState('');
   const [creating, setCreating] = useState(false);
@@ -202,11 +205,12 @@ export function RevisedInvoicePanel({ accounts, onChanged }: { accounts: PortalA
     setSearching(true);
     setSearchError(null);
     setSelected(null);
+    setFamily(null);
     setCreateMessage(null);
     try {
       const { invoices } = await searchPortalInvoices({ accountId, invoice: invoiceNo, debtorName: customer, poId });
       setMatches(invoices);
-      if (invoices.length === 1) setSelected(invoices[0]);
+      if (invoices.length === 1) void choose(invoices[0]);
     } catch (err) {
       setMatches(null);
       setSearchError(err instanceof Error ? err.message : 'Search failed');
@@ -215,16 +219,36 @@ export function RevisedInvoicePanel({ accounts, onChanged }: { accounts: PortalA
     }
   };
 
+  const choose = useCallback(
+    async (invoice: PortalInvoice) => {
+      setSelected(invoice);
+      setFamily(null);
+      setCreateMessage(null);
+      if (accountId === '') return;
+      try {
+        const { invoices } = await searchPortalInvoices({ accountId, invoice: invoice.invoiceNo.replace(/R\d*$/i, '') || invoice.invoiceNo });
+        setFamily(findFamily(invoices, invoice));
+      } catch {
+        setFamily(findFamily([invoice], invoice));
+      }
+    },
+    [accountId]
+  );
+
   const differenceNum = difference.trim() ? Math.round(parseFloat(difference) * 100) / 100 : NaN;
   const differenceOk = Number.isFinite(differenceNum) && differenceNum > 0;
-  const alreadyRevised = selected ? /r$/i.test(selected.invoiceNo) : false;
+  const members = family?.members ?? [];
+  const nextSuffix = revisionSuffix(nextRevisionNumber(members));
+  const baseNo = family?.base ?? selected?.invoiceNo ?? '';
+  const basePo = ((family?.original ?? selected)?.poId ?? '').replace(/R\d*$/i, '');
+  const newInvoiceNo = `${baseNo}${nextSuffix}`;
+  const newPoNo = basePo ? `${basePo}${nextSuffix}` : '';
+  const familyTotal = members.reduce((sum, m) => sum + m.amount, 0);
 
   const create = async () => {
     if (accountId === '' || !selected || !differenceOk) return;
-    const newNo = `${selected.invoiceNo}R`;
-    const newPo = `${selected.poId}R`;
     const question =
-      `Create revised invoice #${newNo}?\n\nBroker: ${selected.debtorName}\nPO: ${newPo}\nAmount: ${money(differenceNum)}\n\n` +
+      `Create revised invoice #${newInvoiceNo}?\n\nBroker: ${selected.debtorName}\nPO: ${newPoNo}\nAmount: ${money(differenceNum)}\nFull amount with this one: ${money(familyTotal + differenceNum)}\n\n` +
       'It will be created in the TruFunding portal and wait on the schedule list until you process it.';
     if (!window.confirm(question)) return;
     setCreating(true);
@@ -240,6 +264,7 @@ export function RevisedInvoicePanel({ accounts, onChanged }: { accounts: PortalA
       setDifference('');
       setDescription('');
       setSelected(null);
+      setFamily(null);
       setMatches(null);
       await loadList();
       onChanged();
@@ -374,14 +399,14 @@ export function RevisedInvoicePanel({ accounts, onChanged }: { accounts: PortalA
             </p>
             {matches.length > 0 && (
               <ul className="divide-y divide-border rounded-lg border border-border">
-                {matches.map((m) => (
+                {matches.map((m) => {
+                  const group = findFamily(matches, m);
+                  const groupTotal = group.members.reduce((sum, g) => sum + g.amount, 0);
+                  return (
                   <li key={m.invoiceKey}>
                     <button
                       type="button"
-                      onClick={() => {
-                        setSelected(m);
-                        setCreateMessage(null);
-                      }}
+                      onClick={() => void choose(m)}
                       className={`flex w-full flex-wrap items-center gap-x-4 gap-y-1 px-3 py-2 text-left text-sm ${
                         selected?.invoiceKey === m.invoiceKey ? 'bg-accent/10' : 'hover:bg-surface'
                       }`}
@@ -393,9 +418,15 @@ export function RevisedInvoicePanel({ accounts, onChanged }: { accounts: PortalA
                       <span className="text-xs text-muted">
                         {money(m.amount)} · balance {money(m.balance)}
                       </span>
+                      {group.members.length > 1 && (
+                        <span className="w-full text-right text-[11px] font-medium text-accent">
+                          Full amount with revisions {money(groupTotal)} ({group.members.length} invoices)
+                        </span>
+                      )}
                     </button>
                   </li>
-                ))}
+                  );
+                })}
               </ul>
             )}
           </div>
@@ -411,21 +442,45 @@ export function RevisedInvoicePanel({ accounts, onChanged }: { accounts: PortalA
               <dd className="font-medium text-ink">{selected.debtorName}</dd>
             </div>
             <div className="flex justify-between gap-3">
-              <dt className="text-muted">Original invoice</dt>
-              <dd className="font-medium text-ink">
-                #{selected.invoiceNo} · {money(selected.amount)}
-              </dd>
+              <dt className="text-muted">Invoice</dt>
+              <dd className="font-medium text-ink">#{baseNo}</dd>
             </div>
             <div className="flex justify-between gap-3">
               <dt className="text-muted">New invoice #</dt>
-              <dd className="font-mono font-medium text-accent">{selected.invoiceNo}R</dd>
+              <dd className="font-mono font-medium text-accent">{newInvoiceNo}</dd>
             </div>
             <div className="flex justify-between gap-3">
               <dt className="text-muted">New PO #</dt>
-              <dd className="font-mono font-medium text-accent">{selected.poId ? `${selected.poId}R` : '—'}</dd>
+              <dd className="font-mono font-medium text-accent">{newPoNo || '—'}</dd>
             </div>
           </dl>
-          {alreadyRevised && <p className="text-sm text-red">This is already a revised invoice.</p>}
+          {family === null ? (
+            <p className="text-xs text-muted">Loading the invoice and its revisions…</p>
+          ) : (
+            <div className="rounded-lg bg-surface px-3 py-2 text-sm">
+              <ul className="space-y-0.5">
+                {members.map((m) => (
+                  <li key={m.invoiceKey} className="flex justify-between gap-3">
+                    <span className="text-ink">
+                      #{m.invoiceNo}
+                      <span className="ml-2 text-xs text-muted">{m.revision === 0 ? 'original' : `revision ${m.revision}`}</span>
+                    </span>
+                    <span className="font-mono text-ink">{money(m.amount)}</span>
+                  </li>
+                ))}
+                {differenceOk && (
+                  <li className="flex justify-between gap-3 text-accent">
+                    <span>#{newInvoiceNo}<span className="ml-2 text-xs">new</span></span>
+                    <span className="font-mono">{money(differenceNum)}</span>
+                  </li>
+                )}
+              </ul>
+              <div className="mt-1.5 flex justify-between gap-3 border-t border-border pt-1.5 font-medium text-ink">
+                <span>Full amount{differenceOk ? ' with the new revision' : ''}</span>
+                <span className="font-mono">{money(familyTotal + (differenceOk ? differenceNum : 0))}</span>
+              </div>
+            </div>
+          )}
           <div className="grid gap-3 sm:grid-cols-3">
             <div>
               <label className={labelClass}>Difference amount ($)</label>
@@ -447,13 +502,13 @@ export function RevisedInvoicePanel({ accounts, onChanged }: { accounts: PortalA
           <div className="flex flex-wrap items-center gap-3">
             <button
               type="button"
-              disabled={creating || !differenceOk || alreadyRevised || !selected.poId}
+              disabled={creating || !differenceOk || family === null || !basePo}
               onClick={() => void create()}
               className="rounded-lg btn-primary px-4 py-2 text-sm disabled:opacity-60"
             >
               {creating ? 'Creating…' : 'Create invoice'}
             </button>
-            {!selected.poId && <span className="text-sm text-red">This invoice has no PO number.</span>}
+            {family !== null && !basePo && <span className="text-sm text-red">This invoice has no PO number.</span>}
           </div>
         </div>
       )}

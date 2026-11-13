@@ -447,12 +447,12 @@ export async function createRevisedInvoice(
   session: PortalSession,
   original: PortalInvoice,
   amount: number,
-  description: string
+  description: string,
+  newInvoiceNo: string,
+  poNo: string
 ): Promise<CreatedRevisedInvoice> {
   if (!original.debtorKey) throw new Error('The invoice has no broker on file, so it cannot be revised here.');
   const [client, debtor] = await Promise.all([clientDetails(session), debtorAddress(session, original.debtorKey)]);
-  const newInvoiceNo = `${original.invoiceNo}R`;
-  const poNo = `${original.poId}R`;
   const broker = debtor.name || original.debtorName;
 
   const header = {
