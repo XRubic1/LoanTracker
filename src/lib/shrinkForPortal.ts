@@ -1,4 +1,4 @@
-import { PDFDocument } from 'pdf-lib';
+import { PDFDocument, PDFName } from 'pdf-lib';
 import { mergeIntoOnePdf } from './mergeInvoicePdf';
 
 /**
@@ -104,6 +104,11 @@ async function splitPdf(name: string, blob: Blob): Promise<SplitResult> {
   const sourceBytes = new Uint8Array(await blob.arrayBuffer());
   const source = await PDFDocument.load(sourceBytes, { ignoreEncryption: true });
   const total = source.getPageCount();
+  // Links, thumbnails and the like point at other pages, and copying a page would drag those pages
+  // (and their pictures) along into every part. Drop them so each part holds only its own pages.
+  for (const page of source.getPages()) {
+    for (const key of ['Annots', 'Thumb', 'B', 'StructParents', 'PieceInfo']) page.node.delete(PDFName.of(key));
+  }
   const groups: Uint8Array[] = [];
   let flattened = 0;
 
