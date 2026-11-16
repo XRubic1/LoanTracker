@@ -1,4 +1,4 @@
-import { PDFDocument } from 'pdf-lib';
+import { PDFDocument, PDFName } from 'pdf-lib';
 import UTIF from 'utif';
 
 export interface MergeInput {
@@ -89,6 +89,10 @@ export async function mergeIntoOnePdf(inputs: MergeInput[]): Promise<MergeResult
     try {
       if (isPdf(fileName)) {
         const source = await PDFDocument.load(bytes, { ignoreEncryption: true });
+        // Links point at other pages; copying a page would drag those pages along.
+        for (const page of source.getPages()) {
+          for (const key of ['Annots', 'Thumb', 'B', 'StructParents', 'PieceInfo']) page.node.delete(PDFName.of(key));
+        }
         const pages = await out.copyPages(source, source.getPageIndices());
         for (const page of pages) out.addPage(page);
       } else if (isJpg(fileName)) {

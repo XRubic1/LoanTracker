@@ -133,8 +133,14 @@ export async function uploadInvoiceFiles(input: { accountId: number; invoice: Po
   form.append('invoiceKey', String(input.invoice.invoiceKey));
   form.append('invoiceNo', input.invoice.invoiceNo);
   for (const file of prepared.files) form.append('files', file, file.name);
-  const result = await call<{ invoice_no: string; message: string }>(form);
-  return prepared.notes.length ? { ...result, message: `${result.message} (${prepared.notes.join('; ')}.)` } : result;
+  const result = await call<{ invoice_no: string; message: string; debug?: unknown }>(form);
+  const debug = { client: prepared.trace, server: result.debug };
+  console.info('Invoice upload debug', debug);
+  return {
+    ...result,
+    message: prepared.notes.length ? `${result.message} (${prepared.notes.join('; ')}.)` : result.message,
+    debug,
+  };
 }
 
 export interface PortalInvoiceFileInfo {

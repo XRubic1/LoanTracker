@@ -5,6 +5,7 @@ import { RevisedInvoicePanel } from '@/components/RevisedInvoicePanel';
 import { fmtDateTime } from '@/lib/utils';
 import {
   fetchPortalUploads,
+  listPortalInvoiceFiles,
   searchPortalInvoices,
   uploadInvoiceFiles,
   type PortalAccount,
@@ -39,6 +40,30 @@ function InvoiceUploadPanel({ accounts, onUploaded }: { accounts: PortalAccount[
   const [dragging, setDragging] = useState(false);
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState<{ ok: boolean; text: string } | null>(null);
+  const [debug, setDebug] = useState<string | null>(null);
+  /** How many documents the invoice already has (null while checking). A second upload would repeat them. */
+  const [existingDocs, setExistingDocs] = useState<number | null>(null);
+  const [docsCheckFailed, setDocsCheckFailed] = useState(false);
+  const [docsCheck, setDocsCheck] = useState(0);
+
+  useEffect(() => {
+    setExistingDocs(null);
+    setDocsCheckFailed(false);
+    if (!selected || accountId === '') return;
+    let cancelled = false;
+    listPortalInvoiceFiles({ accountId, invoice: selected })
+      .then(({ files: list }) => {
+        if (!cancelled) setExistingDocs(list.length);
+      })
+      .catch(() => {
+        // The server checks again before uploading, so a failed look-up here only hides the early warning.
+        if (!cancelled) setDocsCheckFailed(true);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [selected, accountId, docsCheck]);
+  const locked = existingDocs != null && existingDocs > 0;
 
   useEffect(() => {
     if (accountId === '' && accounts[0]) setAccountId(accounts[0].id);
@@ -78,14 +103,21 @@ function InvoiceUploadPanel({ accounts, onUploaded }: { accounts: PortalAccount[
 
   const upload = async () => {
     if (accountId === '' || !selected || files.length === 0) return;
-    const question = `Upload ${files.length} file${files.length === 1 ? '' : 's'} to invoice ${selected.invoiceNo} (${selected.debtorName}) for ${account?.label}?`;
+    const question =
+      `Upload ${files.length} file${files.length === 1 ? '' : 's'} to invoice ${selected.invoiceNo} (${selected.debtorName}) for ${account?.label}?
+
+` +
+      'This can only be done once per invoice. Make sure all the paperwork is added.';
     if (!window.confirm(question)) return;
     setBusy(true);
     setResult(null);
+    setDebug(null);
     try {
       const done = await uploadInvoiceFiles({ accountId, invoice: selected, files });
+      setDebug(JSON.stringify(done.debug, null, 2));
       setResult({ ok: true, text: done.message });
       setFiles([]);
+      setDocsCheck((n) => n + 1);
     } catch (err) {
       setResult({ ok: false, text: err instanceof Error ? err.message : 'Upload failed' });
     } finally {
@@ -181,8 +213,21 @@ function InvoiceUploadPanel({ accounts, onUploaded }: { accounts: PortalAccount[
         </div>
       )}
 
-      {selected && (
+      {selected && locked && (
+        <p className="rounded-lg border border-red/40 bg-red/10 px-3 py-3 text-sm text-red">
+          Invoice #{selected.invoiceNo} already has {existingDocs} document{existingDocs === 1 ? '' : 's'}. Uploading again is blocked. Upload more
+          paperwork from Cadence.
+        </p>
+      )}
+
+      {selected && !locked && (
         <>
+          <p className="rounded-lg border border-border bg-surface px-3 py-2 text-xs text-muted">
+            Add all the paperwork at once. An invoice can only be uploaded to once. Multiple files are combined into one PDF.
+          </p>
+          {docsCheckFailed && (
+            <p className="text-xs text-muted">Could not check whether this invoice already has documents; the upload will check again.</p>
+          )}
           <div
             onDragOver={(e) => {
               e.preventDefault();
@@ -199,7 +244,7 @@ function InvoiceUploadPanel({ accounts, onUploaded }: { accounts: PortalAccount[
               dragging ? 'border-accent bg-accent/5 text-ink' : 'border-border text-muted hover:border-accent'
             }`}
           >
-            Drop documents for invoice #{selected.invoiceNo} here, or click to choose (large files are shrunk or split automatically)
+            Drop documents for invoice #{selected.invoiceNo} here, or click to choose (several files are combined into one PDF; big ones are compressed)
             <input
               ref={fileInput}
               type="file"
@@ -231,7 +276,7 @@ function InvoiceUploadPanel({ accounts, onUploaded }: { accounts: PortalAccount[
           <div className="flex flex-wrap items-center gap-3">
             <button
               type="button"
-              disabled={busy || files.length === 0 || files.some((f) => f.size > 50 * 1024 * 1024)}
+              disabled={busy || existingDocs == null || files.length === 0 || files.some((f) => f.size > 50 * 1024 * 1024)}
               onClick={() => void upload()}
               className="rounded-lg btn-primary px-4 py-2 text-sm disabled:opacity-60"
             >
@@ -239,6 +284,12 @@ function InvoiceUploadPanel({ accounts, onUploaded }: { accounts: PortalAccount[
             </button>
             {result && <span className={`text-sm ${result.ok ? 'text-green' : 'text-red'}`}>{result.text}</span>}
           </div>
+          {debug && (
+            <details className="text-xs text-muted">
+              <summary className="cursor-pointer">Debug details</summary>
+              <pre className="mt-2 max-h-96 overflow-auto whitespace-pre-wrap rounded-lg border border-border p-3">{debug}</pre>
+            </details>
+          )}
         </>
       )}
     </div>

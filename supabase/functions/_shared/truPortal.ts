@@ -204,7 +204,11 @@ export function base64(bytes: Uint8Array): string {
 export const MAX_INVOICE_IMAGE_BYTES = 16 * 1024 * 1024;
 
 /** Same call as the "Upload images" button on an invoice page. */
-export async function uploadInvoiceImage(session: PortalSession, invoiceKey: number, file: File): Promise<void> {
+export async function uploadInvoiceImage(
+  session: PortalSession,
+  invoiceKey: number,
+  file: File
+): Promise<Record<string, unknown>> {
   const result = await postJson(session.base, '/api/UploadInvoiceImages', {
     username: session.username,
     token: session.apiKey,
@@ -221,6 +225,7 @@ export async function uploadInvoiceImage(session: PortalSession, invoiceKey: num
   if (String(result.StatusResponse) !== '1') {
     throw new Error(String(result.InfoResponse || `The portal rejected ${file.name}.`));
   }
+  return result;
 }
 
 export interface PortalInvoiceFile {

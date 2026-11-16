@@ -703,6 +703,19 @@ Deno.serve(async (req) => {
         const found = (await searchInvoices(session, { invoice: invoiceNo })).find((i) => i.invoiceKey === invoiceKey);
         if (!found) return json({ error: `Invoice ${invoiceNo} was not found for ${acct.label}.` }, 404);
 
+        // The portal repeats every earlier document on each further upload, so only an invoice with no
+        // documents may be uploaded to.
+        const already = await listInvoiceFiles(session, invoiceKey);
+        if (already.length > 0) {
+          return json(
+            {
+              error: `Invoice ${found.invoiceNo} already has ${already.length} document${already.length === 1 ? '' : 's'}. Uploading again is blocked because the portal would repeat them. Upload more paperwork from Cadence.`,
+              existing: already.length,
+            },
+            409
+          );
+        }
+
         const names = imageFiles.map((f) => f.name);
         const record = (status: string, message: string) =>
           admin.from('portal_upload_log').insert({
@@ -717,14 +730,46 @@ Deno.serve(async (req) => {
             uploaded_by: caller.email,
           });
         const uploaded: string[] = [];
+        // Debug trail: what arrived, what the portal already had, what each call returned, what it has now.
+        const debug: Record<string, unknown> = {
+          requestId: crypto.randomUUID(),
+          receivedAt: new Date().toISOString(),
+          received: imageFiles.map((f) => ({ name: f.name, bytes: f.size, type: f.type })),
+          sent: [] as unknown[],
+        };
+        const listNames = async () => {
+          try {
+            return (await listInvoiceFiles(session, invoiceKey)).map((f) => ({ imageKey: f.imageKey, name: f.fileName }));
+          } catch (e) {
+            return `could not list: ${e instanceof Error ? e.message : String(e)}`;
+          }
+        };
+        const beforeList = await listNames();
+        debug.portalBeforeCount = Array.isArray(beforeList) ? beforeList.length : beforeList;
         try {
           for (const file of imageFiles) {
-            await uploadInvoiceImage(session, invoiceKey, file);
+            const started = Date.now();
+            const reply = await uploadInvoiceImage(session, invoiceKey, file);
+            (debug.sent as unknown[]).push({
+              name: file.name,
+              bytes: file.size,
+              ms: Date.now() - started,
+              portalStatus: String(reply.StatusResponse ?? ''),
+              portalInfo: String(reply.InfoResponse ?? ''),
+            });
+            console.log('invoice_upload', debug.requestId, file.name, file.size, JSON.stringify(reply).slice(0, 300));
             uploaded.push(file.name);
+          }
+          const afterList = await listNames();
+          debug.portalAfterCount = Array.isArray(afterList) ? afterList.length : afterList;
+          // Only what this upload added, so the debug stays short.
+          if (Array.isArray(beforeList) && Array.isArray(afterList)) {
+            const known = new Set(beforeList.map((e) => e.imageKey));
+            debug.portalAdded = afterList.filter((e) => !known.has(e.imageKey));
           }
           const message = `Uploaded ${uploaded.length} file${uploaded.length === 1 ? '' : 's'} to invoice ${found.invoiceNo}.`;
           await record('success', message);
-          return json({ invoice_no: found.invoiceNo, message });
+          return json({ invoice_no: found.invoiceNo, message, debug });
         } catch (err) {
           const reason = err instanceof Error ? err.message : 'Upload failed.';
           const message = uploaded.length ? `${reason} (${uploaded.join(', ')} went through.)` : reason;
