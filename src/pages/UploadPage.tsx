@@ -5,7 +5,7 @@ import { RevisedInvoicePanel } from '@/components/RevisedInvoicePanel';
 import { fmtDateTime } from '@/lib/utils';
 import {
   fetchPortalUploads,
-  listPortalInvoiceFiles,
+  checkInvoiceUploaded,
   searchPortalInvoices,
   uploadInvoiceFiles,
   type PortalAccount,
@@ -41,29 +41,32 @@ function InvoiceUploadPanel({ accounts, onUploaded }: { accounts: PortalAccount[
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState<{ ok: boolean; text: string } | null>(null);
   const [debug, setDebug] = useState<string | null>(null);
-  /** How many documents the invoice already has (null while checking). A second upload would repeat them. */
-  const [existingDocs, setExistingDocs] = useState<number | null>(null);
+  /** Whether this invoice was already uploaded to from OpsDesk (undefined while checking). */
+  const [uploadedBefore, setUploadedBefore] = useState<{ at: string | null; by: string | null } | null | undefined>(undefined);
   const [docsCheckFailed, setDocsCheckFailed] = useState(false);
   const [docsCheck, setDocsCheck] = useState(0);
 
   useEffect(() => {
-    setExistingDocs(null);
+    setUploadedBefore(undefined);
     setDocsCheckFailed(false);
     if (!selected || accountId === '') return;
     let cancelled = false;
-    listPortalInvoiceFiles({ accountId, invoice: selected })
-      .then(({ files: list }) => {
-        if (!cancelled) setExistingDocs(list.length);
+    checkInvoiceUploaded({ accountId, invoice: selected })
+      .then((res) => {
+        if (!cancelled) setUploadedBefore(res.uploaded ? { at: res.at, by: res.by } : null);
       })
       .catch(() => {
         // The server checks again before uploading, so a failed look-up here only hides the early warning.
-        if (!cancelled) setDocsCheckFailed(true);
+        if (!cancelled) {
+          setDocsCheckFailed(true);
+          setUploadedBefore(null);
+        }
       });
     return () => {
       cancelled = true;
     };
   }, [selected, accountId, docsCheck]);
-  const locked = existingDocs != null && existingDocs > 0;
+  const locked = Boolean(uploadedBefore);
 
   useEffect(() => {
     if (accountId === '' && accounts[0]) setAccountId(accounts[0].id);
@@ -107,7 +110,7 @@ function InvoiceUploadPanel({ accounts, onUploaded }: { accounts: PortalAccount[
       `Upload ${files.length} file${files.length === 1 ? '' : 's'} to invoice ${selected.invoiceNo} (${selected.debtorName}) for ${account?.label}?
 
 ` +
-      'This can only be done once per invoice. Make sure all the paperwork is added.';
+      'You will not be able to add more files to this invoice from OpsDesk afterwards. Is all the paperwork added?';
     if (!window.confirm(question)) return;
     setBusy(true);
     setResult(null);
@@ -215,18 +218,19 @@ function InvoiceUploadPanel({ accounts, onUploaded }: { accounts: PortalAccount[
 
       {selected && locked && (
         <p className="rounded-lg border border-red/40 bg-red/10 px-3 py-3 text-sm text-red">
-          Invoice #{selected.invoiceNo} already has {existingDocs} document{existingDocs === 1 ? '' : 's'}. Uploading again is blocked. Upload more
-          paperwork from Cadence.
+          Invoice #{selected.invoiceNo} was already uploaded from OpsDesk
+          {uploadedBefore?.at ? ` on ${fmtDateTime(uploadedBefore.at)}` : ''}
+          {uploadedBefore?.by ? ` by ${uploadedBefore.by}` : ''}. Uploading again is blocked. Upload more paperwork from Cadence.
         </p>
       )}
 
       {selected && !locked && (
         <>
           <p className="rounded-lg border border-border bg-surface px-3 py-2 text-xs text-muted">
-            Add all the paperwork at once. An invoice can only be uploaded to once. Multiple files are combined into one PDF.
+            Add all the paperwork for this invoice now. After this upload you can't add more to it from OpsDesk. Multiple files are combined into one PDF.
           </p>
           {docsCheckFailed && (
-            <p className="text-xs text-muted">Could not check whether this invoice already has documents; the upload will check again.</p>
+            <p className="text-xs text-muted">Could not check earlier uploads for this invoice; the upload will check again.</p>
           )}
           <div
             onDragOver={(e) => {
@@ -276,7 +280,7 @@ function InvoiceUploadPanel({ accounts, onUploaded }: { accounts: PortalAccount[
           <div className="flex flex-wrap items-center gap-3">
             <button
               type="button"
-              disabled={busy || existingDocs == null || files.length === 0 || files.some((f) => f.size > 50 * 1024 * 1024)}
+              disabled={busy || uploadedBefore === undefined || files.length === 0 || files.some((f) => f.size > 50 * 1024 * 1024)}
               onClick={() => void upload()}
               className="rounded-lg btn-primary px-4 py-2 text-sm disabled:opacity-60"
             >

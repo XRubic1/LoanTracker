@@ -287,6 +287,7 @@ Deno.serve(async (req) => {
       action === 'invoice_search' ||
       action === 'invoice_upload' ||
       action === 'invoice_files' ||
+      action === 'invoice_uploaded' ||
       action === 'invoice_download' ||
       action === 'invoice_download_log' ||
       action === 'invoice_package' ||
@@ -690,6 +691,34 @@ Deno.serve(async (req) => {
         });
       }
 
+      // Invoices already uploaded to from this app. The portal repeats earlier documents on every
+      // further upload, so such an invoice must not be uploaded to again. Matched on the invoice key
+      // kept in the history entry; older entries without a key are matched on the invoice number.
+      const uploadedFromHere = async (invoiceKey: number, invoiceNo: string) => {
+        const { data } = await admin
+          .from('portal_upload_log')
+          .select('message, created_at, uploaded_by')
+          .eq('account_id', acct.id)
+          .eq('status', 'success')
+          .eq('batch_no', `Invoice ${invoiceNo}`)
+          .order('created_at', { ascending: false })
+          .limit(50);
+        return (
+          (data ?? []).find((row) => {
+            const text = String(row.message ?? '');
+            return text.includes(`(ref ${invoiceKey})`) || !/(ref d+)/.test(text);
+          }) ?? null
+        );
+      };
+
+      if (action === 'invoice_uploaded') {
+        const invoiceKey = Number(body.invoiceKey);
+        const invoiceNo = String(body.invoiceNo ?? '').trim();
+        if (!invoiceKey || !invoiceNo) return json({ error: 'Find the invoice first.' }, 400);
+        const prior = await uploadedFromHere(invoiceKey, invoiceNo);
+        return json({ uploaded: Boolean(prior), at: prior?.created_at ?? null, by: prior?.uploaded_by ?? null });
+      }
+
       if (action === 'invoice_upload') {
         const invoiceKey = Number(form?.get('invoiceKey'));
         const invoiceNo = String(form?.get('invoiceNo') ?? '').trim();
@@ -703,14 +732,12 @@ Deno.serve(async (req) => {
         const found = (await searchInvoices(session, { invoice: invoiceNo })).find((i) => i.invoiceKey === invoiceKey);
         if (!found) return json({ error: `Invoice ${invoiceNo} was not found for ${acct.label}.` }, 404);
 
-        // The portal repeats every earlier document on each further upload, so only an invoice with no
-        // documents may be uploaded to.
-        const already = await listInvoiceFiles(session, invoiceKey);
-        if (already.length > 0) {
+        const already = await uploadedFromHere(invoiceKey, found.invoiceNo);
+        if (already) {
           return json(
             {
-              error: `Invoice ${found.invoiceNo} already has ${already.length} document${already.length === 1 ? '' : 's'}. Uploading again is blocked because the portal would repeat them. Upload more paperwork from Cadence.`,
-              existing: already.length,
+              error: `Invoice ${found.invoiceNo} was already uploaded from OpsDesk. Uploading again is blocked. Upload more paperwork from Cadence.`,
+              uploaded: true,
             },
             409
           );
@@ -768,7 +795,7 @@ Deno.serve(async (req) => {
             debug.portalAdded = afterList.filter((e) => !known.has(e.imageKey));
           }
           const message = `Uploaded ${uploaded.length} file${uploaded.length === 1 ? '' : 's'} to invoice ${found.invoiceNo}.`;
-          await record('success', message);
+          await record('success', `${message} (ref ${invoiceKey})`);
           return json({ invoice_no: found.invoiceNo, message, debug });
         } catch (err) {
           const reason = err instanceof Error ? err.message : 'Upload failed.';

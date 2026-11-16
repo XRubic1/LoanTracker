@@ -156,6 +156,15 @@ export const listPortalInvoiceFiles = (input: { accountId: number; invoice: Port
     invoiceNo: input.invoice.invoiceNo,
   });
 
+/** Whether this invoice was already uploaded to from OpsDesk (a second upload would repeat its documents). */
+export const checkInvoiceUploaded = (input: { accountId: number; invoice: PortalInvoice }) =>
+  call<{ uploaded: boolean; at: string | null; by: string | null }>({
+    action: 'invoice_uploaded',
+    accountId: input.accountId,
+    invoiceKey: input.invoice.invoiceKey,
+    invoiceNo: input.invoice.invoiceNo,
+  });
+
 /** Fetch one document from the portal. */
 export async function fetchPortalInvoiceFile(input: {
   accountId: number;
