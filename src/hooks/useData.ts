@@ -4,6 +4,8 @@ import { isConfigMissing, getSupabase } from '@/lib/supabase';
 import {
   buildCloseLoanFully,
   buildPostInstallmentPayment,
+  confirmSecondCloseInWeek,
+  todayDateOnly,
   buildReverseLastPayment,
 } from '@/lib/loanPaymentActions';
 import { getLoanOpenInstallmentRemaining } from '@/lib/utils';
@@ -113,7 +115,8 @@ export interface UseDataResult {
 export function useData(
   ownerId: string | null,
   userId: string | null = null,
-  pauseBackgroundSync = false
+  pauseBackgroundSync = false,
+  userEmail?: string
 ): UseDataResult {
   const [loans, setLoans] = useState<Loan[]>([]);
   const [reserves, setReserves] = useState<Reserve[]>([]);
@@ -305,15 +308,19 @@ export function useData(
     if (!loan) return;
     const result = buildPostInstallmentPayment(
       loan,
-      getLoanOpenInstallmentRemaining(loan) || loan.installment
+      getLoanOpenInstallmentRemaining(loan) || loan.installment,
+      '',
+      undefined,
+      userEmail
     );
     if (!result.ok) {
       window.alert(result.error);
       return;
     }
+    if (!confirmSecondCloseInWeek(loan, result.loan, todayDateOnly())) return;
     await updateLoanById(id, result.loan);
     if (result.message) window.alert(result.message);
-  }, [loans, updateLoanById]);
+  }, [loans, updateLoanById, userEmail]);
 
   const reverseLoanPayment = useCallback(
     async (id: number) => {

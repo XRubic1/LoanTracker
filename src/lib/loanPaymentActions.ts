@@ -1,4 +1,5 @@
 import type { Loan, LoanInstallmentPayment } from '@/types';
+import { fmtDate } from '@/lib/utils';
 
 /** Today's date as YYYY-MM-DD (local calendar). */
 export function todayDateOnly(): string {
@@ -46,6 +47,20 @@ function padNotes(notes: string[] | undefined, length: number): string[] {
   return out;
 }
 
+/**
+ * Ask before closing a second installment in the same week. Only applies when this post actually closes one
+ * (a partial payment is fine). Returns false when the user declines.
+ */
+export function confirmSecondCloseInWeek(before: Loan, after: Loan, paidDate: string): boolean {
+  if (after.paidCount <= before.paidCount) return true;
+  const existing = findInstallmentClosedInWeek(before, paidDate);
+  if (!existing) return true;
+  const who = existing.by ? ` by ${existing.by}` : '';
+  return window.confirm(
+    `An installment was already closed (${fmtDate(existing.date)})${who} this week.\n\nAre you sure you want to close another installment this week?`
+  );
+}
+
 /** Deep-clone installment payment slots. */
 function clonePaymentSlots(
   payments: LoanInstallmentPayment[][] | undefined
@@ -55,8 +70,36 @@ function clonePaymentSlots(
       amount: Number(p.amount) || 0,
       date: String(p.date ?? ''),
       note: String(p.note ?? ''),
+      ...(p.by ? { by: p.by } : {}),
     }))
   );
+}
+
+/** Monday (YYYY-MM-DD) of the calendar week containing `date`. */
+function weekKey(date: string): string {
+  const [y, m, d] = date.split('-').map(Number);
+  const day = new Date(y, (m || 1) - 1, d || 1);
+  day.setDate(day.getDate() - ((day.getDay() + 6) % 7));
+  return `${day.getFullYear()}-${day.getMonth() + 1}-${day.getDate()}`;
+}
+
+/**
+ * An installment already closed in the same Mon–Sun week as `date`, if any
+ * (used to warn before closing a second one that week). `by` is the user who posted it, when known.
+ */
+export function findInstallmentClosedInWeek(
+  loan: Loan,
+  date: string
+): { date: string; by?: string } | null {
+  if (!date) return null;
+  const target = weekKey(date);
+  for (let i = 0; i < loan.paidCount; i++) {
+    const closedOn = loan.paymentDates?.[i];
+    if (!closedOn || weekKey(closedOn) !== target) continue;
+    const slot = loan.installmentPayments?.[i] ?? [];
+    return { date: closedOn, by: slot[slot.length - 1]?.by };
+  }
+  return null;
 }
 
 /** Ensure slots exist through `index` (inclusive). */
@@ -358,7 +401,8 @@ export function buildPostInstallmentPayment(
   loan: Loan,
   paymentAmount: number,
   note = '',
-  paidDate?: string
+  paidDate?: string,
+  by?: string
 ): PostInstallmentPaymentResult {
   const amount = roundMoney(Number(paymentAmount));
   if (!Number.isFinite(amount) || amount <= 0) {
@@ -421,6 +465,7 @@ export function buildPostInstallmentPayment(
           amount: posted,
           date,
           note: entryNote,
+          ...(by ? { by } : {}),
         }),
       };
       messages.push(
@@ -451,6 +496,7 @@ export function buildPostInstallmentPayment(
         amount: applied,
         date,
         note: entryNote,
+        ...(by ? { by } : {}),
       }),
       partialPaidAmount: 0,
     };

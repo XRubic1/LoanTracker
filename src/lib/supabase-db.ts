@@ -1038,10 +1038,12 @@ function parseInstallmentPayments(
           if (!p || typeof p !== 'object') return null;
           const amount = Number((p as LoanInstallmentPayment).amount);
           if (!Number.isFinite(amount)) return null;
+          const by = (p as LoanInstallmentPayment).by;
           return {
             amount,
             date: String((p as LoanInstallmentPayment).date ?? ''),
             note: String((p as LoanInstallmentPayment).note ?? ''),
+            ...(by ? { by: String(by) } : {}),
           };
         })
         .filter((p): p is LoanInstallmentPayment => p != null)

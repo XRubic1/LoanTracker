@@ -40,7 +40,7 @@ import { ClientInsuranceDetailModal } from '@/components/modals/ClientInsuranceD
 import { EditClientInsuranceModal } from '@/components/modals/EditClientInsuranceModal';
 import { EditAaaPaymentModal } from '@/components/modals/EditAaaPaymentModal';
 import type { Client, Loan } from '@/types';
-import { buildPostInstallmentPayment } from '@/lib/loanPaymentActions';
+import { buildPostInstallmentPayment, confirmSecondCloseInWeek } from '@/lib/loanPaymentActions';
 import { useAuth } from '@/contexts/AuthContext';
 import { MotusAutoCheckContext } from '@/contexts/MotusAutoCheckContext';
 import { useMotusAutoCheck } from '@/hooks/useMotusAutoCheck';
@@ -156,7 +156,7 @@ export default function App() {
     updateWorksheetEntryById,
     removeWorksheetEntry,
     clearWorksheetActivityInRange,
-  } = useData(effectiveOwnerId ?? null, user?.id ?? null, page === 'worksheet');
+  } = useData(effectiveOwnerId ?? null, user?.id ?? null, page === 'worksheet', user?.email ?? undefined);
   const motusAuto = useMotusAutoCheck(effectiveOwnerId ?? null);
   const [motusTab, setMotusTab] = useState<MotusTab>('check');
   const motusIssueCount = countMotusIssues(motusAuto.data, clientInsurance);
@@ -312,15 +312,24 @@ export default function App() {
   const handleLoanCloseInstallmentWithNote = useCallback(
     async (index: number, note: string, paidDate: string, paymentAmount: number) => {
       if (selectedLoan == null || index !== selectedLoan.paidCount) return;
-      const result = buildPostInstallmentPayment(selectedLoan, paymentAmount, note, paidDate);
+      const result = buildPostInstallmentPayment(
+        selectedLoan,
+        paymentAmount,
+        note,
+        paidDate,
+        user?.email ?? undefined
+      );
       if (!result.ok) {
         window.alert(result.error);
         throw new Error(result.error);
       }
+      if (!confirmSecondCloseInWeek(selectedLoan, result.loan, paidDate)) {
+        throw new Error('Cancelled — no installment was closed.');
+      }
       await updateLoanById(selectedLoan.id, result.loan);
       if (result.message) window.alert(result.message);
     },
-    [selectedLoan, updateLoanById]
+    [selectedLoan, updateLoanById, user?.email]
   );
 
   /** Update the paid date for an already-closed installment. */
@@ -378,16 +387,20 @@ export default function App() {
         overviewCloseInstallmentLoan,
         paymentAmount,
         note,
-        paidDate
+        paidDate,
+        user?.email ?? undefined
       );
       if (!result.ok) {
         window.alert(result.error);
         throw new Error(result.error);
       }
+      if (!confirmSecondCloseInWeek(overviewCloseInstallmentLoan, result.loan, paidDate)) {
+        throw new Error('Cancelled — no installment was closed.');
+      }
       await updateLoanById(overviewCloseInstallmentLoan.id, result.loan);
       if (result.message) window.alert(result.message);
     },
-    [overviewCloseInstallmentLoan, updateLoanById]
+    [overviewCloseInstallmentLoan, updateLoanById, user?.email]
   );
 
   /** Single update: save note and mark next deduction (avoids note being overwritten). */

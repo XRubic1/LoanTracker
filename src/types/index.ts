@@ -8,6 +8,8 @@ export interface LoanInstallmentPayment {
   date: string;
   /** Optional note for this payment only. */
   note: string;
+  /** Who posted it (user email), when known. Older payments have none. */
+  by?: string;
 }
 
 /** App model: loan (camelCase) */
