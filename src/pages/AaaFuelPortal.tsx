@@ -319,6 +319,12 @@ export function AaaFuelPortal() {
       .filter((p) => !q || p.client.toLowerCase().includes(q) || amountMatches(q, [p.amount]))
       .sort((a, b) => b.paymentDate.localeCompare(a.paymentDate) || b.id - a.id);
   }, [data.closedPayments, openQuery]);
+  const weekDeducted = useMemo(() => {
+    const start = weekStartOf();
+    const end = weekEndOf(start);
+    const mine = data.closedPayments.filter((p) => p.paymentDate >= start && p.paymentDate <= end);
+    return { count: mine.length, total: mine.reduce((sum, p) => sum + p.amount, 0) };
+  }, [data.closedPayments]);
   const thisWeekTotal = thisWeek.reduce((sum, p) => sum + p.amount, 0);
 
   const openDueIds = useMemo(() => new Set(data.openDues.map((d) => d.id)), [data.openDues]);
@@ -475,22 +481,26 @@ export function AaaFuelPortal() {
             <>
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
                 <Tile
-                  label="Open payments"
-                  value={String(data.openDues.length)}
-                  sub="Waiting to be deducted"
-                  tone="bg-accent"
-                />
-                <Tile
                   label="Left to be deducted"
                   value={fmt(totalLeft)}
-                  sub="Across all open payments"
+                  sub={`${data.openDues.length} open payment${data.openDues.length === 1 ? '' : 's'}`}
                   tone="bg-yellow"
                 />
                 <Tile
                   label="Past due"
-                  value={String(pastDue.length)}
-                  sub={pastDue.length ? `${fmt(pastDueLeft)} not yet deducted` : 'Nothing past due'}
+                  value={pastDue.length ? fmt(pastDueLeft) : '—'}
+                  sub={
+                    pastDue.length
+                      ? `${pastDue.length} payment${pastDue.length === 1 ? '' : 's'}`
+                      : 'Nothing past due'
+                  }
                   tone={pastDue.length ? 'bg-red' : 'bg-label'}
+                />
+                <Tile
+                  label="Deducted this week"
+                  value={fmt(weekDeducted.total)}
+                  sub={`${weekDeducted.count} payment${weekDeducted.count === 1 ? '' : 's'}`}
+                  tone="bg-green"
                 />
               </div>
 
@@ -505,15 +515,14 @@ export function AaaFuelPortal() {
               <Section title="Open payments" count={openRows.length} noPadding>
                 <table className="w-full table-fixed border-collapse" data-no-sort>
                   <colgroup>
-                    <col style={{ width: '27%' }} />
-                    <col style={{ width: '16%' }} />
-                    <col style={{ width: '27%' }} />
-                    <col style={{ width: '17%' }} />
-                    <col style={{ width: '13%' }} />
+                    <col style={{ width: '32%' }} />
+                    <col style={{ width: '20%' }} />
+                    <col style={{ width: '28%' }} />
+                    <col style={{ width: '20%' }} />
                   </colgroup>
                   <thead>
                     <tr>
-                      {['Client', 'Week', 'Amount', 'Received?', 'Status'].map((h) => (
+                      {['Client', 'Week', 'Left to deduct', 'Status'].map((h) => (
                         <th key={h} className={thClass}>
                           {h}
                         </th>
@@ -523,7 +532,7 @@ export function AaaFuelPortal() {
                   <tbody>
                     {openRows.length === 0 ? (
                       <tr>
-                        <td colSpan={5} className="py-8 text-center text-[12px] text-muted">
+                        <td colSpan={4} className="py-8 text-center text-[12px] text-muted">
                           {loading
                             ? 'Loading…'
                             : openQuery.trim()
@@ -562,20 +571,20 @@ export function AaaFuelPortal() {
                             >
                               <td className="overflow-hidden border-b border-border px-4 py-[11px] align-middle">
                                 <div className="truncate text-[12px] font-medium text-ink">{d.client}</div>
-                                <button
-                                  type="button"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    toggle(group.key);
-                                  }}
-                                  aria-expanded={isOpen}
-                                  className={`mt-0.5 inline-flex items-center gap-1 text-[11px] hover:underline ${
-                                    group.payments.length === 0 ? 'text-muted' : 'text-accent'
-                                  }`}
-                                >
-                                  <span className="inline-block w-2">{isOpen ? '▾' : '▸'}</span>
-                                  {group.payments.length} payment{group.payments.length === 1 ? '' : 's'}
-                                </button>
+                                {group.payments.length > 0 && (
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      toggle(group.key);
+                                    }}
+                                    aria-expanded={isOpen}
+                                    className="mt-0.5 inline-flex items-center gap-1 text-[11px] text-accent hover:underline"
+                                  >
+                                    <span className="inline-block w-2">{isOpen ? '▾' : '▸'}</span>
+                                    {group.payments.length} payment{group.payments.length === 1 ? '' : 's'}
+                                  </button>
+                                )}
                               </td>
                               <td className="border-b border-border px-4 py-[11px] align-middle">
                                 <span className="whitespace-nowrap text-[11px] text-muted2">
@@ -583,46 +592,41 @@ export function AaaFuelPortal() {
                                 </span>
                               </td>
                               <td className="border-b border-border px-4 py-[11px] align-middle">
-                                {paid > 0 ? (
-                                  <div className="max-w-[210px]">
-                                    <div className="flex items-baseline gap-1.5 whitespace-nowrap">
-                                      <span className="text-[13px] font-semibold text-yellow">{fmt(left)}</span>
-                                      <span className="text-[10px] text-muted">left</span>
-                                    </div>
-                                    <div className="mt-1.5 h-[4px] overflow-hidden bg-border">
+                                <div className="text-[14px] font-semibold tabular-nums text-ink">{fmt(left)}</div>
+                                {paid > 0 && (
+                                  <div className="mt-1 max-w-[180px]">
+                                    <div className="h-[3px] overflow-hidden bg-border">
                                       <div
                                         className="h-full bg-green"
                                         style={{ width: `${Math.min(100, (paid / d.amount) * 100)}%` }}
                                       />
                                     </div>
-                                    <div className="mt-1 flex justify-between gap-3 whitespace-nowrap text-[10px] text-muted">
-                                      <span className="text-green">{fmt(paid)} deducted</span>
-                                      <span>of {fmt(d.amount)}</span>
+                                    <div className="mt-1 whitespace-nowrap text-[10px] text-muted">
+                                      {fmt(paid)} of {fmt(d.amount)} deducted
                                     </div>
                                   </div>
-                                ) : (
-                                  <div className="text-[13px] font-medium text-yellow">{fmt(d.amount)}</div>
                                 )}
-                              </td>
-                              <td className="border-b border-border px-4 py-[11px] align-middle">
-                                <InvoiceReceiptBadge group={group} />
                               </td>
                               <td className="border-b border-border px-4 py-[11px] align-middle">
                                 <div className="flex flex-col items-start gap-1">
                                   {status === 'past_due' ? (
                                     <Badge variant="overdue">Past due</Badge>
+                                  ) : paid > 0 ? (
+                                    <Badge variant="ok">Partial</Badge>
                                   ) : status === 'upcoming' ? (
                                     <Badge variant="closed">Upcoming</Badge>
                                   ) : (
                                     <Badge variant="due">Due</Badge>
                                   )}
-                                  {paid > 0 && <Badge variant="ok">Partial</Badge>}
+                                  {invoiceReceiptState(group) === 'not_received' && (
+                                    <Badge variant="overdue">Not received</Badge>
+                                  )}
                                 </div>
                               </td>
                             </tr>
                             {isOpen && (
                               <tr>
-                                <td colSpan={5} className="border-b border-border p-0">
+                                <td colSpan={4} className="border-b border-border p-0">
                                   {panelFor(group)}
                                 </td>
                               </tr>
