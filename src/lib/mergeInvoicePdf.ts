@@ -1,5 +1,11 @@
 import { PDFDocument, PDFName } from 'pdf-lib';
 import UTIF from 'utif';
+import { decodeTiffLzw } from '@/lib/tiffLzw';
+
+// UTIF's own LZW decoder corrupts large, mostly-white scans.
+UTIF.decode._decodeLZW = (data, off, tgt, toff) => {
+  decodeTiffLzw(data, off, tgt, toff);
+};
 
 export interface MergeInput {
   fileName: string;
