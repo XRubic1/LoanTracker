@@ -553,7 +553,10 @@ export default function App() {
         isOwner={isOwner}
         showAdmin={showAdminNav}
         memberAllowedPages={memberAllowedPages}
-        badges={{ aaaPayments: aaaPayments.filter((p) => p.notReceivedAt && !p.notReceivedAckAt).length }}
+        badges={{
+          aaaPayments: aaaPayments.filter((p) => p.notReceivedAt && !p.notReceivedAckAt).length,
+          motus: motusAuto.data.suggestions.length,
+        }}
         adminTab={adminTab}
         onAdminTab={showAdminNav ? setAdminTab : undefined}
         onReplayTour={() => setTutorialReplay((n) => n + 1)}

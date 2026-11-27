@@ -397,7 +397,11 @@ export function Sidebar({
                       }`}
                       style={{ borderRadius: 9999 }}
                       aria-label={`${badges[id]} unread`}
-                      title={`${badges[id]} payment${badges[id] === 1 ? '' : 's'} marked not received`}
+                      title={
+                        id === 'motus'
+                          ? `${badges[id]} new cancellation${badges[id] === 1 ? '' : 's'} waiting for approval`
+                          : `${badges[id]} payment${badges[id] === 1 ? '' : 's'} marked not received`
+                      }
                     >
                       {(badges[id] ?? 0) > 99 ? '99+' : badges[id]}
                     </span>
