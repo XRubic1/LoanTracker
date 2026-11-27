@@ -44,11 +44,15 @@ function InvoiceUploadPanel({ accounts, onUploaded }: { accounts: PortalAccount[
   /** Whether this invoice was already uploaded to from OpsDesk (undefined while checking). */
   const [uploadedBefore, setUploadedBefore] = useState<{ at: string | null; by: string | null } | null | undefined>(undefined);
   const [docsCheckFailed, setDocsCheckFailed] = useState(false);
-  const [docsCheck, setDocsCheck] = useState(0);
+  /** Set when the user tries to add documents to an invoice that is already locked. */
+  const [blockedAttempt, setBlockedAttempt] = useState(false);
 
   useEffect(() => {
     setUploadedBefore(undefined);
     setDocsCheckFailed(false);
+    setBlockedAttempt(false);
+    setResult(null);
+    setDebug(null);
     if (!selected || accountId === '') return;
     let cancelled = false;
     checkInvoiceUploaded({ accountId, invoice: selected })
@@ -65,7 +69,7 @@ function InvoiceUploadPanel({ accounts, onUploaded }: { accounts: PortalAccount[
     return () => {
       cancelled = true;
     };
-  }, [selected, accountId, docsCheck]);
+  }, [selected, accountId]);
   const locked = Boolean(uploadedBefore);
 
   useEffect(() => {
@@ -98,14 +102,22 @@ function InvoiceUploadPanel({ accounts, onUploaded }: { accounts: PortalAccount[
     }
   };
 
-  const addFiles = (list: FileList | File[]) =>
+  const addFiles = (list: FileList | File[]) => {
+    if (locked) {
+      setBlockedAttempt(true);
+      return;
+    }
+    // Copy now: the input's FileList is live and is emptied right after this call, while React may run
+    // the state update later.
+    const picked = Array.from(list);
     setFiles((current) => {
       const known = new Set(current.map((f) => `${f.name}:${f.size}`));
-      return [...current, ...[...list].filter((f) => !known.has(`${f.name}:${f.size}`))];
+      return [...current, ...picked.filter((f) => !known.has(`${f.name}:${f.size}`))];
     });
+  };
 
   const upload = async () => {
-    if (accountId === '' || !selected || files.length === 0) return;
+    if (accountId === '' || !selected || locked || files.length === 0) return;
     const question =
       `Upload ${files.length} file${files.length === 1 ? '' : 's'} to invoice ${selected.invoiceNo} (${selected.debtorName}) for ${account?.label}?
 
@@ -120,7 +132,8 @@ function InvoiceUploadPanel({ accounts, onUploaded }: { accounts: PortalAccount[
       setDebug(JSON.stringify(done.debug, null, 2));
       setResult({ ok: true, text: done.message });
       setFiles([]);
-      setDocsCheck((n) => n + 1);
+      // Lock straight away; the success message stays on screen next to the warning.
+      setUploadedBefore({ at: new Date().toISOString(), by: null });
     } catch (err) {
       setResult({ ok: false, text: err instanceof Error ? err.message : 'Upload failed' });
     } finally {
@@ -224,11 +237,13 @@ function InvoiceUploadPanel({ accounts, onUploaded }: { accounts: PortalAccount[
         </p>
       )}
 
-      {selected && !locked && (
+      {selected && (
         <>
-          <p className="rounded-lg border border-border bg-surface px-3 py-2 text-xs text-muted">
-            Add all the paperwork for this invoice now. After this upload you can't add more to it from OpsDesk. Multiple files are combined into one PDF.
-          </p>
+          {!locked && (
+            <p className="rounded-lg border border-border bg-surface px-3 py-2 text-xs text-muted">
+              Add all the paperwork for this invoice now. After this upload you can't add more to it from OpsDesk. Multiple files are combined into one PDF.
+            </p>
+          )}
           {docsCheckFailed && (
             <p className="text-xs text-muted">Could not check earlier uploads for this invoice; the upload will check again.</p>
           )}
@@ -243,12 +258,19 @@ function InvoiceUploadPanel({ accounts, onUploaded }: { accounts: PortalAccount[
               setDragging(false);
               addFiles(e.dataTransfer.files);
             }}
-            onClick={() => fileInput.current?.click()}
-            className={`cursor-pointer rounded-lg border-2 border-dashed px-4 py-6 text-center text-sm ${
-              dragging ? 'border-accent bg-accent/5 text-ink' : 'border-border text-muted hover:border-accent'
+            onClick={() => (locked ? setBlockedAttempt(true) : fileInput.current?.click())}
+            aria-disabled={locked}
+            className={`rounded-lg border-2 border-dashed px-4 py-6 text-center text-sm ${
+              locked
+                ? `cursor-not-allowed text-muted opacity-60 ${blockedAttempt ? 'border-red' : 'border-border'}`
+                : `cursor-pointer ${
+                    dragging ? 'border-accent bg-accent/5 text-ink' : 'border-border text-muted hover:border-accent'
+                  }`
             }`}
           >
-            Drop documents for invoice #{selected.invoiceNo} here, or click to choose (several files are combined into one PDF; big ones are compressed)
+            {locked
+              ? `No more documents can be added to invoice #${selected.invoiceNo}.`
+              : `Drop documents for invoice #${selected.invoiceNo} here, or click to choose (several files are combined into one PDF; big ones are compressed)`}
             <input
               ref={fileInput}
               type="file"
@@ -260,6 +282,12 @@ function InvoiceUploadPanel({ accounts, onUploaded }: { accounts: PortalAccount[
               }}
             />
           </div>
+
+          {locked && blockedAttempt && (
+            <p className="text-sm text-red" role="alert">
+              Upload blocked: invoice #{selected.invoiceNo} already has its documents. Upload more paperwork from Cadence.
+            </p>
+          )}
 
           {files.length > 0 && (
             <ul className="divide-y divide-border rounded-lg border border-border">
@@ -280,7 +308,7 @@ function InvoiceUploadPanel({ accounts, onUploaded }: { accounts: PortalAccount[
           <div className="flex flex-wrap items-center gap-3">
             <button
               type="button"
-              disabled={busy || uploadedBefore === undefined || files.length === 0 || files.some((f) => f.size > 50 * 1024 * 1024)}
+              disabled={busy || locked || uploadedBefore === undefined || files.length === 0 || files.some((f) => f.size > 50 * 1024 * 1024)}
               onClick={() => void upload()}
               className="rounded-lg btn-primary px-4 py-2 text-sm disabled:opacity-60"
             >
